@@ -1,5 +1,5 @@
-using SymbolicRegression
-using SymbolicRegression: string_tree
+using LaSR
+using LaSR: string_tree
 using Random, Bumper, LoopVectorization
 
 include("test_params.jl")
@@ -44,14 +44,14 @@ function test_mixed(i, batching::Bool, weighted::Bool, parallelism)
     numprocs = parallelism == :multiprocessing ? 2 : nothing
 
     options = if i == 5
-        SymbolicRegression.Options(;
+        LaSR.Options(;
             unary_operators=(cos,),
             batching=batching,
             parsimony=0.0f0, # Required for scoring
             early_stop_condition=1e-6,
         )
     else
-        SymbolicRegression.Options(;
+        LaSR.Options(;
             default_params...,
             binary_operators=(+, *),
             unary_operators=(cos,),

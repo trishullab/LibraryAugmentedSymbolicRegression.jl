@@ -1,5 +1,5 @@
 include("test_params.jl")
-using SymbolicRegression, Test
+using LaSR, Test
 using SymbolicUtils: simplify, Symbolic
 using DynamicExpressions.OperatorEnumConstructionModule: empty_all_globals!
 #! format: off

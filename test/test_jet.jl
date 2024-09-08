@@ -17,17 +17,17 @@ Pkg.add(["JET", "Preferences", "DynamicExpressions"]; io=devnull)
 using Preferences
 cd(dir)
 Preferences.set_preferences!(
-    "SymbolicRegression", "instability_check" => "disable"; force=true
+    "LaSR", "instability_check" => "disable"; force=true
 )
 Preferences.set_preferences!(
     "DynamicExpressions", "instability_check" => "disable"; force=true
 )
 
-using SymbolicRegression
+using LaSR
 using JET
 
 @info "Running tests..."
-JET.test_package(SymbolicRegression; target_defined_modules=true)
+JET.test_package(LaSR; target_defined_modules=true)
 @info "Done!"
 
 @info "test_jet.jl finished"

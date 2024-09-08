@@ -23,27 +23,37 @@ using Compat: Returns, @inline
 using ..CoreModule: Options, DATA_TYPE, binopmap, unaopmap
 using ..MutationFunctionsModule: gen_random_tree_fixed_size
 
-using PromptingTools: SystemMessage, UserMessage, AIMessage, aigenerate, CustomOpenAISchema, OllamaSchema, OpenAISchema
+using PromptingTools:
+    SystemMessage,
+    UserMessage,
+    AIMessage,
+    aigenerate,
+    CustomOpenAISchema,
+    OllamaSchema,
+    OpenAISchema
 using JSON: parse
 
 function load_prompt(path::String)::String
     # load prompt file 
     f = open(path, "r")
-    s = read(f, String)     
+    s = read(f, String)
     close(f)
     return s
 end
 
 function convertDict(d)::NamedTuple
-    return (;Dict(Symbol(k) => v for (k,v) in d)...)
+    return (; Dict(Symbol(k) => v for (k, v) in d)...)
 end
 
 function get_vars(options::Options)::String
-    variable_names = ["x","y","z","k","j","l","m","n","p","a","b"]
+    variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
     if !isnothing(options.llm_options.var_order)
-        variable_names = [options.llm_options.var_order[key] for key in sort(collect(keys(options.llm_options.var_order)))]
+        variable_names = [
+            options.llm_options.var_order[key] for
+            key in sort(collect(keys(options.llm_options.var_order)))
+        ]
     end
-    join(variable_names, ", ")
+    return join(variable_names, ", ")
 end
 
 function get_ops(options::Options)::String
@@ -51,7 +61,16 @@ function get_ops(options::Options)::String
     unary_operators = map(v -> string(v), map(unaopmap, options.operators.unaops))
     # Binary Ops: +, *, -, /, safe_pow (^)
     # Unary Ops: exp, safe_log, safe_sqrt, sin, cos
-    replace(replace("binary operators: " * join(binary_operators, ", ") * ", and unary operators: " * join(unary_operators, ", "), "safe_" => ""), "pow" => "^")
+    return replace(
+        replace(
+            "binary operators: " *
+            join(binary_operators, ", ") *
+            ", and unary operators: " *
+            join(unary_operators, ", "),
+            "safe_" => "",
+        ),
+        "pow" => "^",
+    )
 end
 
 """
@@ -59,10 +78,12 @@ Constructs a prompt by replacing the element_id_tag with the corresponding eleme
 If the element_list is longer than the number of occurrences of the element_id_tag, the missing elements are added after the last occurrence.
 If the element_list is shorter than the number of occurrences of the element_id_tag, the extra ids are removed.
 """
-function construct_prompt(user_prompt::String, element_list::Vector, element_id_tag::String)::String
+function construct_prompt(
+    user_prompt::String, element_list::Vector, element_id_tag::String
+)::String
     # Split the user prompt into lines
     lines = split(user_prompt, "\n")
-    
+
     # Filter lines that match the pattern "... : {{element_id_tag[1-9]}}
     pattern = r"^.*: \{\{" * element_id_tag * r"\d+\}\}$"
 
@@ -72,9 +93,9 @@ function construct_prompt(user_prompt::String, element_list::Vector, element_id_
     # if n_occurrences is less than |element_list|, add the missing elements after the last occurrence
     if n_occurrences < length(element_list)
         last_occurrence = findlast(x -> occursin(pattern, x), lines)
-        for i in reverse(n_occurrences+1:length(element_list))
+        for i in reverse((n_occurrences + 1):length(element_list))
             new_line = replace(lines[last_occurrence], string(n_occurrences) => string(i))
-            insert!(lines, last_occurrence+1, new_line)
+            insert!(lines, last_occurrence + 1, new_line)
         end
     end
 
@@ -87,7 +108,9 @@ function construct_prompt(user_prompt::String, element_list::Vector, element_id_
                 continue
             end
             # replace the element_id_tag with the corresponding element
-            new_prompt *= replace(line, r"\{\{" * element_id_tag * r"\d+\}\}" => element_list[idx]) * "\n"
+            new_prompt *=
+                replace(line, r"\{\{" * element_id_tag * r"\d+\}\}" => element_list[idx]) *
+                "\n"
             idx += 1
         else
             new_prompt *= line * "\n"
@@ -97,7 +120,11 @@ function construct_prompt(user_prompt::String, element_list::Vector, element_id_
 end
 
 function gen_llm_random_tree(
-    node_count::Int, options::Options, nfeatures::Int, ::Type{T}, idea_database::Union{Vector{String},Nothing}
+    node_count::Int,
+    options::Options,
+    nfeatures::Int,
+    ::Type{T},
+    idea_database::Union{Vector{String},Nothing},
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
     # Note that this base tree is just a placeholder; it will be replaced.
     N = 5
@@ -105,7 +132,11 @@ function gen_llm_random_tree(
     # conversation = [
     #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "gen_random_system.txt")),
     #     UserMessage(load_prompt(options.llm_options.prompts_dir * "gen_random_user.txt"))]
-    assumptions = sample_context(idea_database, options.llm_options.num_pareto_context, options.llm_options.idea_threshold)
+    assumptions = sample_context(
+        idea_database,
+        options.llm_options.num_pareto_context,
+        options.llm_options.idea_threshold,
+    )
 
     if !options.llm_options.prompt_concepts
         assumptions = []
@@ -113,40 +144,46 @@ function gen_llm_random_tree(
 
     conversation = [
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "gen_random_system.txt")
-            * "\n"
-            * construct_prompt(
+            load_prompt(options.llm_options.prompts_dir * "gen_random_system.txt") *
+            "\n" *
+            construct_prompt(
                 load_prompt(options.llm_options.prompts_dir * "gen_random_user.txt"),
                 assumptions,
-                "assump"
-                )
-            )
-        ]
+                "assump",
+            ),
+        ),
+    ]
 
     if options.llm_options.llm_context != ""
         pushfirst!(assumptions, options.llm_options.llm_context)
     end
-    
+
     msg = nothing
     try
-        msg = aigenerate(CustomOpenAISchema(), conversation; #OllamaSchema(), conversation;
-                    variables=get_vars(options),
-                    operators=get_ops(options),
-                    N=N,
-                    api_key=options.llm_options.api_key,
-                    model=options.llm_options.model,
-                    api_kwargs=convertDict(options.llm_options.api_kwargs),
-                    http_kwargs=convertDict(options.llm_options.http_kwargs)
-                    )
+        msg = aigenerate(
+            CustomOpenAISchema(),
+            conversation; #OllamaSchema(), conversation;
+            variables=get_vars(options),
+            operators=get_ops(options),
+            N=N,
+            api_key=options.llm_options.api_key,
+            model=options.llm_options.model,
+            api_kwargs=convertDict(options.llm_options.api_kwargs),
+            http_kwargs=convertDict(options.llm_options.http_kwargs),
+        )
     catch e
-        open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-            write(file, "- None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
+                write(file, "- None\n")
+            end
         end
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
-    open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-        write(file, "- GEN RANDOM:\n" * msg.content * "\n\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
+            write(file, "- GEN RANDOM:\n" * msg.content * "\n\n")
+        end
     end
 
     gen_tree_options = parse_msg_content(msg.content)
@@ -154,30 +191,42 @@ function gen_llm_random_tree(
     N = min(size(gen_tree_options)[1], N)
 
     if N == 0
-        open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-            write(file, "- None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
+                write(file, "- None\n")
+            end
         end
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
     for i in 1:N
         l = rand(1:N)
-        t = expr_to_tree(T, String(strip(gen_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])), options)
+        t = expr_to_tree(
+            T,
+            String(strip(gen_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
+            options,
+        )
         if t.val == 1 && t.constant
             continue
         end
 
-        open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-            write(file, "- " * tree_to_expr(t, options) * "\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
+                write(file, "- " * tree_to_expr(t, options) * "\n")
+            end
         end
 
         return t
     end
 
-    out = expr_to_tree(T, String(strip(gen_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options)
+    out = expr_to_tree(
+        T, String(strip(gen_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
+    )
 
-    open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-        write(file, "- " * tree_to_expr(out, options) * "\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
+            write(file, "- " * tree_to_expr(out, options) * "\n")
+        end
     end
 
     if out.val == 1 && out.constant
@@ -187,9 +236,10 @@ function gen_llm_random_tree(
     return out
 end
 
-
 """Crossover between two expressions"""
-function crossover_trees(tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T})::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
+function crossover_trees(
+    tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}
+)::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
     tree1 = copy_node(tree1)
     tree2 = copy_node(tree2)
 
@@ -237,39 +287,46 @@ function sketch_const(val)
     end
 end
 
-function tree_to_expr(ex::AbstractExpression{T}, options::Options)::String where {T<:DATA_TYPE}
-    tree_to_expr(get_contents(ex), options)
+function tree_to_expr(
+    ex::AbstractExpression{T}, options::Options
+)::String where {T<:DATA_TYPE}
+    return tree_to_expr(get_contents(ex), options)
 end
 
 function tree_to_expr(tree::AbstractExpressionNode{T}, options)::String where {T<:DATA_TYPE}
-    variable_names = ["x","y","z","k","j","l","m","n","p","a","b"]
+    variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
     if !isnothing(options.llm_options.var_order)
-        variable_names = [options.llm_options.var_order[key] for key in sort(collect(keys(options.llm_options.var_order)))]
+        variable_names = [
+            options.llm_options.var_order[key] for
+            key in sort(collect(keys(options.llm_options.var_order)))
+        ]
     end
-    string_tree(tree, options.operators, f_constant=sketch_const, variable_names=variable_names)
+    return string_tree(
+        tree, options.operators; f_constant=sketch_const, variable_names=variable_names
+    )
 end
-
 
 function handle_not_expr(::Type{T}, x, var_names)::Node{T} where {T<:DATA_TYPE}
     if x isa Real
-        Node{T}(val=convert(T,x)) # old:  Node(T, 0, true, convert(T,x))
+        Node{T}(; val=convert(T, x)) # old:  Node(T, 0, true, convert(T,x))
     elseif x isa Symbol
         if x === :C # constant that got abstracted
-            Node{T}(val=convert(T,1)) # old: Node(T, 0, true, convert(T,1))
+            Node{T}(; val=convert(T, 1)) # old: Node(T, 0, true, convert(T,1))
         else
-            feature = findfirst(isequal(string(x)),var_names)
+            feature = findfirst(isequal(string(x)), var_names)
             if isnothing(feature) # invalid var name, just assume its x0
                 feature = 1
             end
-            Node{T}(feature=feature) # old: Node(T, 0, false, nothing, feature)
+            Node{T}(; feature=feature) # old: Node(T, 0, false, nothing, feature)
         end
     else
-        Node{T}(val=convert(T,1)) # old: Node(T, 0, true, convert(T,1)) # return a constant being 0
+        Node{T}(; val=convert(T, 1)) # old: Node(T, 0, true, convert(T,1)) # return a constant being 0
     end
 end
 
-
-function expr_to_tree_recurse(::Type{T}, node::Expr, op::AbstractOperatorEnum, var_names)::Node{T} where {T<:DATA_TYPE}
+function expr_to_tree_recurse(
+    ::Type{T}, node::Expr, op::AbstractOperatorEnum, var_names
+)::Node{T} where {T<:DATA_TYPE}
     args = node.args
     x = args[1]
     degree = length(args)
@@ -286,9 +343,13 @@ function expr_to_tree_recurse(::Type{T}, node::Expr, op::AbstractOperatorEnum, v
             end
         end
 
-        left = if (args[2] isa Expr) expr_to_tree_recurse(T, args[2], op, var_names) else handle_not_expr(T, args[2], var_names) end
+        left = if (args[2] isa Expr)
+            expr_to_tree_recurse(T, args[2], op, var_names)
+        else
+            handle_not_expr(T, args[2], var_names)
+        end
 
-        Node(op=idx, l=left) # old: Node(1, false, nothing, 0, idx, left)
+        Node(; op=idx, l=left) # old: Node(1, false, nothing, 0, idx, left)
     elseif degree == 3
         if x === :^
             x = :pow
@@ -301,22 +362,33 @@ function expr_to_tree_recurse(::Type{T}, node::Expr, op::AbstractOperatorEnum, v
                 idx = 1
             end
         end
-        
-        left = if (args[2] isa Expr) expr_to_tree_recurse(T, args[2], op, var_names) else handle_not_expr(T, args[2], var_names) end
-        right = if (args[3] isa Expr) expr_to_tree_recurse(T, args[3], op, var_names) else handle_not_expr(T, args[3], var_names) end
 
-        Node(op=idx, l=left, r=right) # old: Node(2, false, nothing, 0, idx, left, right)
+        left = if (args[2] isa Expr)
+            expr_to_tree_recurse(T, args[2], op, var_names)
+        else
+            handle_not_expr(T, args[2], var_names)
+        end
+        right = if (args[3] isa Expr)
+            expr_to_tree_recurse(T, args[3], op, var_names)
+        else
+            handle_not_expr(T, args[3], var_names)
+        end
+
+        Node(; op=idx, l=left, r=right) # old: Node(2, false, nothing, 0, idx, left, right)
     else
-        Node{T}(val=convert(T,1))  # old: Node(T, 0, true, convert(T,1)) # return a constant being 1
+        Node{T}(; val=convert(T, 1))  # old: Node(T, 0, true, convert(T,1)) # return a constant being 1
     end
 end
 
 function expr_to_tree_run(::Type{T}, x::String, options)::Node{T} where {T<:DATA_TYPE}
     try
         expr = Meta.parse(x)
-        variable_names = ["x","y","z","k","j","l","m","n","p","a","b"]
+        variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
         if !isnothing(options.llm_options.var_order)
-            variable_names = [options.llm_options.var_order[key] for key in sort(collect(keys(options.llm_options.var_order)))]
+            variable_names = [
+                options.llm_options.var_order[key] for
+                key in sort(collect(keys(options.llm_options.var_order)))
+            ]
         end
         if expr isa Expr
             expr_to_tree_recurse(T, expr, options.operators, variable_names)
@@ -324,7 +396,7 @@ function expr_to_tree_run(::Type{T}, x::String, options)::Node{T} where {T<:DATA
             handle_not_expr(T, expr, variable_names)
         end
     catch
-        Node{T}(val=convert(T,1)) # old: Node(T, 0, true, convert(T,1)) # return a constant being 1
+        Node{T}(; val=convert(T, 1)) # old: Node(T, 0, true, convert(T,1)) # return a constant being 1
     end
 end
 
@@ -355,19 +427,18 @@ function expr_to_tree(::Type{T}, x::String, options) where {T<:DATA_TYPE}
     return out
 end
 
-
 function format_pareto(dominating, options, num_pareto_context::Int)::Vector{String}
     pareto = Vector{String}()
     if !isnothing(dominating) && size(dominating)[1] > 0
         idx = randperm(size(dominating)[1])
         for i in 1:min(size(dominating)[1], num_pareto_context)
-            push!(pareto,tree_to_expr(dominating[idx[i]].tree, options))
+            push!(pareto, tree_to_expr(dominating[idx[i]].tree, options))
         end
     end
     while size(pareto)[1] < num_pareto_context
         push!(pareto, "None")
     end
-    pareto
+    return pareto
 end
 
 function sample_one_context(idea_database, idea_threshold)::String
@@ -400,7 +471,7 @@ function sample_context(idea_database, N, idea_threshold)::Vector{String}
         for i in 1:(size(idea_database)[1])
             push!(assumptions, idea_database[i])
         end
-        for i in (size(idea_database)[1]+1):N
+        for i in (size(idea_database)[1] + 1):N
             push!(assumptions, "None")
         end
         return assumptions
@@ -413,11 +484,10 @@ function sample_context(idea_database, N, idea_threshold)::Vector{String}
         end
         push!(assumptions, chosen_idea)
     end
-    assumptions
+    return assumptions
 end
 
 function prompt_evol(idea_database, options::Options)
-
     num_ideas = size(idea_database)[1]
     if num_ideas <= options.llm_options.idea_threshold
         return nothing
@@ -436,29 +506,32 @@ function prompt_evol(idea_database, options::Options)
     #     UserMessage(load_prompt(options.llm_options.prompts_dir * "prompt_evol_user.txt"))]
     conversation = [
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "prompt_evol_system.txt")
-            * "\n"
-            * construct_prompt(
+            load_prompt(options.llm_options.prompts_dir * "prompt_evol_system.txt") *
+            "\n" *
+            construct_prompt(
                 load_prompt(options.llm_options.prompts_dir * "prompt_evol_user.txt"),
                 [idea1, idea2, idea3, idea4, idea5],
-                "idea"
-                )
-            )
-        ]
-    
-    
+                "idea",
+            ),
+        ),
+    ]
+
     msg = nothing
     try
-        msg = aigenerate(CustomOpenAISchema(), conversation; #OllamaSchema(), conversation;
-                N=N,
-                api_key=options.llm_options.api_key,
-                model=options.llm_options.model,
-                api_kwargs=convertDict(options.llm_options.api_kwargs),
-                http_kwargs=convertDict(options.llm_options.http_kwargs)
-                )
+        msg = aigenerate(
+            CustomOpenAISchema(),
+            conversation; #OllamaSchema(), conversation;
+            N=N,
+            api_key=options.llm_options.api_key,
+            model=options.llm_options.model,
+            api_kwargs=convertDict(options.llm_options.api_kwargs),
+            http_kwargs=convertDict(options.llm_options.http_kwargs),
+        )
     catch e
-        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-            write(file, "- ADDED: None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
+                write(file, "- ADDED: None\n")
+            end
         end
         return nothing
     end
@@ -468,20 +541,26 @@ function prompt_evol(idea_database, options::Options)
     N = min(size(idea_options)[1], N)
 
     if N == 0
-        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-            write(file, "- ADDED: None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
+                write(file, "- ADDED: None\n")
+            end
         end
         return nothing
     end
 
     # only choose one, merging ideas not really crossover
-    chosen_idea = String(strip(idea_options[rand(1:N)], [' ', '\n', '"', ',', '.', '[', ']']))
+    chosen_idea = String(
+        strip(idea_options[rand(1:N)], [' ', '\n', '"', ',', '.', '[', ']'])
+    )
 
-    open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-        write(file, "- ADDED: " * chosen_idea * "\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
+            write(file, "- ADDED: " * chosen_idea * "\n")
+        end
     end
 
-    chosen_idea
+    return chosen_idea
 end
 
 function parse_msg_content(msg_content)
@@ -499,7 +578,6 @@ function parse_msg_content(msg_content)
             end
         end
     end
-
 
     try
         out = parse(content) # json parse
@@ -546,7 +624,7 @@ end
 function update_idea_database(idea_database, dominating, worst_members, options::Options)
     # turn dominating pareto curve into ideas as strings
     if isnothing(dominating)
-        return
+        return nothing
     end
 
     op = options.operators
@@ -562,21 +640,20 @@ function update_idea_database(idea_database, dominating, worst_members, options:
     #     UserMessage(load_prompt(options.llm_options.prompts_dir * "extract_idea_user.txt"))]
     conversation = [
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "extract_idea_system.txt")
-            * "\n"
-            * construct_prompt(
+            load_prompt(options.llm_options.prompts_dir * "extract_idea_system.txt") *
+            "\n" *
+            construct_prompt(
                 construct_prompt(
                     load_prompt(options.llm_options.prompts_dir * "extract_idea_user.txt"),
                     gexpr,
-                    "gexpr"
-                    ),
+                    "gexpr",
+                ),
                 bexpr,
-                "bexpr"
-                )
-            )
-        ]
-    
-    
+                "bexpr",
+            ),
+        ),
+    ]
+
     msg = nothing
     try
         # msg = aigenerate(OpenAISchema(), conversation; #OllamaSchema(), conversation;
@@ -595,24 +672,30 @@ function update_idea_database(idea_database, dominating, worst_members, options:
         #         bexpr5=bexpr[5],
         #         model="gpt-3.5-turbo-0125"
         #         )
-        msg = aigenerate(CustomOpenAISchema(), conversation; #OllamaSchema(), conversation;
-                variables=get_vars(options),
-                operators=get_ops(options),
-                N=N,
-                api_key=options.llm_options.api_key,
-                model=options.llm_options.model,
-                api_kwargs=convertDict(options.llm_options.api_kwargs),
-                http_kwargs=convertDict(options.llm_options.http_kwargs)
-            )
+        msg = aigenerate(
+            CustomOpenAISchema(),
+            conversation; #OllamaSchema(), conversation;
+            variables=get_vars(options),
+            operators=get_ops(options),
+            N=N,
+            api_key=options.llm_options.api_key,
+            model=options.llm_options.model,
+            api_kwargs=convertDict(options.llm_options.api_kwargs),
+            http_kwargs=convertDict(options.llm_options.http_kwargs),
+        )
     catch e
-        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-            write(file, "- None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
+                write(file, "- None\n")
+            end
         end
-        return
+        return nothing
     end
 
-    open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-        write(file, "- IDEA:\n" * msg.content * "\n\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
+            write(file, "- IDEA:\n" * msg.content * "\n\n")
+        end
     end
 
     idea_options = parse_msg_content(msg.content)
@@ -620,30 +703,36 @@ function update_idea_database(idea_database, dominating, worst_members, options:
     N = min(size(idea_options)[1], N)
 
     if N == 0
-        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-            write(file, "- None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
+                write(file, "- None\n")
+            end
         end
-        return
+        return nothing
     end
 
     a = rand(1:N)
 
     chosen_idea1 = String(strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']']))
 
-    open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-        write(file, "- " * chosen_idea1 * "\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
+            write(file, "- " * chosen_idea1 * "\n")
+        end
     end
     pushfirst!(idea_database, chosen_idea1)
 
     if N > 1
-        b = rand(1:N-1)
+        b = rand(1:(N - 1))
         if a == b
             b += 1
         end
         chosen_idea2 = String(strip(idea_options[b], [' ', '\n', '"', ',', '.', '[', ']']))
 
-        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-            write(file, "- " * chosen_idea2 * "\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
+                write(file, "- " * chosen_idea2 * "\n")
+            end
         end
 
         pushfirst!(idea_database, chosen_idea2)
@@ -658,14 +747,18 @@ function update_idea_database(idea_database, dominating, worst_members, options:
     end
 end
 
-function llm_mutate_op(ex::AbstractExpression{T}, options::Options, dominating, idea_database)::AbstractExpression{T} where {T<:DATA_TYPE}
+function llm_mutate_op(
+    ex::AbstractExpression{T}, options::Options, dominating, idea_database
+)::AbstractExpression{T} where {T<:DATA_TYPE}
     tree = get_contents(ex)
     ex = with_contents(ex, llm_mutate_op(tree, options, dominating, idea_database))
     return ex
 end
 
 """LLM Mutation on a tree"""
-function llm_mutate_op(tree::AbstractExpressionNode{T}, options::Options, dominating, idea_database)::AbstractExpressionNode{T} where {T<:DATA_TYPE}
+function llm_mutate_op(
+    tree::AbstractExpressionNode{T}, options::Options, dominating, idea_database
+)::AbstractExpressionNode{T} where {T<:DATA_TYPE}
     expr = tree_to_expr(tree, options) # TODO: change global expr right now, could do it by subtree (weighted near root more)
     N = 5
     # LLM prompt
@@ -675,7 +768,11 @@ function llm_mutate_op(tree::AbstractExpressionNode{T}, options::Options, domina
     #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "mutate_system.txt")),
     #     UserMessage(load_prompt(options.llm_options.prompts_dir * "mutate_user.txt"))]
 
-    assumptions = sample_context(idea_database, options.llm_options.num_pareto_context, options.llm_options.idea_threshold)
+    assumptions = sample_context(
+        idea_database,
+        options.llm_options.num_pareto_context,
+        options.llm_options.idea_threshold,
+    )
     pareto = format_pareto(dominating, options, options.llm_options.num_pareto_context)
     if !options.llm_options.prompt_concepts
         assumptions = []
@@ -683,23 +780,25 @@ function llm_mutate_op(tree::AbstractExpressionNode{T}, options::Options, domina
     end
     conversation = [
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "mutate_system.txt")
-            * "\n"
-            * construct_prompt(
+            load_prompt(options.llm_options.prompts_dir * "mutate_system.txt") *
+            "\n" *
+            construct_prompt(
                 load_prompt(options.llm_options.prompts_dir * "mutate_user.txt"),
                 assumptions,
-                "assump"
-                )
-            )
-        ]
+                "assump",
+            ),
+        ),
+    ]
 
     if options.llm_options.llm_context != ""
         pushfirst!(assumptions, options.llm_options.llm_context)
     end
-    
+
     msg = nothing
     try
-        msg = aigenerate(CustomOpenAISchema(), conversation; #OllamaSchema(), conversation;
+        msg = aigenerate(
+            CustomOpenAISchema(),
+            conversation; #OllamaSchema(), conversation;
             variables=get_vars(options),
             operators=get_ops(options),
             N=N,
@@ -707,17 +806,21 @@ function llm_mutate_op(tree::AbstractExpressionNode{T}, options::Options, domina
             api_key=options.llm_options.api_key,
             model=options.llm_options.model,
             api_kwargs=convertDict(options.llm_options.api_kwargs),
-            http_kwargs=convertDict(options.llm_options.http_kwargs)
+            http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-            write(file, "- None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
+                write(file, "- None\n")
+            end
         end
         return tree
     end
 
-    open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-        write(file, "- MUTATE:\n" * msg.content * "\n\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
+            write(file, "- MUTATE:\n" * msg.content * "\n\n")
+        end
     end
 
     mut_tree_options = parse_msg_content(msg.content)
@@ -725,36 +828,50 @@ function llm_mutate_op(tree::AbstractExpressionNode{T}, options::Options, domina
     N = min(size(mut_tree_options)[1], N)
 
     if N == 0
-        open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-            write(file, "- None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
+                write(file, "- None\n")
+            end
         end
         return tree
     end
 
     for i in 1:N
         l = rand(1:N)
-        t = expr_to_tree(T, String(strip(mut_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])), options)
+        t = expr_to_tree(
+            T,
+            String(strip(mut_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
+            options,
+        )
         if t.val == 1 && t.constant
             continue
         end
 
-        open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-            write(file, "- " * tree_to_expr(t, options) * "\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
+                write(file, "- " * tree_to_expr(t, options) * "\n")
+            end
         end
 
         return t
     end
 
-    out = expr_to_tree(T, String(strip(mut_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options)
+    out = expr_to_tree(
+        T, String(strip(mut_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
+    )
 
-    open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-        write(file, "- " * tree_to_expr(out, options) * "\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
+            write(file, "- " * tree_to_expr(out, options) * "\n")
+        end
     end
 
     return out
 end
 
-function llm_crossover_trees(ex1::E, ex2::E, options::Options, dominating, idea_database)::Tuple{E,E} where {T,E<:AbstractExpression{T}}
+function llm_crossover_trees(
+    ex1::E, ex2::E, options::Options, dominating, idea_database
+)::Tuple{E,E} where {T,E<:AbstractExpression{T}}
     tree1 = get_contents(ex1)
     tree2 = get_contents(ex2)
     tree1, tree2 = llm_crossover_trees(tree1, tree2, options, dominating, idea_database)
@@ -763,9 +880,14 @@ function llm_crossover_trees(ex1::E, ex2::E, options::Options, dominating, idea_
     return ex1, ex2
 end
 
-
 """LLM Crossover between two expressions"""
-function llm_crossover_trees(tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}, options::Options, dominating, idea_database)::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
+function llm_crossover_trees(
+    tree1::AbstractExpressionNode{T},
+    tree2::AbstractExpressionNode{T},
+    options::Options,
+    dominating,
+    idea_database,
+)::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
     expr1 = tree_to_expr(tree1, options)
     expr2 = tree_to_expr(tree2, options)
     N = 5
@@ -774,7 +896,11 @@ function llm_crossover_trees(tree1::AbstractExpressionNode{T}, tree2::AbstractEx
     # conversation = [
     #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "crossover_system.txt")),
     #     UserMessage(load_prompt(options.llm_options.prompts_dir * "crossover_user.txt"))]
-    assumptions = sample_context(idea_database, options.llm_options.num_pareto_context, options.llm_options.idea_threshold)
+    assumptions = sample_context(
+        idea_database,
+        options.llm_options.num_pareto_context,
+        options.llm_options.idea_threshold,
+    )
     pareto = format_pareto(dominating, options, options.llm_options.num_pareto_context)
     if !options.llm_options.prompt_concepts
         assumptions = []
@@ -783,46 +909,51 @@ function llm_crossover_trees(tree1::AbstractExpressionNode{T}, tree2::AbstractEx
 
     conversation = [
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "crossover_system.txt")
-            * "\n"
-            * construct_prompt(
+            load_prompt(options.llm_options.prompts_dir * "crossover_system.txt") *
+            "\n" *
+            construct_prompt(
                 load_prompt(options.llm_options.prompts_dir * "crossover_user.txt"),
                 assumptions,
-                "assump"
-                )
-            )
-        ]
-    
+                "assump",
+            ),
+        ),
+    ]
 
     if options.llm_options.llm_context != ""
         pushfirst!(assumptions, options.llm_options.llm_context)
     end
-    
+
     msg = nothing
     try
-        msg = aigenerate(CustomOpenAISchema(), conversation; #OllamaSchema(), conversation;
-                variables=get_vars(options),
-                operators=get_ops(options),
-                N=N,
-                # pareto1=pareto[1],
-                # pareto2=pareto[2],
-                # pareto3=pareto[3],
-                expr1=expr1,
-                expr2=expr2,
-                api_key=options.llm_options.api_key,
-                model=options.llm_options.model,
-                api_kwargs=convertDict(options.llm_options.api_kwargs),
-                http_kwargs=convertDict(options.llm_options.http_kwargs)
-            )
+        msg = aigenerate(
+            CustomOpenAISchema(),
+            conversation; #OllamaSchema(), conversation;
+            variables=get_vars(options),
+            operators=get_ops(options),
+            N=N,
+            # pareto1=pareto[1],
+            # pareto2=pareto[2],
+            # pareto3=pareto[3],
+            expr1=expr1,
+            expr2=expr2,
+            api_key=options.llm_options.api_key,
+            model=options.llm_options.model,
+            api_kwargs=convertDict(options.llm_options.api_kwargs),
+            http_kwargs=convertDict(options.llm_options.http_kwargs),
+        )
     catch e
-        open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-            write(file, "- None && None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
+                write(file, "- None && None\n")
+            end
         end
         return tree1, tree2
     end
 
-    open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-        write(file, "- CROSSOVER:\n" * msg.content * "\n\n")
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
+            write(file, "- CROSSOVER:\n" * msg.content * "\n\n")
+        end
     end
 
     cross_tree_options = parse_msg_content(msg.content)
@@ -833,25 +964,37 @@ function llm_crossover_trees(tree1::AbstractExpressionNode{T}, tree2::AbstractEx
     N = min(size(cross_tree_options)[1], N)
 
     if N == 0
-        open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-            write(file, "- None && None\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
+                write(file, "- None && None\n")
+            end
         end
         return tree1, tree2
     end
 
     if N == 1
-        t = expr_to_tree(T, String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options)
+        t = expr_to_tree(
+            T,
+            String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
+            options,
+        )
 
-        open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-            write(file, "- " * tree_to_expr(t, options) * " && " * "None" * "\n")
+        if options.llm_options.active
+            open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
+                write(file, "- " * tree_to_expr(t, options) * " && " * "None" * "\n")
+            end
         end
 
         return t, tree2
     end
 
-    for i in 1:(2*N)
+    for i in 1:(2 * N)
         l = rand(1:N)
-        t = expr_to_tree(T, String(strip(cross_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])), options)
+        t = expr_to_tree(
+            T,
+            String(strip(cross_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
+            options,
+        )
         if t.val == 1 && t.constant
             continue
         end
@@ -865,19 +1008,35 @@ function llm_crossover_trees(tree1::AbstractExpressionNode{T}, tree2::AbstractEx
     end
 
     if isnothing(cross_tree1)
-        cross_tree1 = expr_to_tree(T, String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options)
-    end
-    
-    if isnothing(cross_tree2)
-        cross_tree2 = expr_to_tree(T, String(strip(cross_tree_options[2], [' ', '\n', '"', ',', '.', '[', ']'])), options)
+        cross_tree1 = expr_to_tree(
+            T,
+            String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
+            options,
+        )
     end
 
-    open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-        write(file, "- " * tree_to_expr(cross_tree1, options) * " && " * tree_to_expr(cross_tree2, options) * "\n")
+    if isnothing(cross_tree2)
+        cross_tree2 = expr_to_tree(
+            T,
+            String(strip(cross_tree_options[2], [' ', '\n', '"', ',', '.', '[', ']'])),
+            options,
+        )
+    end
+
+    if options.llm_options.active
+        open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
+            write(
+                file,
+                "- " *
+                tree_to_expr(cross_tree1, options) *
+                " && " *
+                tree_to_expr(cross_tree2, options) *
+                "\n",
+            )
+        end
     end
 
     return cross_tree1, cross_tree2
 end
-
 
 end
