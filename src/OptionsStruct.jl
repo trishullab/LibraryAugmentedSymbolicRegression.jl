@@ -7,6 +7,7 @@ using DynamicExpressions:
 using LossFunctions: SupervisedLoss
 
 import ..MutationWeightsModule: MutationWeights
+import ..LLMOptionsModule: LLMOptions
 
 """
 This struct defines how complexity is calculated.
@@ -157,6 +158,7 @@ struct Options{
     batching::Bool
     batch_size::Int
     mutation_weights::MutationWeights
+    llm_options::LLMOptions
     crossover_probability::Float32
     warmup_maxsize_by::Float32
     use_frequency::Bool
@@ -209,7 +211,7 @@ function Base.print(io::IO, options::Options)
         *
         join(
             [
-                if fieldname in (:optimizer_options, :mutation_weights)
+                if fieldname in (:optimizer_options, :mutation_weights, :llm_options)
                     "$(fieldname)=..."
                 else
                     "$(fieldname)=$(getfield(options, fieldname))"

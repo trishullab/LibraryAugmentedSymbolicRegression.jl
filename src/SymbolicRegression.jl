@@ -7,6 +7,8 @@ export Population,
     Options,
     Dataset,
     MutationWeights,
+    LLMWeights,
+    LLMOptions,
     Node,
     GraphNode,
     ParametricNode,
@@ -186,6 +188,7 @@ using DispatchDoctor: @stable
     include("CheckConstraints.jl")
     include("AdaptiveParsimony.jl")
     include("MutationFunctions.jl")
+    include("LLMFunctions.jl")
     include("LossFunctions.jl")
     include("PopMember.jl")
     include("ConstantOptimization.jl")
@@ -210,6 +213,8 @@ using .CoreModule:
     Dataset,
     Options,
     MutationWeights,
+    LLMOptions,
+    LLMWeights,
     plus,
     sub,
     mult,
@@ -234,7 +239,7 @@ using .CoreModule:
     erfc,
     atanh_clip,
     create_expression
-using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
+using .UtilsModule: is_anonymous_function, recursive_merge, json3_write
 using .ComplexityModule: compute_complexity
 using .CheckConstraintsModule: check_constraints
 using .AdaptiveParsimonyModule:
@@ -245,6 +250,9 @@ using .MutationFunctionsModule:
     random_node,
     random_node_and_parent,
     crossover_trees
+using .LLMFunctionsModule:
+    update_idea_database
+
 using .InterfaceDynamicExpressionsModule: @extend_operators
 using .LossFunctionsModule: eval_loss, score_func, update_baseline_loss!
 using .PopMemberModule: PopMember, reset_birth!
@@ -620,11 +628,14 @@ end
 @noinline function _equation_search(
     datasets::Vector{D}, ropt::RuntimeOptions, options::Options, saved_state
 ) where {D<:Dataset}
+    # PROMPT EVOLUTION
+    idea_database_all = [Vector{String}() for j in 1:length(datasets)]
+
     _validate_options(datasets, ropt, options)
     state = _create_workers(datasets, ropt, options)
-    _initialize_search!(state, datasets, ropt, options, saved_state)
-    _warmup_search!(state, datasets, ropt, options)
-    _main_search_loop!(state, datasets, ropt, options)
+    _initialize_search!(state, datasets, ropt, options, saved_state, idea_database_all)
+    _warmup_search!(state, datasets, ropt, options, idea_database_all)
+    _main_search_loop!(state, datasets, ropt, options, idea_database_all)
     _tear_down!(state, ropt, options)
     return _format_output(state, datasets, ropt, options)
 end
@@ -747,7 +758,7 @@ end
     )
 end
 function _initialize_search!(
-    state::SearchState{T,L,N}, datasets, ropt::RuntimeOptions, options::Options, saved_state
+    state::SearchState{T,L,N}, datasets, ropt::RuntimeOptions, options::Options, saved_state, idea_database_all
 ) where {T,L,N}
     nout = length(datasets)
 
@@ -805,6 +816,7 @@ function _initialize_search!(
                                 nlength=3,
                                 options=options,
                                 nfeatures=datasets[j].nfeatures,
+                                idea_database=idea_database_all[j]
                             ),
                             HallOfFame(options, datasets[j]),
                             RecordType(),
@@ -821,7 +833,7 @@ function _initialize_search!(
     return nothing
 end
 function _warmup_search!(
-    state::SearchState{T,L,N}, datasets, ropt::RuntimeOptions, options::Options
+    state::SearchState{T,L,N}, datasets, ropt::RuntimeOptions, options::Options, idea_database_all
 ) where {T,L,N}
     nout = length(datasets)
     for j in 1:nout, i in 1:(options.populations)
@@ -852,6 +864,7 @@ function _warmup_search!(
                     ropt.verbosity,
                     cur_maxsize,
                     running_search_statistics=c_rss,
+                    idea_database=idea_database_all[j],
                 )::DefaultWorkerOutputType{Population{T,L,N},HallOfFame{T,L,N}}
             end,
             parallelism = ropt.parallelism,
@@ -862,7 +875,7 @@ function _warmup_search!(
     return nothing
 end
 function _main_search_loop!(
-    state::SearchState{T,L,N}, datasets, ropt::RuntimeOptions, options::Options
+    state::SearchState{T,L,N}, datasets, ropt::RuntimeOptions, options::Options, idea_database_all
 ) where {T,L,N}
     ropt.verbosity > 0 && @info "Started!"
     nout = length(datasets)
@@ -896,6 +909,11 @@ function _main_search_loop!(
         start_reporting_at=options.populations * 3 * nout,
         window_size=options.populations * 2 * nout,
     )
+    n_iterations = 0
+    open(options.llm_options.llm_recorder_dir * "n_iterations.txt", "a") do file
+        write(file, "- " * string(div(n_iterations,options.populations)) * "\n")
+    end
+    worst_members = Vector{PopMember}()
     while sum(state.cycles_remaining) > 0
         kappa += 1
         if kappa > options.populations * nout
@@ -903,6 +921,7 @@ function _main_search_loop!(
         end
         # nout, populations:
         j, i = state.task_order[kappa]
+        idea_database = idea_database_all[j]
 
         # Check if error on population:
         if ropt.parallelism in (:multiprocessing, :multithreading)
@@ -924,6 +943,10 @@ function _main_search_loop!(
         # TODO - this might skip extra cycles?
         population_ready &= (state.cycles_remaining[j] > 0)
         if population_ready
+            if n_iterations % options.populations == 0
+                worst_members = Vector{PopMember}()
+            end
+            n_iterations += 1
             # Take the fetch operation from the channel since its ready
             (cur_pop, best_seen, cur_record, cur_num_evals) = if ropt.parallelism in
                 (
@@ -942,9 +965,16 @@ function _main_search_loop!(
             dataset = datasets[j]
             cur_maxsize = state.cur_maxsizes[j]
 
+            worst_member = nothing
             for member in cur_pop.members
+                if worst_member == nothing || worst_member.loss < member.loss
+                    worst_member = member
+                end
                 size = compute_complexity(member, options)
                 update_frequencies!(state.all_running_search_statistics[j]; size)
+            end
+            if worst_member != nothing && worst_member.loss > 100 # if the worst of population is good then thats still good to keep
+                push!(worst_members, worst_member)
             end
             #! format: off
             update_hall_of_fame!(state.halls_of_fame[j], cur_pop.members, options)
@@ -953,6 +983,9 @@ function _main_search_loop!(
 
             # Dominating pareto curve - must be better than all simpler equations
             dominating = calculate_pareto_frontier(state.halls_of_fame[j])
+            if options.llm_options.active && options.llm_options.prompt_evol && (n_iterations % options.populations == 0)
+                update_idea_database(idea_database, dominating, worst_members, options)
+            end
 
             if options.save_to_file
                 save_to_file(dominating, nout, j, dataset, options)
@@ -1004,6 +1037,8 @@ function _main_search_loop!(
                         ropt.verbosity,
                         cur_maxsize,
                         running_search_statistics=c_rss,
+                        dominating=dominating,
+                        idea_database=idea_database,
                     )
                 end,
                 parallelism = ropt.parallelism,
@@ -1088,6 +1123,9 @@ function _main_search_loop!(
         end
         ################################################################
     end
+    open(options.llm_options.llm_recorder_dir * "n_iterations.txt", "a") do file
+        write(file, "- " * string(div(n_iterations,options.populations)) * "\n")
+    end
     return nothing
 end
 function _tear_down!(state::SearchState, ropt::RuntimeOptions, options::Options)
@@ -1133,6 +1171,8 @@ end
     verbosity,
     cur_maxsize::Int,
     running_search_statistics,
+    dominating=nothing,
+    idea_database=nothing,
 ) where {T,L,N}
     record = RecordType()
     @recorder record["out$(out)_pop$(pop)"] = RecordType(
@@ -1149,6 +1189,8 @@ end
         verbosity=verbosity,
         options=options,
         record=record,
+        dominating=dominating,
+        idea_database=idea_database,
     )
     num_evals += evals_from_cycle
     out_pop, evals_from_optimize = optimize_and_simplify_population(

@@ -1,6 +1,7 @@
 module MutateModule
 
 using DynamicExpressions:
+    AbstractExpressionNode,
     AbstractExpression,
     ParametricExpression,
     with_contents,
@@ -28,8 +29,23 @@ using ..MutationFunctionsModule:
     crossover_trees,
     form_random_connection!,
     break_random_connection!
+
+using ..LLMFunctionsModule:
+    llm_mutate_op,
+    llm_crossover_trees,
+    tree_to_expr,
+    gen_llm_random_tree
+
 using ..ConstantOptimizationModule: optimize_constants
 using ..RecorderModule: @recorder
+
+function check_constant(tree::AbstractExpressionNode)::Bool
+    (tree.degree == 0) && tree.constant
+end
+
+function check_constant(tree::AbstractExpression)::Bool
+    check_constant(get_tree(tree))
+end
 
 function condition_mutation_weights!(
     weights::MutationWeights, member::PopMember, options::Options, curmaxsize::Int
@@ -89,6 +105,8 @@ function next_generation(
     running_search_statistics::RunningSearchStatistics,
     options::Options;
     tmp_recorder::RecordType,
+    dominating=nothing,
+    idea_database=nothing,
 )::Tuple{
     P,Bool,Float64
 } where {T,L,D<:Dataset{T,L},N<:AbstractExpression{T},P<:PopMember{T,L,N}}
@@ -122,6 +140,32 @@ function next_generation(
     # Mutations
     #############################################
     local tree
+    if options.llm_options.active && (rand() < options.llm_options.weights.llm_mutate)
+        tree = copy_node(member.tree)
+        if check_constant(tree)
+            tree = with_contents(
+                tree,
+                gen_random_tree_fixed_size(rand(1:curmaxsize), options, nfeatures, T)
+            )
+        end
+        tree = llm_mutate_op(tree, options, dominating, idea_database)
+        tree = simplify_tree!(tree, options.operators)
+        tree = combine_operators(tree, options.operators)
+        @recorder tmp_recorder["type"] = "llm_mutate"
+
+        successful_mutation = (!check_constant(tree)) && check_constraints(tree, options, curmaxsize)
+
+        if successful_mutation
+            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
+                write(file, "- MUTATE: " * tree_to_expr(tree, options) * "\n")
+            end
+        else
+            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
+                write(file, "- MUTATE: FAILED - " * tree_to_expr(tree, options) * "\n")
+            end
+        end
+    end
+
     while (!successful_mutation) && attempts < max_attempts
         tree = copy_node(member.tree)
         successful_mutation = true
@@ -184,13 +228,31 @@ function next_generation(
             # We select a random size, though the generated tree
             # may have fewer nodes than we request.
             tree_size_to_generate = rand(1:curmaxsize)
-            tree = with_contents(
-                tree,
-                gen_random_tree_fixed_size(tree_size_to_generate, options, nfeatures, T),
-            )
-            @recorder tmp_recorder["type"] = "regenerate"
+            if options.llm_options.active && (rand() < options.llm_options.weights.llm_gen_random)
+                tree = with_contents(
+                    tree,
+                    combine_operators(simplify_tree!(gen_llm_random_tree(tree_size_to_generate, options, nfeatures, T, idea_database), options.operators), options.operators)
+                )
+                @recorder tmp_recorder["type"] = "regenerate_llm"
+                
+                is_success_always_possible = false
 
-            is_success_always_possible = true
+                if check_constant(tree) # don't allow constant outputs
+                    tree = with_contents(
+                        tree,
+                        gen_random_tree_fixed_size(tree_size_to_generate, options, nfeatures, T)
+                    )
+                    is_success_always_possible = true
+                end
+            else
+                tree = with_contents(
+                    tree,
+                    gen_random_tree_fixed_size(tree_size_to_generate, options, nfeatures, T),
+                )
+                @recorder tmp_recorder["type"] = "regenerate"
+
+                is_success_always_possible = true
+            end
         elseif mutation_choice == :optimize
             cur_member = PopMember(
                 tree,
@@ -363,20 +425,75 @@ end
 
 """Generate a generation via crossover of two members."""
 function crossover_generation(
-    member1::P, member2::P, dataset::D, curmaxsize::Int, options::Options
+    member1::P, member2::P, dataset::D, curmaxsize::Int, options::Options;
+    dominating=nothing,
+    idea_database=nothing,
 )::Tuple{P,P,Bool,Float64} where {T,L,D<:Dataset{T,L},N,P<:PopMember{T,L,N}}
     tree1 = member1.tree
     tree2 = member2.tree
+
+    # add simplification for crossover
+    tree1 = simplify_tree!(tree1, options.operators)
+    tree1 = combine_operators(tree1, options.operators)
+    tree2 = simplify_tree!(tree2, options.operators)
+    tree2 = combine_operators(tree2, options.operators)
+
     crossover_accepted = false
+    nfeatures = dataset.nfeatures
+
+    if check_constant(tree1)
+        tree1 = with_contents(
+            tree1,
+            gen_random_tree_fixed_size(rand(1:curmaxsize), options, nfeatures, T),
+        )
+    end
+    if check_constant(tree2)
+        tree2 = with_contents(
+            tree2,
+            gen_random_tree_fixed_size(rand(1:curmaxsize), options, nfeatures, T)
+        )
+    end
+
+    child_tree1 = nothing
+    child_tree2 = nothing
+    llm_skip = false
+    if options.llm_options.active && (rand() < options.llm_options.weights.llm_crossover)
+        child_tree1, child_tree2 = llm_crossover_trees(tree1, tree2, options, dominating, idea_database)
+
+        child_tree1 = simplify_tree!(child_tree1, options.operators)
+        child_tree1 = combine_operators(child_tree1, options.operators)
+        child_tree2 = simplify_tree!(child_tree2, options.operators)
+        child_tree2 = combine_operators(child_tree2, options.operators)
+
+        afterSize1 = compute_complexity(child_tree1, options)
+        afterSize2 = compute_complexity(child_tree2, options)
+
+        successful_crossover = (!check_constant(child_tree1)) && (!check_constant(child_tree2)) &&
+            check_constraints(child_tree1, options, curmaxsize, afterSize1) &&
+            check_constraints(child_tree2, options, curmaxsize, afterSize2)
+
+        if successful_crossover
+            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
+                write(file, "- CROSSOVER: " * tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options) * "\n")
+            end
+            llm_skip = true
+        else
+            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
+                write(file, "- CROSSOVER: FAILED - " * tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options) * "\n")
+            end
+            child_tree1, child_tree2 = crossover_trees(tree1, tree2)
+        end
+    else
+        child_tree1, child_tree2 = crossover_trees(tree1, tree2)
+    end
 
     # We breed these until constraints are no longer violated:
-    child_tree1, child_tree2 = crossover_trees(tree1, tree2)
     num_tries = 1
     max_tries = 10
     num_evals = 0.0
     afterSize1 = -1
     afterSize2 = -1
-    while true
+    while !llm_skip
         afterSize1 = compute_complexity(child_tree1, options)
         afterSize2 = compute_complexity(child_tree2, options)
         # Both trees satisfy constraints
