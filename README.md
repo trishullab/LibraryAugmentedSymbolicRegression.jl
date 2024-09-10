@@ -6,6 +6,8 @@
     <a href="https://trishullab.github.io/lasr-web/static/lasr-slides.pdf"> Short Slide Deck</a>
 </center>
 
+**Purpose**: This branch contains code to run LaSR on the synthetic dataset and the Feynman Equations dataset. We hope this is useful for future work which wishes to compare against LaSR.
+
 ## Installation
 
 ```bash
