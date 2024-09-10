@@ -21,3 +21,4 @@ docs/src/index.md
 .vscode
 **/*.json
 LocalPreferences.toml
+*.key

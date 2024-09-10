@@ -38,12 +38,11 @@ $ vim pysr/juliapkg.jl
 #     }
 # }
 (lasr) $ pip install .
-# Run run.sh to run all experiments.
 (lasr) $ cat vllm_api.key
 token-abc123
 # ^ There is no newline at the end of the file.
 (lasr) $ python -m experiments.main --use_llm --use_prompt_evol --model "meta-llama/Meta-Llama-3-8B-Instruct" --api_key "vllm_api.key" --model_url "http://localhost:11440/v1" --exp_idx 0 --dataset_path data/FeynmanEquations.csv  --dataset "Feynman" --start_idx 0 
-# For more commands, checkout `run.sh`
+# For more commands, read `run.sh`
 
 # To run bigbench experiments
 (lasr) $ unzip bigbench.zip
@@ -53,4 +52,22 @@ token-abc123
 # VLLM Setup: https://docs.vllm.ai/en/latest/
 $ conda activate vllm
 (vllm) $ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m vllm.entrypoints.openai.api_server --model meta-llama/Meta-Llama-3-8B-Instruct --api-key token-abc123 --port 11440 --tensor-parallel-size 8 --disable-log-requests --block-size 32 --swap-space 4
+
+#  The Julia code doesn't validate the backend API. I used this to validate the backend API:
+curl {your_model_url}/chat/completions \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer {your_api_key}" \
+-d '{
+"model": "{your_model_name}",
+"messages": [
+  {
+    "role": "system",
+    "content": "You are a helpful assistant."
+  },
+  {
+    "role": "user",
+    "content": "Hello!"
+  }
+]
+}' 
 ```
