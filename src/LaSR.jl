@@ -1225,8 +1225,6 @@ function __init__()
     @require_extensions
 end
 
-macro ignore(args...) end
-
 # Hack to get static analysis to work from within tests:
 @ignore include("../test/runtests.jl")
 
