@@ -56,7 +56,7 @@ using ..UtilsModule: max_ops, @save_kwargs, @ignore
             op in unary_operators
         ]
     else
-        una_constraints
+        _una_constraints1
     end
 
     is_bin_constraints_already_done = bin_constraints isa Vector{Tuple{Int,Int}}
@@ -76,7 +76,7 @@ using ..UtilsModule: max_ops, @save_kwargs, @ignore
             end for op in binary_operators
         ]
     else
-        bin_constraints
+        _bin_constraints1
     end
 
     return _una_constraints2, _bin_constraints2
