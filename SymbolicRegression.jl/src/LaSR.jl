@@ -239,7 +239,7 @@ using .CoreModule:
     erfc,
     atanh_clip,
     create_expression
-using .UtilsModule: is_anonymous_function, recursive_merge, json3_write
+using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
 using .ComplexityModule: compute_complexity
 using .CheckConstraintsModule: check_constraints
 using .AdaptiveParsimonyModule:
@@ -250,7 +250,7 @@ using .MutationFunctionsModule:
     random_node,
     random_node_and_parent,
     crossover_trees
-using .LLMFunctionsModule: update_idea_database
+using .LLMFunctionsModule: update_idea_database, llm_recorder
 
 using .InterfaceDynamicExpressionsModule: @extend_operators
 using .LossFunctionsModule: eval_loss, score_func, update_baseline_loss!
@@ -922,11 +922,7 @@ function _main_search_loop!(
         window_size=options.populations * 2 * nout,
     )
     n_iterations = 0
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "n_iterations.txt", "a") do file
-            write(file, "- " * string(div(n_iterations, options.populations)) * "\n")
-        end
-    end
+    llm_recorder(options.llm_options, string(div(n_iterations, options.populations)), "n_iterations")
     worst_members = Vector{PopMember}()
     while sum(state.cycles_remaining) > 0
         kappa += 1
@@ -1139,11 +1135,7 @@ function _main_search_loop!(
         end
         ################################################################
     end
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "n_iterations.txt", "a") do file
-            write(file, "- " * string(div(n_iterations, options.populations)) * "\n")
-        end
-    end
+    llm_recorder(options.llm_options, string(div(n_iterations, options.populations)), "n_iterations")
     return nothing
 end
 function _tear_down!(state::SearchState, ropt::RuntimeOptions, options::Options)

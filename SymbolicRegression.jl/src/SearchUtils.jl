@@ -4,7 +4,7 @@ This includes: process management, stdin reading, checking for early stops."""
 module SearchUtilsModule
 
 using Printf: @printf, @sprintf
-using Distributed
+using Distributed: Distributed, @spawnat, Future, procs
 using StatsBase: mean
 using DispatchDoctor: @unstable
 
@@ -14,10 +14,9 @@ using ..CoreModule: Dataset, Options, MAX_DEGREE, RecordType
 using ..ComplexityModule: compute_complexity
 using ..PopulationModule: Population
 using ..PopMemberModule: PopMember
-using ..HallOfFameModule:
-    HallOfFame, calculate_pareto_frontier, string_dominating_pareto_curve
+using ..HallOfFameModule: HallOfFame, string_dominating_pareto_curve
 using ..ProgressBarsModule: WrappedProgressBar, set_multiline_postfix!, manually_iterate!
-using ..AdaptiveParsimonyModule: update_frequencies!, RunningSearchStatistics
+using ..AdaptiveParsimonyModule: RunningSearchStatistics
 
 """
     RuntimeOptions{N,PARALLELISM,DIM_OUT,RETURN_STATE}
@@ -129,11 +128,26 @@ end
 function init_dummy_pops(
     npops::Int, datasets::Vector{D}, options::Options
 ) where {T,L,D<:Dataset{T,L}}
+    prototype = Population(
+        first(datasets);
+        population_size=1,
+        options=options,
+        nfeatures=first(datasets).nfeatures,
+    )
+    # ^ Due to occasional inference issue, we manually specify the return type
     return [
-        [
-            Population(d; population_size=1, options=options, nfeatures=d.nfeatures) for
-            _ in 1:npops
-        ] for d in datasets
+        typeof(prototype)[
+            if (i == 1 && j == 1)
+                prototype
+            else
+                Population(
+                    datasets[j];
+                    population_size=1,
+                    options=options,
+                    nfeatures=datasets[j].nfeatures,
+                )
+            end for i in 1:npops
+        ] for j in 1:length(datasets)
     ]
 end
 
