@@ -25,6 +25,8 @@ function s_r_cycle(
     verbosity::Int=0,
     options::Options,
     record::RecordType,
+    dominating=nothing,
+    idea_database=nothing,
 )::Tuple{
     P,HallOfFame{T,L,N},Float64
 } where {T,L,D<:Dataset{T,L},N<:AbstractExpression{T},P<:Population{T,L,N}}
@@ -52,6 +54,8 @@ function s_r_cycle(
             running_search_statistics,
             options,
             record,
+            dominating=dominating,
+            idea_database=idea_database,
         )
         num_evals += tmp_num_evals
         for (i, member) in enumerate(pop.members)

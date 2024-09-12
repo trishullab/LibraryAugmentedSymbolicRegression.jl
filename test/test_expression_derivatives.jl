@@ -1,5 +1,5 @@
 @testitem "Test derivatives" tags = [:part1] begin
-    using SymbolicRegression
+    using LaSR
     using Zygote: Zygote
     using Random: MersenneTwister
 
@@ -36,8 +36,8 @@
 end
 
 @testitem "Test derivatives during optimization" tags = [:part1] begin
-    using SymbolicRegression
-    using SymbolicRegression.ConstantOptimizationModule: Evaluator, GradEvaluator
+    using LaSR
+    using LaSR.ConstantOptimizationModule: Evaluator, GradEvaluator
     using DynamicExpressions
     using Zygote: Zygote
     using Random: MersenneTwister
@@ -67,8 +67,8 @@ end
 end
 
 @testitem "Test derivatives of parametric expression during optimization" tags = [:part3] begin
-    using SymbolicRegression
-    using SymbolicRegression.ConstantOptimizationModule:
+    using LaSR
+    using LaSR.ConstantOptimizationModule:
         Evaluator, GradEvaluator, optimize_constants, specialized_options
     using DynamicExpressions
     using Zygote: Zygote

@@ -1,4 +1,4 @@
-using SymbolicRegression: L2DistLoss, MutationWeights
+using LaSR: L2DistLoss, MutationWeights
 using DynamicExpressions.OperatorEnumConstructionModule: empty_all_globals!
 using Optim: Optim
 using LineSearches: LineSearches

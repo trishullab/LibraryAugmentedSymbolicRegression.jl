@@ -8,6 +8,7 @@ using ..ComplexityModule: compute_complexity
 using ..LossFunctionsModule: score_func, update_baseline_loss!
 using ..AdaptiveParsimonyModule: RunningSearchStatistics
 using ..MutationFunctionsModule: gen_random_tree
+using ..LLMFunctionsModule: gen_llm_random_tree
 using ..PopMemberModule: PopMember
 using ..UtilsModule: bottomk_fast, argmin_fast, PerThreadCache
 # A list of members of the population, with easy constructors,
@@ -25,6 +26,14 @@ function Population(pop::Vector{<:PopMember})
     return Population(pop, size(pop, 1))
 end
 
+function gen_random_tree_pop(nlength, options, nfeatures, T, idea_database)
+    if options.llm_options.active && (rand() < options.llm_options.weights.llm_gen_random)
+        gen_llm_random_tree(nlength, options, nfeatures, T, idea_database)
+    else
+        gen_random_tree(nlength, options, nfeatures, T)
+    end
+end
+
 """
     Population(dataset::Dataset{T,L};
                population_size, nlength::Int=3, options::Options,
@@ -39,6 +48,7 @@ function Population(
     nlength::Int=3,
     nfeatures::Int,
     npop=nothing,
+    idea_database=nothing,
 ) where {T,L}
     @assert (population_size !== nothing) ⊻ (npop !== nothing)
     population_size = if npop === nothing
@@ -50,7 +60,7 @@ function Population(
         [
             PopMember(
                 dataset,
-                gen_random_tree(nlength, options, nfeatures, T),
+                gen_random_tree_pop(nlength, options, nfeatures, T, idea_database),
                 options;
                 parent=-1,
                 deterministic=options.deterministic,

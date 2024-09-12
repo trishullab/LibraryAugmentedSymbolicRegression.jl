@@ -1,8 +1,8 @@
-using SymbolicRegression
-using SymbolicRegression: SymbolicRegression
-using SymbolicRegression: Dataset, RunningSearchStatistics, RecordType
+using LaSR
+using LaSR: LaSR
+using LaSR: Dataset, RunningSearchStatistics, RecordType
 using Optim: Optim
-using SymbolicRegression.MutateModule: next_generation
+using LaSR.MutateModule: next_generation
 using DynamicExpressions: get_scalar_constants
 
 mutation_weights = (; optimize=1e30)  # We also test whether a named tuple works.

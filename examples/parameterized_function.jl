@@ -1,4 +1,4 @@
-using SymbolicRegression
+using LaSR
 using Random: MersenneTwister
 using Zygote
 using MLJBase: machine, fit!, predict, report
@@ -17,7 +17,7 @@ y = [
 
 stop_at = Ref(1e-4)
 
-model = SRRegressor(;
+model = LaSRRegressor(;
     niterations=100,
     binary_operators=[+, *, /, -],
     unary_operators=[cos, exp],

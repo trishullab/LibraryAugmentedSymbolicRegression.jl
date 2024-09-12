@@ -4,7 +4,7 @@ using DispatchDoctor: @unstable
 using Optim: Optim
 using Dates: Dates
 using StatsBase: StatsBase
-using DynamicExpressions: OperatorEnum, Expression, default_node_type
+using DynamicExpressions: OperatorEnum, Node, Expression, default_node_type
 using ADTypes: AbstractADType, ADTypes
 using LossFunctions: L2DistLoss, SupervisedLoss
 using Optim: Optim
@@ -26,6 +26,7 @@ using ..OperatorsModule:
     safe_acosh,
     atanh_clip
 using ..MutationWeightsModule: MutationWeights, mutations
+using ..LLMOptionsModule: LLMOptions, validate_llm_options
 import ..OptionsStructModule: Options
 using ..OptionsStructModule: ComplexityMapping, operator_specialization
 using ..UtilsModule: max_ops, @save_kwargs, @ignore
@@ -54,6 +55,8 @@ using ..UtilsModule: max_ops, @save_kwargs, @ignore
             haskey(_una_constraints1, op) ? _una_constraints1[op]::Int : -1 for
             op in unary_operators
         ]
+    else
+        _una_constraints1
     end
 
     is_bin_constraints_already_done = bin_constraints isa Vector{Tuple{Int,Int}}
@@ -72,6 +75,8 @@ using ..UtilsModule: max_ops, @save_kwargs, @ignore
                 (-1, -1)
             end for op in binary_operators
         ]
+    else
+        _bin_constraints1
     end
 
     return _una_constraints2, _bin_constraints2
@@ -197,6 +202,9 @@ end
 
 create_mutation_weights(w::MutationWeights) = w
 create_mutation_weights(w::NamedTuple) = MutationWeights(; w...)
+
+create_llm_options(w::LLMOptions) = w
+create_llm_options(w::NamedTuple) = LLMOptions(; w...)
 
 const deprecated_options_mapping = Base.ImmutableDict(
     :mutationWeights => :mutation_weights,
@@ -386,6 +394,8 @@ const OPTION_DESCRIPTIONS = """- `binary_operators`: Vector of binary operators 
 - `mutation_weights`: Relative probabilities of the mutations. The struct
     `MutationWeights` should be passed to these options.
     See its documentation on `MutationWeights` for the different weights.
+- `llm_options`: Options for LLM inference. Managed through struct
+    `LLMOptions`. See its documentation for more details.
 - `crossover_probability`: Probability of performing crossover.
 - `annealing`: Whether to use simulated annealing.
 - `warmup_maxsize_by`: Whether to slowly increase the max size from 5 up to
@@ -468,6 +478,7 @@ $(OPTION_DESCRIPTIONS)
     batching::Bool=false,
     batch_size::Integer=50,
     mutation_weights::Union{MutationWeights,AbstractVector,NamedTuple}=MutationWeights(),
+    llm_options::LLMOptions=LLMOptions(),
     crossover_probability::Real=0.066,
     warmup_maxsize_by::Real=0.0,
     use_frequency::Bool=true,
@@ -550,6 +561,10 @@ $(OPTION_DESCRIPTIONS)
         k == :enable_autodiff && continue
         k == :ns && (tournament_selection_n = kws[k]; true) && continue
         k == :loss && (elementwise_loss = kws[k]; true) && continue
+        if k == :llm_options
+            llm_options = kws[k]
+            continue
+        end
         if k == :mutationWeights
             if typeof(kws[k]) <: AbstractVector
                 _mutation_weights = kws[k]
@@ -718,6 +733,8 @@ $(OPTION_DESCRIPTIONS)
     end
 
     set_mutation_weights = create_mutation_weights(mutation_weights)
+    set_llm_options = create_llm_options(llm_options)
+    validate_llm_options(set_llm_options)
 
     @assert print_precision > 0
 
@@ -763,6 +780,7 @@ $(OPTION_DESCRIPTIONS)
         batching,
         batch_size,
         set_mutation_weights,
+        set_llm_options,
         crossover_probability,
         warmup_maxsize_by,
         use_frequency,

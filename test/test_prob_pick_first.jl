@@ -1,5 +1,5 @@
 println("Testing whether tournament_selection_p works.")
-using SymbolicRegression
+using LaSR
 using DynamicExpressions: with_type_parameters, @parse_expression
 using Test
 include("test_params.jl")
@@ -34,11 +34,11 @@ for reverse in [false, true]
 
     pop = Population(members)
 
-    dummy_running_stats = SymbolicRegression.AdaptiveParsimonyModule.RunningSearchStatistics(;
+    dummy_running_stats = LaSR.AdaptiveParsimonyModule.RunningSearchStatistics(;
         options=options
     )
     best_pop_member = [
-        SymbolicRegression.best_of_sample(pop, dummy_running_stats, options).score for
+        LaSR.best_of_sample(pop, dummy_running_stats, options).score for
         j in 1:100
     ]
 

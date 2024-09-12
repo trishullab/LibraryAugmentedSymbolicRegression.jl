@@ -1,10 +1,10 @@
 @testitem "Generic interface tests" tags = [:part1] begin
-    using SymbolicRegression
+    using LaSR
     using MLJTestInterface: MLJTestInterface as MTI
     include("test_params.jl")
 
     failures, summary = MTI.test(
-        [SRRegressor], MTI.make_regression()...; mod=@__MODULE__, verbosity=0, throw=true
+        [LaSRRegressor], MTI.make_regression()...; mod=@__MODULE__, verbosity=0, throw=true
     )
     @test isempty(failures)
 
@@ -13,14 +13,14 @@
     (X, Y) = MTI.table.((X, Y))
     w = ones(100)
     failures, summary = MTI.test(
-        [MultitargetSRRegressor], X, Y, w; mod=@__MODULE__, verbosity=0, throw=true
+        [MultitargetLaSRRegressor], X, Y, w; mod=@__MODULE__, verbosity=0, throw=true
     )
     @test isempty(failures)
 end
 
 @testitem "Variable names - single outputs" tags = [:part3] begin
-    using SymbolicRegression
-    using SymbolicRegression: Node
+    using LaSR
+    using LaSR: Node
     using MLJBase
     using SymbolicUtils
     using Random: MersenneTwister
@@ -33,7 +33,7 @@ end
     X = (a=rand(rng, 32), b=rand(rng, 32))
     y = X.a .^ 2.1
     # We also make sure the deprecated npop and npopulations still work:
-    model = SRRegressor(; niterations=10, npop=1000, npopulations=15, stop_kws...)
+    model = LaSRRegressor(; niterations=10, npop=1000, npopulations=15, stop_kws...)
     mach = machine(model, X, y)
     fit!(mach)
     rep = report(mach)
@@ -56,7 +56,7 @@ end
 end
 
 @testitem "Variable names - multiple outputs" tags = [:part1] begin
-    using SymbolicRegression
+    using LaSR
     using MLJBase
     using Random: MersenneTwister
 
@@ -67,7 +67,7 @@ end
     rng = MersenneTwister(0)
     X = (a=rand(rng, 32), b=rand(rng, 32))
     y = X.a .^ 2.1
-    model = MultitargetSRRegressor(; niterations=10, stop_kws...)
+    model = MultitargetLaSRRegressor(; niterations=10, stop_kws...)
     mach = machine(model, X, reduce(hcat, [reshape(y, :, 1) for i in 1:3]))
     fit!(mach)
     rep = report(mach)
@@ -94,7 +94,7 @@ end
 end
 
 @testitem "Variable names - named outputs" tags = [:part1] begin
-    using SymbolicRegression
+    using LaSR
     using MLJBase
     using Random: MersenneTwister
 
@@ -106,7 +106,7 @@ end
     X = (b1=randn(rng, 32), b2=randn(rng, 32))
     Y = (c1=X.b1 .* X.b2, c2=X.b1 .+ X.b2)
     w = ones(32)
-    model = MultitargetSRRegressor(; niterations=10, stop_kws...)
+    model = MultitargetLaSRRegressor(; niterations=10, stop_kws...)
     mach = machine(model, X, Y, w)
     fit!(mach)
     test_outs = predict(mach, X)
@@ -118,7 +118,7 @@ end
 end
 
 @testitem "Good predictions" tags = [:part1] begin
-    using SymbolicRegression
+    using LaSR
     using MLJBase
     using Random: MersenneTwister
 
@@ -129,46 +129,46 @@ end
     rng = MersenneTwister(0)
     X = randn(rng, 100, 3)
     Y = X
-    model = MultitargetSRRegressor(; niterations=10, stop_kws...)
+    model = MultitargetLaSRRegressor(; niterations=10, stop_kws...)
     mach = machine(model, X, Y)
     fit!(mach)
     @test sum(abs2, predict(mach, X) .- Y) / length(X) < 1e-6
 end
 
 @testitem "Helpful errors" tags = [:part3] begin
-    using SymbolicRegression
+    using LaSR
     using MLJBase
     using Random: MersenneTwister
 
     include("test_params.jl")
 
-    model = MultitargetSRRegressor()
+    model = MultitargetLaSRRegressor()
     rng = MersenneTwister(0)
     mach = machine(model, randn(rng, 32, 3), randn(rng, 32); scitype_check_level=0)
     @test_throws AssertionError @quiet(fit!(mach))
     VERSION >= v"1.8" &&
         @test_throws "For single-output regression, please" @quiet(fit!(mach))
 
-    model = SRRegressor()
+    model = LaSRRegressor()
     rng = MersenneTwister(0)
     mach = machine(model, randn(rng, 32, 3), randn(rng, 32, 2); scitype_check_level=0)
     @test_throws AssertionError @quiet(fit!(mach))
     VERSION >= v"1.8" &&
         @test_throws "For multi-output regression, please" @quiet(fit!(mach))
 
-    model = SRRegressor(; verbosity=0)
+    model = LaSRRegressor(; verbosity=0)
     rng = MersenneTwister(0)
     mach = machine(model, randn(rng, 32, 3), randn(rng, 32))
     @test_throws ErrorException @quiet(fit!(mach; verbosity=0))
 end
 
 @testitem "Unfinished search" tags = [:part3] begin
-    using SymbolicRegression
+    using LaSR
     using MLJBase
     using Suppressor
     using Random: MersenneTwister
 
-    model = SRRegressor(; timeout_in_seconds=1e-10)
+    model = LaSRRegressor(; timeout_in_seconds=1e-10)
     rng = MersenneTwister(0)
     mach = machine(model, randn(rng, 32, 3), randn(rng, 32))
     fit!(mach)
@@ -176,7 +176,7 @@ end
     _, hof = mach.fitresult.state
     hof.exists .= false
     # Recompute the report:
-    mach.report[:fit] = SymbolicRegression.MLJInterfaceModule.full_report(
+    mach.report[:fit] = LaSR.MLJInterfaceModule.full_report(
         model, mach.fitresult
     )
     @test report(mach).best_idx == 0
@@ -186,7 +186,7 @@ end
     end
     @test occursin("Evaluation failed either due to", msg)
 
-    model = MultitargetSRRegressor(; timeout_in_seconds=1e-10)
+    model = MultitargetLaSRRegressor(; timeout_in_seconds=1e-10)
     rng = MersenneTwister(0)
     mach = machine(model, randn(rng, 32, 3), randn(rng, 32, 3))
     fit!(mach)
@@ -195,7 +195,7 @@ end
     foreach(hofs) do hof
         hof.exists .= false
     end
-    mach.report[:fit] = SymbolicRegression.MLJInterfaceModule.full_report(
+    mach.report[:fit] = LaSR.MLJInterfaceModule.full_report(
         model, mach.fitresult
     )
     @test report(mach).best_idx == [0, 0, 0]

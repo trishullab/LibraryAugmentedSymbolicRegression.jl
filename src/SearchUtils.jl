@@ -1,4 +1,4 @@
-"""Functions to help with the main loop of SymbolicRegression.jl.
+"""Functions to help with the main loop of LaSR.jl.
 
 This includes: process management, stdin reading, checking for early stops."""
 module SearchUtilsModule

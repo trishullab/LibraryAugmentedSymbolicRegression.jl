@@ -6,6 +6,7 @@ include("Utils.jl")
 include("ProgramConstants.jl")
 include("Dataset.jl")
 include("MutationWeights.jl")
+include("LLMOptions.jl")
 include("OptionsStruct.jl")
 include("Operators.jl")
 include("Options.jl")
@@ -14,8 +15,9 @@ using .ProgramConstantsModule:
     MAX_DEGREE, BATCH_DIM, FEATURE_DIM, RecordType, DATA_TYPE, LOSS_TYPE
 using .DatasetModule: Dataset
 using .MutationWeightsModule: MutationWeights, sample_mutation
+using .LLMOptionsModule: LLMOptions, LLMWeights
 using .OptionsStructModule: Options, ComplexityMapping, specialized_options
-using .OptionsModule: Options
+using .OptionsModule: Options, binopmap, unaopmap
 using .OperatorsModule:
     plus,
     sub,
