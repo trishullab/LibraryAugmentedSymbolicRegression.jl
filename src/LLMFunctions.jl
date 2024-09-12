@@ -20,7 +20,7 @@ using DynamicExpressions:
     string_tree,
     AbstractOperatorEnum
 using Compat: Returns, @inline
-using ..CoreModule: Options, DATA_TYPE, binopmap, unaopmap
+using ..CoreModule: Options, DATA_TYPE, binopmap, unaopmap, LLMOptions
 using ..MutationFunctionsModule: gen_random_tree_fixed_size
 
 using PromptingTools:
@@ -32,6 +32,18 @@ using PromptingTools:
     OllamaSchema,
     OpenAISchema
 using JSON: parse
+
+"""LLM Recoder records the LLM calls for debugging purposes."""
+function llm_recorder(options::LLMOptions, expr::String, mode::String="debug")
+    if options.active
+        if !isdir(options.llm_recorder_dir)
+            mkdir(options.llm_recorder_dir)
+        end
+        recorder = open(joinpath(options.llm_recorder_dir, "llm_calls.txt"), "a")
+        write(recorder, string("[", mode, "] ", expr, "\n[/", mode, "]\n"))
+        close(recorder)
+    end
+end
 
 function load_prompt(path::String)::String
     # load prompt file 
@@ -153,6 +165,7 @@ function gen_llm_random_tree(
             ),
         ),
     ]
+    llm_recorder(options.llm_options, conversation[1].content, "llm_input|gen_random")
 
     if options.llm_options.llm_context != ""
         pushfirst!(assumptions, options.llm_options.llm_context)
@@ -172,30 +185,17 @@ function gen_llm_random_tree(
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-                write(file, "- None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "gen_random|failed")
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
-
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-            write(file, "- GEN RANDOM:\n" * msg.content * "\n\n")
-        end
-    end
+    llm_recorder(options.llm_options, string(msg.content), "llm_output|gen_random")
 
     gen_tree_options = parse_msg_content(msg.content)
 
     N = min(size(gen_tree_options)[1], N)
 
     if N == 0
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-                write(file, "- None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "gen_random|failed")
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
@@ -209,12 +209,7 @@ function gen_llm_random_tree(
         if t.val == 1 && t.constant
             continue
         end
-
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-                write(file, "- " * tree_to_expr(t, options) * "\n")
-            end
-        end
+        llm_recorder(options.llm_options, tree_to_expr(t, options), "gen_random")
 
         return t
     end
@@ -223,11 +218,7 @@ function gen_llm_random_tree(
         T, String(strip(gen_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "gen_random.txt", "a") do file
-            write(file, "- " * tree_to_expr(out, options) * "\n")
-        end
-    end
+    llm_recorder(options.llm_options, tree_to_expr(out, options), "gen_random")
 
     if out.val == 1 && out.constant
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
@@ -400,30 +391,12 @@ function expr_to_tree_run(::Type{T}, x::String, options)::Node{T} where {T<:DATA
     end
 end
 
-# TODO: not perfect but decent
-# function expr_to_tree(::Type{T}, x::String, options)::ParametricNode{T} where {T<:DATA_TYPE}
-#     # open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-#     #     write(file, "- " * x * " -> ")
-#     # end
-#     out = ParametricNode{T}(expr_to_tree_run(T, x, options))
-#     # open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-#     #     write(file, "- " * x * " -> " * tree_to_expr(out, options) * "\n")
-#     # end
-#     return out
-# end
-
 function expr_to_tree(::Type{T}, x::String, options) where {T<:DATA_TYPE}
-    # open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-    #     write(file, "- " * x * " -> ")
-    # end
     if options.llm_options.is_parametric
         out = ParametricNode{T}(expr_to_tree_run(T, x, options))
     else
         out = Node{T}(expr_to_tree_run(T, x, options))
     end
-    # open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-    #     write(file, "- " * x * " -> " * tree_to_expr(out, options) * "\n")
-    # end
     return out
 end
 
@@ -515,6 +488,7 @@ function prompt_evol(idea_database, options::Options)
             ),
         ),
     ]
+    llm_recorder(options.llm_options, conversation[1].content, "llm_input|ideas")
 
     msg = nothing
     try
@@ -528,24 +502,17 @@ function prompt_evol(idea_database, options::Options)
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-                write(file, "- ADDED: None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "ideas|failed")
         return nothing
     end
+    llm_recorder(options.llm_options, string(msg.content), "llm_output|ideas")
 
     idea_options = parse_msg_content(msg.content)
 
     N = min(size(idea_options)[1], N)
 
     if N == 0
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-                write(file, "- ADDED: None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "ideas|failed")
         return nothing
     end
 
@@ -554,11 +521,7 @@ function prompt_evol(idea_database, options::Options)
         strip(idea_options[rand(1:N)], [' ', '\n', '"', ',', '.', '[', ']'])
     )
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-            write(file, "- ADDED: " * chosen_idea * "\n")
-        end
-    end
+    llm_recorder(options.llm_options, chosen_idea, "ideas")
 
     return chosen_idea
 end
@@ -653,6 +616,7 @@ function update_idea_database(idea_database, dominating, worst_members, options:
             ),
         ),
     ]
+    llm_recorder(options.llm_options, conversation[1].content, "llm_input|gen_random")
 
     msg = nothing
     try
@@ -684,30 +648,18 @@ function update_idea_database(idea_database, dominating, worst_members, options:
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-                write(file, "- None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "ideas|failed")
         return nothing
     end
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-            write(file, "- IDEA:\n" * msg.content * "\n\n")
-        end
-    end
+    llm_recorder(options.llm_options, string(msg.content), "llm_output|ideas")
 
     idea_options = parse_msg_content(msg.content)
 
     N = min(size(idea_options)[1], N)
 
     if N == 0
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-                write(file, "- None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "ideas|failed")
         return nothing
     end
 
@@ -715,11 +667,7 @@ function update_idea_database(idea_database, dominating, worst_members, options:
 
     chosen_idea1 = String(strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']']))
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-            write(file, "- " * chosen_idea1 * "\n")
-        end
-    end
+    llm_recorder(options.llm_options, chosen_idea1, "ideas")
     pushfirst!(idea_database, chosen_idea1)
 
     if N > 1
@@ -729,11 +677,7 @@ function update_idea_database(idea_database, dominating, worst_members, options:
         end
         chosen_idea2 = String(strip(idea_options[b], [' ', '\n', '"', ',', '.', '[', ']']))
 
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "ideas.txt", "a") do file
-                write(file, "- " * chosen_idea2 * "\n")
-            end
-        end
+        llm_recorder(options.llm_options, chosen_idea2, "ideas")
 
         pushfirst!(idea_database, chosen_idea2)
     end
@@ -789,6 +733,7 @@ function llm_mutate_op(
             ),
         ),
     ]
+    llm_recorder(options.llm_options, conversation[1].content, "llm_input|mutate")
 
     if options.llm_options.llm_context != ""
         pushfirst!(assumptions, options.llm_options.llm_context)
@@ -809,30 +754,18 @@ function llm_mutate_op(
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-                write(file, "- None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "mutate|failed")
         return tree
     end
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-            write(file, "- MUTATE:\n" * msg.content * "\n\n")
-        end
-    end
+    llm_recorder(options.llm_options, string(msg.content), "llm_output|mutate")
 
     mut_tree_options = parse_msg_content(msg.content)
 
     N = min(size(mut_tree_options)[1], N)
 
     if N == 0
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-                write(file, "- None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "mutate|failed")
         return tree
     end
 
@@ -847,11 +780,7 @@ function llm_mutate_op(
             continue
         end
 
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-                write(file, "- " * tree_to_expr(t, options) * "\n")
-            end
-        end
+        llm_recorder(options.llm_options, tree_to_expr(t, options), "mutate")
 
         return t
     end
@@ -860,11 +789,7 @@ function llm_mutate_op(
         T, String(strip(mut_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "mutate.txt", "a") do file
-            write(file, "- " * tree_to_expr(out, options) * "\n")
-        end
-    end
+    llm_recorder(options.llm_options, tree_to_expr(out, options), "mutate")
 
     return out
 end
@@ -923,6 +848,8 @@ function llm_crossover_trees(
         pushfirst!(assumptions, options.llm_options.llm_context)
     end
 
+    llm_recorder(options.llm_options, conversation[1].content, "llm_input|crossover")
+
     msg = nothing
     try
         msg = aigenerate(
@@ -942,19 +869,11 @@ function llm_crossover_trees(
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-                write(file, "- None && None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "crossover|failed")
         return tree1, tree2
     end
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "llm-calls.txt", "a") do file
-            write(file, "- CROSSOVER:\n" * msg.content * "\n\n")
-        end
-    end
+    llm_recorder(options.llm_options, string(msg.content), "llm_output|crossover")
 
     cross_tree_options = parse_msg_content(msg.content)
 
@@ -964,11 +883,7 @@ function llm_crossover_trees(
     N = min(size(cross_tree_options)[1], N)
 
     if N == 0
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-                write(file, "- None && None\n")
-            end
-        end
+        llm_recorder(options.llm_options, "None", "crossover|failed")
         return tree1, tree2
     end
 
@@ -978,12 +893,8 @@ function llm_crossover_trees(
             String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-
-        if options.llm_options.active
-            open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-                write(file, "- " * tree_to_expr(t, options) * " && " * "None" * "\n")
-            end
-        end
+        
+        llm_recorder(options.llm_options, tree_to_expr(t, options), "crossover")
 
         return t, tree2
     end
@@ -1023,18 +934,8 @@ function llm_crossover_trees(
         )
     end
 
-    if options.llm_options.active
-        open(options.llm_options.llm_recorder_dir * "crossover.txt", "a") do file
-            write(
-                file,
-                "- " *
-                tree_to_expr(cross_tree1, options) *
-                " && " *
-                tree_to_expr(cross_tree2, options) *
-                "\n",
-            )
-        end
-    end
+    recording_str = tree_to_expr(cross_tree1, options) * " && " * tree_to_expr(cross_tree2, options)
+    llm_recorder(options.llm_options, recording_str, "crossover")
 
     return cross_tree1, cross_tree2
 end

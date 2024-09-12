@@ -1,7 +1,6 @@
 module LLMOptionsModule
 
 using StatsBase: StatsBase
-using URIs: URI
 using Base: isvalid
 
 """
@@ -88,14 +87,6 @@ function validate_llm_options(options::LLMOptions)
         end
         if !haskey(options.api_kwargs, "url")
             throw(ArgumentError("api_kwargs must have a 'url' key."))
-        end
-        try
-            isvalid(URI(options.api_kwargs["url"]))
-        catch
-            throw(ArgumentError("api_kwargs['url'] must be a valid URL."))
-        end
-        if !isdir(options.llm_recorder_dir)
-            throw(ArgumentError("llm_recorder_dir must be a valid directory."))
         end
         if !isdir(options.prompts_dir)
             throw(ArgumentError("prompts_dir must be a valid directory."))

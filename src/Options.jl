@@ -55,6 +55,8 @@ using ..UtilsModule: max_ops, @save_kwargs, @ignore
             haskey(_una_constraints1, op) ? _una_constraints1[op]::Int : -1 for
             op in unary_operators
         ]
+    else
+        _una_constraints1
     end
 
     is_bin_constraints_already_done = bin_constraints isa Vector{Tuple{Int,Int}}
@@ -73,6 +75,8 @@ using ..UtilsModule: max_ops, @save_kwargs, @ignore
                 (-1, -1)
             end for op in binary_operators
         ]
+    else
+        _bin_constraints1
     end
 
     return _una_constraints2, _bin_constraints2

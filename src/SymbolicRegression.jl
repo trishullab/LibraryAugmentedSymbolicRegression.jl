@@ -239,7 +239,7 @@ using .CoreModule:
     erfc,
     atanh_clip,
     create_expression
-using .UtilsModule: is_anonymous_function, recursive_merge, json3_write
+using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
 using .ComplexityModule: compute_complexity
 using .CheckConstraintsModule: check_constraints
 using .AdaptiveParsimonyModule:
