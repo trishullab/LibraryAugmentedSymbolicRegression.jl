@@ -45,8 +45,10 @@ token-abc123
 # For more commands, read `run.sh`
 
 # To run bigbench experiments
-(lasr) $ unzip bigbench.zip
-(lasr) $ julia search.jl
+(lasr) $ unzip bigbench/csvs.zip # Use the pre-generated datasets.
+(lasr) $ open bigbench/generate_datasets.ipynb # Follow instructions to generate bigbench datasets. Might require $ pip install bigbench
+(lasr) $ julia search.jl # Edit the file to change the dataset path and other parameters
+(lasr) $ open bigbench/evaluate_equations.ipynb # Follow instructions to evaluate the equations found by LaSR
 
 
 # VLLM Setup: https://docs.vllm.ai/en/latest/
