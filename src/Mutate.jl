@@ -1,5 +1,6 @@
 module MutateModule
 
+using DispatchDoctor: @unstable
 using DynamicExpressions:
     AbstractExpressionNode,
     AbstractExpression,
@@ -94,7 +95,7 @@ end
 
 # Go through one simulated options.annealing mutation cycle
 #  exp(-delta/T) defines probability of accepting a change
-function next_generation(
+@unstable function next_generation(
     dataset::D,
     member::P,
     temperature,
@@ -430,7 +431,7 @@ function next_generation(
 end
 
 """Generate a generation via crossover of two members."""
-function crossover_generation(
+@unstable function crossover_generation(
     member1::P,
     member2::P,
     dataset::D,
