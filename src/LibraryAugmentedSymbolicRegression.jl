@@ -762,7 +762,7 @@ function _initialize_search!(
     ropt::RuntimeOptions,
     options::Options,
     saved_state,
-    idea_database_all,
+    idea_database_all::Vector{Vector{String}},
 ) where {T,L,N}
     nout = length(datasets)
 

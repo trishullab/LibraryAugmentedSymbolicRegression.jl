@@ -31,7 +31,7 @@ end
     options::Options,
     nfeatures::Int,
     ::Type{T},
-    idea_database::Union{Vector{String},String,Nothing},
+    idea_database::Union{Vector{String},Nothing},
 ) where {T<:DATA_TYPE}
     if options.llm_options.active && (rand() < options.llm_options.weights.llm_gen_random)
         gen_llm_random_tree(nlength, options, nfeatures, T, idea_database)
@@ -54,7 +54,7 @@ Create random population with LLM and RNG and score them on the dataset.
     nlength::Int=3,
     nfeatures::Int,
     npop=nothing,
-    idea_database::Union{Vector{String},String,Nothing}=nothing,
+    idea_database::Union{Vector{String},Nothing}=nothing,
 ) where {T,L}
     @assert (population_size !== nothing) ⊻ (npop !== nothing)
     population_size = if npop === nothing
