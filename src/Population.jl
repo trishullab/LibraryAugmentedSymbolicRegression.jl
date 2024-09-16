@@ -41,7 +41,7 @@ end
 
 Create random population and score them on the dataset.
 """
-function Population(
+@unstable function Population(
     dataset::Dataset{T,L};
     options::Options,
     population_size=nothing,
