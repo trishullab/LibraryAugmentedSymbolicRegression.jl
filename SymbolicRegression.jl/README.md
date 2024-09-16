@@ -1,6 +1,17 @@
 <!-- prettier-ignore-start -->
 <div align="center">
 
+<<<<<<< HEAD
+LaSR.jl accelerates the search for symbolic expressions using language guidance.
+
+| Latest release | Website | Forums | Paper |
+| :---: | :---: | :---: | :---: |
+| [![version](https://juliahub.com/docs/LaSR/version.svg)](https://juliahub.com/ui/Packages/LaSR/X2eIS) | [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://trishullab.github.io/lasr-web/) | [![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/trishullab/LaSR.jl/discussions) | [![Paper](https://img.shields.io/badge/arXiv-????.?????-b31b1b)](https://atharvas.net/static/lasr.pdf) |
+
+| Build status | Coverage |
+| :---: | :---: |
+| [![CI](https://github.com/trishullab/LaSR.jl/workflows/CI/badge.svg)](.github/workflows/CI.yml) | [![Coverage Status](https://coveralls.io/repos/github/trishullab/LaSR.jl/badge.svg?branch=master)](https://coveralls.io/github/trishullab/LaSR.jl?branch=master) |
+=======
 SymbolicRegression.jl searches for symbolic expressions which optimize a particular objective.
 
 https://github.com/MilesCranmer/SymbolicRegression.jl/assets/7593028/f5b68f1f-9830-497f-a197-6ae332c94ee0
@@ -12,10 +23,12 @@ https://github.com/MilesCranmer/SymbolicRegression.jl/assets/7593028/f5b68f1f-98
 | Build status | Coverage |
 | :---: | :---: |
 | [![CI](https://github.com/MilesCranmer/SymbolicRegression.jl/workflows/CI/badge.svg)](.github/workflows/CI.yml) | [![Coverage Status](https://coveralls.io/repos/github/MilesCranmer/SymbolicRegression.jl/badge.svg?branch=master)](https://coveralls.io/github/MilesCranmer/SymbolicRegression.jl?branch=master) |
+>>>>>>> parent of 00d8f5bb (update package name)
 
-Check out [PySR](https://github.com/MilesCranmer/PySR) for
+LaSR is loaded into [SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl). Check out [PySR](https://github.com/MilesCranmer/PySR) for
 a Python frontend.
-[Cite this software](https://arxiv.org/abs/2305.01582)
+
+[Cite this software](https://arxiv.org/abs/????.?????)
 
 </div>
 <!-- prettier-ignore-end -->
@@ -23,13 +36,8 @@ a Python frontend.
 **Contents**:
 
 - [Quickstart](#quickstart)
-  - [MLJ Interface](#mlj-interface)
-  - [Low-Level Interface](#low-level-interface)
-- [Constructing expressions](#constructing-expressions)
-- [Exporting to SymbolicUtils.jl](#exporting-to-symbolicutilsjl)
-- [Contributors ✨](#contributors-)
-- [Code structure](#code-structure)
-- [Search options](#search-options)
+- [Organization](#organization)
+- [LLM Utilities](#llm-utilities)
 
 ## Quickstart
 
@@ -40,14 +48,22 @@ using Pkg
 Pkg.add("SymbolicRegression")
 ```
 
+<<<<<<< HEAD
+LaSR uses the same interface as [SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl). The easiest way to use LaSR.jl
+=======
 ### MLJ Interface
 
 The easiest way to use SymbolicRegression.jl
+>>>>>>> parent of 00d8f5bb (update package name)
 is with [MLJ](https://github.com/alan-turing-institute/MLJ.jl).
 Let's see an example:
 
 ```julia
+<<<<<<< HEAD
+import LaSR: LaSRRegressor, LLMOptions
+=======
 import SymbolicRegression: SRRegressor
+>>>>>>> parent of 00d8f5bb (update package name)
 import MLJ: machine, fit!, predict, report
 
 # Dataset with two named features:
@@ -63,6 +79,9 @@ model = SRRegressor(
     niterations=50,
     binary_operators=[+, -, *],
     unary_operators=[cos],
+    llm_options=LLMOptions(
+      ...
+    )
 )
 ```
 
@@ -112,6 +131,9 @@ For fitting multiple outputs, one can use `MultitargetSRRegressor`
 (and pass an array of indices to `idx` in `predict` for selecting specific equations).
 For a full list of options available to each regressor, see the [API page](https://astroautomata.com/SymbolicRegression.jl/dev/api/).
 
+<<<<<<< HEAD
+### LLM Options
+=======
 ### Low-Level Interface
 
 The heart of SymbolicRegression.jl is the
@@ -120,8 +142,14 @@ This takes a 2D array and attempts
 to model a 1D array using analytic functional forms.
 **Note:** unlike the MLJ interface,
 this assumes column-major input of shape [features, rows].
+>>>>>>> parent of 00d8f5bb (update package name)
 
+LaSR uses PromptingTools.jl for zero shot prompting. If you wish to make changes to the prompting options, you can pass an `LLMOptions` object to the `LaSRRegressor` constructor. The options available are:
 ```julia
+<<<<<<< HEAD
+llm_options = LLMOptions(
+  ...
+=======
 import SymbolicRegression: Options, equation_search
 
 X = randn(2, 100)
@@ -136,12 +164,16 @@ options = Options(
 hall_of_fame = equation_search(
     X, y, niterations=40, options=options,
     parallelism=:multithreading
+>>>>>>> parent of 00d8f5bb (update package name)
 )
 ```
 
-You can view the resultant equations in the dominating Pareto front (best expression
-seen at each complexity) with:
 
+<<<<<<< HEAD
+## Organization
+
+LaSR.jl development is kept independent from the main codebase. However, to ensure LaSR can be used easily, it is integrated into SymbolicRegression.jl via the `ext/SymbolicRegressionLaSRExt` extension module. This, in turn, is loaded into PySR. The below diagram summarizes the interaction between the different packages.
+=======
 ```julia
 import SymbolicRegression: calculate_pareto_frontier
 
@@ -294,6 +326,7 @@ If you have an idea for a new feature, don't hesitate to share it on the [issues
 <!-- prettier-ignore-end -->
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
+>>>>>>> parent of 00d8f5bb (update package name)
 
 ## Code structure
 

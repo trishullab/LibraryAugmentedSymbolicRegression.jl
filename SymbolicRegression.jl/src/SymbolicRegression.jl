@@ -14,6 +14,7 @@ export Population,
     ParametricNode,
     Expression,
     ParametricExpression,
+    StructuredExpression,
     NodeSampler,
     AbstractExpression,
     AbstractExpressionNode,
@@ -91,6 +92,7 @@ using DynamicExpressions:
     ParametricNode,
     Expression,
     ParametricExpression,
+    StructuredExpression,
     NodeSampler,
     AbstractExpression,
     AbstractExpressionNode,
@@ -102,7 +104,9 @@ using DynamicExpressions:
     print_tree,
     count_nodes,
     get_constants,
+    get_scalar_constants,
     set_constants!,
+    set_scalar_constants!,
     index_constants,
     NodeIndex,
     eval_tree_array,
@@ -235,7 +239,7 @@ using .CoreModule:
     erfc,
     atanh_clip,
     create_expression
-using .UtilsModule: is_anonymous_function, recursive_merge, json3_write
+using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
 using .ComplexityModule: compute_complexity
 using .CheckConstraintsModule: check_constraints
 using .AdaptiveParsimonyModule:
@@ -246,8 +250,7 @@ using .MutationFunctionsModule:
     random_node,
     random_node_and_parent,
     crossover_trees
-using .LLMFunctionsModule:
-    update_idea_database
+using .LLMFunctionsModule: update_idea_database, llm_recorder
 
 using .InterfaceDynamicExpressionsModule: @extend_operators
 using .LossFunctionsModule: eval_loss, score_func, update_baseline_loss!
@@ -906,9 +909,8 @@ function _main_search_loop!(
         window_size=options.populations * 2 * nout,
     )
     n_iterations = 0
-    open(options.llm_options.llm_recorder_dir * "n_iterations.txt", "a") do file
-        write(file, "- " * string(div(n_iterations,options.populations)) * "\n")
-    end
+    llm_recorder(options.llm_options, string(div(n_iterations, options.populations)), "n_iterations")
+
     worst_members = Vector{PopMember}()
     while sum(state.cycles_remaining) > 0
         kappa += 1
@@ -934,6 +936,7 @@ function _main_search_loop!(
             true
         end
         record_channel_state!(resource_monitor, population_ready)
+
         # Don't start more if this output has finished its cycles:
         # TODO - this might skip extra cycles?
         population_ready &= (state.cycles_remaining[j] > 0)
@@ -1118,9 +1121,7 @@ function _main_search_loop!(
         end
         ################################################################
     end
-    open(options.llm_options.llm_recorder_dir * "n_iterations.txt", "a") do file
-        write(file, "- " * string(div(n_iterations,options.populations)) * "\n")
-    end
+    llm_recorder(options.llm_options, string(div(n_iterations, options.populations)), "n_iterations")
     return nothing
 end
 function _tear_down!(state::SearchState, ropt::RuntimeOptions, options::Options)
@@ -1210,9 +1211,11 @@ function __init__()
     @require_extensions
 end
 
-macro ignore(args...) end
 # Hack to get static analysis to work from within tests:
 @ignore include("../test/runtests.jl")
+
+# TODO: Hack to force ConstructionBase version
+using ConstructionBase: ConstructionBase as _
 
 include("precompile.jl")
 redirect_stdout(devnull) do

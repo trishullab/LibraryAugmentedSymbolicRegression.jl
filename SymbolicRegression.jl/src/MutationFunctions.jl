@@ -1,8 +1,7 @@
 module MutationFunctionsModule
 
-using Random: default_rng, AbstractRNG, rand, randperm
+using Random: default_rng, AbstractRNG
 using DynamicExpressions:
-    Node,
     AbstractExpressionNode,
     AbstractExpression,
     AbstractNode,
@@ -14,14 +13,9 @@ using DynamicExpressions:
     set_node!,
     count_nodes,
     has_constants,
-    has_operators,
-    string_tree,
-    AbstractOperatorEnum
+    has_operators
 using Compat: Returns, @inline
-using ..CoreModule: Options, DATA_TYPE, binopmap, unaopmap
-
-using PromptingTools: SystemMessage, UserMessage, AIMessage, aigenerate, CustomOpenAISchema, OllamaSchema, OpenAISchema
-using JSON: parse
+using ..CoreModule: Options, DATA_TYPE
 
 """
     random_node(tree::AbstractNode; filter::F=Returns(true))

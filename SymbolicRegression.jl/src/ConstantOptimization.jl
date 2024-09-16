@@ -7,12 +7,11 @@ using DifferentiationInterface: value_and_gradient
 using DynamicExpressions:
     AbstractExpression,
     Expression,
-    Node,
-    count_constants,
-    get_constants,
-    set_constants!,
+    count_scalar_constants,
+    get_scalar_constants,
+    set_scalar_constants!,
     extract_gradient
-using ..CoreModule: Options, Dataset, DATA_TYPE, LOSS_TYPE
+using ..CoreModule: Options, Dataset, DATA_TYPE, LOSS_TYPE, specialized_options
 using ..UtilsModule: get_birth_order
 using ..LossFunctionsModule: eval_loss, loss_to_score, batch_sample
 using ..PopMemberModule: PopMember
@@ -36,13 +35,20 @@ function dispatch_optimize_constants(
     if nconst == 1 && !(T <: Complex)
         algorithm = Optim.Newton(; linesearch=LineSearches.BackTracking())
         return _optimize_constants(
-            dataset, member, options, algorithm, options.optimizer_options, idx
+            dataset,
+            member,
+            specialized_options(options),
+            algorithm,
+            options.optimizer_options,
+            idx,
         )
     end
     return _optimize_constants(
         dataset,
         member,
-        options,
+        specialized_options(options),
+        # We use specialized options here due to Enzyme being
+        # more particular about dynamic dispatch
         options.optimizer_algorithm,
         options.optimizer_options,
         idx,
@@ -50,14 +56,14 @@ function dispatch_optimize_constants(
 end
 
 """How many constants will be optimized."""
-count_constants_for_optimization(ex::Expression) = count_constants(ex)
+count_constants_for_optimization(ex::Expression) = count_scalar_constants(ex)
 
 function _optimize_constants(
     dataset, member::P, options, algorithm, optimizer_options, idx
 )::Tuple{P,Float64} where {T,L,P<:PopMember{T,L}}
     tree = member.tree
     eval_fraction = options.batching ? (options.batch_size / dataset.n) : 1.0
-    x0, refs = get_constants(tree)
+    x0, refs = get_scalar_constants(tree)
     @assert count_constants_for_optimization(tree) == length(x0)
     f = Evaluator(tree, refs, dataset, options, idx)
     fg! = GradEvaluator(f, options.autodiff_backend)
@@ -91,7 +97,7 @@ function _optimize_constants(
         member.birth = get_birth_order(; deterministic=options.deterministic)
         num_evals += eval_fraction
     else
-        set_constants!(member.tree, x0, refs)
+        set_scalar_constants!(member.tree, x0, refs)
     end
 
     return member, num_evals
@@ -105,7 +111,7 @@ struct Evaluator{N<:AbstractExpression,R,D<:Dataset,O<:Options,I} <: Function
     idx::I
 end
 function (e::Evaluator)(x::AbstractVector; regularization=false)
-    set_constants!(e.tree, x, e.refs)
+    set_scalar_constants!(e.tree, x, e.refs)
     return eval_loss(e.tree, e.dataset, e.options; regularization, e.idx)
 end
 struct GradEvaluator{F<:Evaluator,AD<:Union{Nothing,AbstractADType},EX} <: Function
@@ -117,7 +123,7 @@ GradEvaluator(f::F, backend::AD) where {F,AD} = GradEvaluator(f, backend, nothin
 
 function (g::GradEvaluator{<:Any,AD})(_, G, x::AbstractVector) where {AD}
     AD isa AutoEnzyme && error("Please load the `Enzyme.jl` package.")
-    set_constants!(g.f.tree, x, g.f.refs)
+    set_scalar_constants!(g.f.tree, x, g.f.refs)
     (val, grad) = value_and_gradient(g.backend, g.f.tree) do tree
         eval_loss(tree, g.f.dataset, g.f.options; regularization=false, idx=g.f.idx)
     end

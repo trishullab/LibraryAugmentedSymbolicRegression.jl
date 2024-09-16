@@ -1,12 +1,9 @@
 module OptionsStructModule
 
+using DispatchDoctor: @unstable
 using Optim: Optim
 using DynamicExpressions:
-    AbstractOperatorEnum,
-    AbstractExpressionNode,
-    AbstractExpression,
-    OperatorEnum,
-    GenericOperatorEnum
+    AbstractOperatorEnum, AbstractExpressionNode, AbstractExpression, OperatorEnum
 using LossFunctions: SupervisedLoss
 
 import ..MutationWeightsModule: MutationWeights
@@ -124,7 +121,6 @@ if VERSION >= v"1.10.0-DEV.0"
 else
     @eval operator_specialization(O::Type{<:OperatorEnum}) = O
 end
-# TODO: HACK - turned this off temporarily
 
 struct Options{
     CM<:ComplexityMapping,
@@ -135,7 +131,6 @@ struct Options{
     _turbo,
     _bumper,
     _return_state,
-    W,
     AD,
 }
     operators::OP
@@ -144,7 +139,6 @@ struct Options{
     complexity_mapping::CM
     tournament_selection_n::Int
     tournament_selection_p::Float32
-    tournament_selection_weights::W
     parsimony::Float32
     dimensional_constraint_penalty::Union{Float32,Nothing}
     dimensionless_constants_only::Bool
@@ -230,5 +224,20 @@ function Base.print(io::IO, options::Options)
     )
 end
 Base.show(io::IO, ::MIME"text/plain", options::Options) = Base.print(io, options)
+
+@unstable function specialized_options(options::Options)
+    return _specialized_options(options)
+end
+@generated function _specialized_options(options::O) where {O<:Options}
+    # Return an options struct with concrete operators
+    type_parameters = O.parameters
+    fields = Any[:(getfield(options, $(QuoteNode(k)))) for k in fieldnames(O)]
+    quote
+        operators = getfield(options, :operators)
+        Options{$(type_parameters[1]),typeof(operators),$(type_parameters[3:end]...)}(
+            $(fields...)
+        )
+    end
+end
 
 end

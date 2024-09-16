@@ -16,7 +16,7 @@ using .ProgramConstantsModule:
 using .DatasetModule: Dataset
 using .MutationWeightsModule: MutationWeights, sample_mutation
 using .LLMOptionsModule: LLMOptions, LLMWeights
-using .OptionsStructModule: Options, ComplexityMapping
+using .OptionsStructModule: Options, ComplexityMapping, specialized_options
 using .OptionsModule: Options, binopmap, unaopmap
 using .OperatorsModule:
     plus,

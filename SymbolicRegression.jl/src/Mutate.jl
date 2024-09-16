@@ -4,17 +4,14 @@ using DynamicExpressions:
     AbstractExpressionNode,
     AbstractExpression,
     ParametricExpression,
-    Node,
     with_contents,
     get_tree,
     preserve_sharing,
     copy_node,
-    count_nodes,
-    count_constants,
+    count_scalar_constants,
     simplify_tree!,
     combine_operators
-using ..CoreModule:
-    Options, MutationWeights, Dataset, RecordType, sample_mutation, DATA_TYPE, LOSS_TYPE
+using ..CoreModule: Options, MutationWeights, Dataset, RecordType, sample_mutation
 using ..ComplexityModule: compute_complexity
 using ..LossFunctionsModule: score_func, score_func_batched
 using ..CheckConstraintsModule: check_constraints
@@ -34,10 +31,7 @@ using ..MutationFunctionsModule:
     break_random_connection!
 
 using ..LLMFunctionsModule:
-    llm_mutate_op,
-    llm_crossover_trees,
-    tree_to_expr,
-    gen_llm_random_tree
+    llm_mutate_op, llm_crossover_trees, tree_to_expr, gen_llm_random_tree, llm_recorder
 
 using ..ConstantOptimizationModule: optimize_constants
 using ..RecorderModule: @recorder
@@ -79,7 +73,7 @@ function condition_mutation_weights!(
 
     if !(member.tree isa ParametricExpression)  # TODO: HACK
         #More constants => more likely to do constant mutation
-        let n_constants = count_constants(member.tree)
+        let n_constants = count_scalar_constants(member.tree)
             weights.mutate_constant *= min(8, n_constants) / 8.0
         end
     end
@@ -159,13 +153,9 @@ function next_generation(
         successful_mutation = (!check_constant(tree)) && check_constraints(tree, options, curmaxsize)
 
         if successful_mutation
-            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-                write(file, "- MUTATE: " * tree_to_expr(tree, options) * "\n")
-            end
+            llm_recorder(options.llm_options, tree_to_expr(tree, options), "mutate")
         else
-            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-                write(file, "- MUTATE: FAILED - " * tree_to_expr(tree, options) * "\n")
-            end
+            llm_recorder(options.llm_options, tree_to_expr(tree, options), "mutate|failed")
         end
     end
 
@@ -476,14 +466,12 @@ function crossover_generation(
             check_constraints(child_tree2, options, curmaxsize, afterSize2)
 
         if successful_crossover
-            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-                write(file, "- CROSSOVER: " * tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options) * "\n")
-            end
+            recorder_str = tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options)
+            llm_recorder(options.llm_options, recorder_str, "crossover")
             llm_skip = true
         else
-            open(options.llm_options.llm_recorder_dir * "tree-expr.txt", "a") do file
-                write(file, "- CROSSOVER: FAILED - " * tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options) * "\n")
-            end
+            recorder_str = tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options)
+            llm_recorder(options.llm_options, recorder_str, "crossover|failed")
             child_tree1, child_tree2 = crossover_trees(tree1, tree2)
         end
     else

@@ -22,3 +22,4 @@ docs/src/index.md
 **/*.json
 LocalPreferences.toml
 *.key
+!pysr/juliapkg.json
