@@ -71,7 +71,7 @@ SpecialFunctions = "0.10.1, 1, 2"
 StatsBase = "0.33, 0.34"
 SymbolicUtils = "0.19, ^1.0.5, 2, 3"
 TOML = "<0.0.1, 1"
-julia = "1.9,1.10"
+julia = "^1.6"
 
 [extras]
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
