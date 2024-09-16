@@ -37,7 +37,8 @@ end
 
 @testitem "Test derivatives during optimization" tags = [:part1] begin
     using LibraryAugmentedSymbolicRegression
-    using LibraryAugmentedSymbolicRegression.ConstantOptimizationModule: Evaluator, GradEvaluator
+    using LibraryAugmentedSymbolicRegression.ConstantOptimizationModule:
+        Evaluator, GradEvaluator
     using DynamicExpressions
     using Zygote: Zygote
     using Random: MersenneTwister

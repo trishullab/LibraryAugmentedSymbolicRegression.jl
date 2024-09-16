@@ -1,7 +1,8 @@
 @testitem "Dimensional analysis" tags = [:part3] begin
     using LibraryAugmentedSymbolicRegression
     using LibraryAugmentedSymbolicRegression.InterfaceDynamicQuantitiesModule: get_units
-    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule: violates_dimensional_constraints
+    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule:
+        violates_dimensional_constraints
     using DynamicQuantities
     using DynamicQuantities: DEFAULT_DIM_BASE_TYPE
 
@@ -102,7 +103,8 @@ end
 
 @testitem "Search with dimensional constraints" tags = [:part3] begin
     using LibraryAugmentedSymbolicRegression
-    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule: violates_dimensional_constraints
+    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule:
+        violates_dimensional_constraints
     using Random: MersenneTwister
 
     rng = MersenneTwister(0)
@@ -392,7 +394,8 @@ end
 
 @testitem "Dimensionless constants" tags = [:part3] begin
     using LibraryAugmentedSymbolicRegression
-    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule: violates_dimensional_constraints
+    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule:
+        violates_dimensional_constraints
     using DynamicQuantities
 
     include("utils.jl")
@@ -435,9 +438,11 @@ end
 @testitem "Miscellaneous tests of unit interface" tags = [:part3] begin
     using LibraryAugmentedSymbolicRegression
     using DynamicQuantities
-    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule: @maybe_return_call, WildcardQuantity
+    using LibraryAugmentedSymbolicRegression.DimensionalAnalysisModule:
+        @maybe_return_call, WildcardQuantity
     using LibraryAugmentedSymbolicRegression.MLJInterfaceModule: unwrap_units_single
-    using LibraryAugmentedSymbolicRegression.InterfaceDynamicQuantitiesModule: get_dimensions_type
+    using LibraryAugmentedSymbolicRegression.InterfaceDynamicQuantitiesModule:
+        get_dimensions_type
     using MLJModelInterface: MLJModelInterface as MMI
 
     function test_return_call(op::Function, w...)

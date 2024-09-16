@@ -893,7 +893,7 @@ function llm_crossover_trees(
             String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        
+
         llm_recorder(options.llm_options, tree_to_expr(t, options), "crossover")
 
         return t, tree2
@@ -934,7 +934,8 @@ function llm_crossover_trees(
         )
     end
 
-    recording_str = tree_to_expr(cross_tree1, options) * " && " * tree_to_expr(cross_tree2, options)
+    recording_str =
+        tree_to_expr(cross_tree1, options) * " && " * tree_to_expr(cross_tree2, options)
     llm_recorder(options.llm_options, recording_str, "crossover")
 
     return cross_tree1, cross_tree2

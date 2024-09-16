@@ -455,7 +455,9 @@ end
 function get_equation_strings_for(::LaSRRegressor, trees, options, variable_names)
     return (t -> string_tree(t, options; variable_names=variable_names)).(trees)
 end
-function get_equation_strings_for(::MultitargetLaSRRegressor, trees, options, variable_names)
+function get_equation_strings_for(
+    ::MultitargetLaSRRegressor, trees, options, variable_names
+)
     return [
         (t -> string_tree(t, options; variable_names=variable_names)).(ts) for ts in trees
     ]

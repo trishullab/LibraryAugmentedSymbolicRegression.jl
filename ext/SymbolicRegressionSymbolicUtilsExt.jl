@@ -1,8 +1,10 @@
 module LaSRSymbolicUtilsExt
 
 using SymbolicUtils: Symbolic
-using LibraryAugmentedSymbolicRegression: AbstractExpressionNode, AbstractExpression, Node, Options
-using LibraryAugmentedSymbolicRegression.MLJInterfaceModule: AbstractSRRegressor, get_options
+using LibraryAugmentedSymbolicRegression:
+    AbstractExpressionNode, AbstractExpression, Node, Options
+using LibraryAugmentedSymbolicRegression.MLJInterfaceModule:
+    AbstractSRRegressor, get_options
 using DynamicExpressions: get_tree, get_operators
 
 import LibraryAugmentedSymbolicRegression: node_to_symbolic, symbolic_to_node
