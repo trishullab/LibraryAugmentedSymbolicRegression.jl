@@ -485,11 +485,17 @@ function crossover_generation(
             check_constraints(child_tree2, options, curmaxsize, afterSize2)
 
         if successful_crossover
-            recorder_str = tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options)
+            recorder_str =
+                tree_to_expr(child_tree1, options) *
+                " && " *
+                tree_to_expr(child_tree2, options)
             llm_recorder(options.llm_options, recorder_str, "crossover")
             llm_skip = true
         else
-            recorder_str = tree_to_expr(child_tree1, options) * " && " * tree_to_expr(child_tree2, options)
+            recorder_str =
+                tree_to_expr(child_tree1, options) *
+                " && " *
+                tree_to_expr(child_tree2, options)
             llm_recorder(options.llm_options, recorder_str, "crossover|failed")
             child_tree1, child_tree2 = crossover_trees(tree1, tree2)
         end

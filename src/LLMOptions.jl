@@ -55,9 +55,7 @@ Base.@kwdef mutable struct LLMOptions
     prompt_evol::Bool = false
     api_key::String = ""
     model::String = ""
-    api_kwargs::Dict = Dict(
-        "max_tokens" => 1000
-    )
+    api_kwargs::Dict = Dict("max_tokens" => 1000)
     http_kwargs::Dict = Dict("retries" => 3, "readtimeout" => 3600)
     llm_recorder_dir::String = "lasr_runs/"
     prompts_dir::String = "prompts/"
@@ -94,8 +92,6 @@ function validate_llm_options(options::LLMOptions)
     end
 end
 
-
-
 # """Sample LLM mutation, given the weightings."""
 # function sample_llm_mutation(w::LLMWeights)
 #     weights = convert(Vector, w)
@@ -103,8 +99,6 @@ end
 # end
 
 end # module
-
-
 
 # sample invocation following:
 # python -m experiments.main --use_llm --use_prompt_evol --model "meta-llama/Meta-Llama-3-8B-Instruct" --api_key "vllm_api.key" --model_url "http://localhost:11440/v1" --exp_idx 0 --dataset_path FeynmanEquations.csv  --start_idx 0

@@ -53,7 +53,7 @@ function s_r_cycle(
             curmaxsize,
             running_search_statistics,
             options,
-            record,
+            record;
             dominating=dominating,
             idea_database=idea_database,
         )

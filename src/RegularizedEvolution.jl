@@ -93,7 +93,11 @@ function reg_evol_cycle(
             allstar2 = best_of_sample(pop, running_search_statistics, options)
 
             baby1, baby2, crossover_accepted, tmp_num_evals = crossover_generation(
-                allstar1, allstar2, dataset, curmaxsize, options;
+                allstar1,
+                allstar2,
+                dataset,
+                curmaxsize,
+                options;
                 dominating=dominating,
                 idea_database=idea_database,
             )
