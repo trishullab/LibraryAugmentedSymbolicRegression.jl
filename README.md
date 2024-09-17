@@ -5,7 +5,7 @@ LibraryAugmentedSymbolicRegression.jl (LaSR.jl) accelerates the search for symbo
 
 | Latest release | Website | Forums | Paper |
 | :---: | :---: | :---: | :---: |
-| [![version](https://juliahub.com/docs/LibraryAugmentedSymbolicRegression/version.svg)](https://juliahub.com/ui/Packages/LibraryAugmentedSymbolicRegression/X2eIS) | [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://trishullab.github.io/lasr-web/) | [![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/discussions) | [![Paper](https://img.shields.io/badge/arXiv-????.?????-b31b1b)](https://atharvas.net/static/lasr.pdf) |
+| [![version](https://juliahub.com/docs/LibraryAugmentedSymbolicRegression/version.svg)](https://juliahub.com/ui/Packages/LibraryAugmentedSymbolicRegression/X2eIS) | [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://trishullab.github.io/lasr-web/) | [![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/discussions) | [![Paper](https://img.shields.io/badge/arXiv-2409.09359-b31b1b)](https://arxiv.org/abs/2409.09359) |
 
 | Build status | Coverage |
 | :---: | :---: |
@@ -14,17 +14,32 @@ LibraryAugmentedSymbolicRegression.jl (LaSR.jl) accelerates the search for symbo
 LaSR is integrated with [SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl). Check out [PySR](https://github.com/MilesCranmer/PySR) for
 a Python frontend.
 
-[Cite this software](https://arxiv.org/abs/????.?????)
+[Cite this software](https://arxiv.org/abs/2409.09359)
 
 </div>
 <!-- prettier-ignore-end -->
 
 **Contents**:
 
-- [Quickstart](#quickstart)
 - [Benchmarking](#benchmarking)
+- [Quickstart](#quickstart)
 - [Organization](#organization)
 - [LLM Utilities](#llm-utilities)
+
+## Benchmarking
+
+If you'd like to compare with LaSR, we've archived the code used in the paper in the `lasr-experiments` branch. Clone this repository and run:
+```bash
+$ git switch lasr-experiments
+```
+to switch to the branch and follow the instructions in the README to reproduce our results. This directory contains the code for evaluating LaSR on the 
+
+- [x] Feynman Equations dataset
+- [x] Synthetic equations dataset
+    - [x] and generation code
+- [x] Bigbench experiments
+    - [x] and evaluation code
+
 
 ## Quickstart
 
@@ -128,20 +143,6 @@ llm_options = LLMOptions(
     idea_threshold=30                                                           # Number of concepts to keep track of.
 )
 ```
-
-## Benchmarking
-
-If you wish to compare against LaSR, we've archived the code we used to run LaSR on top of PySR and SymbolicRegression.jl in the `lasr-experiments` branch. Run
-```bash
-$ git switch lasr-experiments
-```
-and follow the instructions in the README to reproduce our results. This directory contains the code for evaluating LaSR on the 
-
-- [x] Feynman Equations dataset
-- [x] Synthetic equations dataset
-    - [x] and generation code
-- [x] Bigbench experiments
-    - [x] and evaluation code
 
 ## Organization
 
