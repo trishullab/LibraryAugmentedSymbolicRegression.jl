@@ -21,7 +21,7 @@ using DynamicExpressions:
     AbstractOperatorEnum
 using Compat: Returns, @inline
 using ..CoreModule: Options, DATA_TYPE, binopmap, unaopmap, LLMOptions
-using ..MutationFunctionsModule: gen_random_tree_fixed_size
+using ..MutationFunctionsModule: gen_random_tree_fixed_size, random_node_and_parent
 
 using PromptingTools:
     SystemMessage,
@@ -58,12 +58,13 @@ function convertDict(d)::NamedTuple
 end
 
 function get_vars(options::Options)::String
-    variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
-    if !isnothing(options.llm_options.var_order)
+    if !isnothing(options.llm_options) && !isnothing(options.llm_options.var_order)
         variable_names = [
             options.llm_options.var_order[key] for
             key in sort(collect(keys(options.llm_options.var_order)))
         ]
+    else
+        variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
     end
     return join(variable_names, ", ")
 end
@@ -105,6 +106,7 @@ function construct_prompt(
     # if n_occurrences is less than |element_list|, add the missing elements after the last occurrence
     if n_occurrences < length(element_list)
         last_occurrence = findlast(x -> occursin(pattern, x), lines)
+        @assert last_occurrence !== nothing "No occurrences of the element_id_tag found in the user prompt."
         for i in reverse((n_occurrences + 1):length(element_list))
             new_line = replace(lines[last_occurrence], string(n_occurrences) => string(i))
             insert!(lines, last_occurrence + 1, new_line)
@@ -544,6 +546,9 @@ function parse_msg_content(msg_content)
 
     try
         out = parse(content) # json parse
+        if out === nothing
+            return []
+        end
         if out isa Dict
             return [out[key] for key in keys(out)]
         end
@@ -893,7 +898,7 @@ function llm_crossover_trees(
             String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        
+
         llm_recorder(options.llm_options, tree_to_expr(t, options), "crossover")
 
         return t, tree2
@@ -934,7 +939,8 @@ function llm_crossover_trees(
         )
     end
 
-    recording_str = tree_to_expr(cross_tree1, options) * " && " * tree_to_expr(cross_tree2, options)
+    recording_str =
+        tree_to_expr(cross_tree1, options) * " && " * tree_to_expr(cross_tree2, options)
     llm_recorder(options.llm_options, recording_str, "crossover")
 
     return cross_tree1, cross_tree2

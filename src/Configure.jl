@@ -257,7 +257,9 @@ function test_module_on_workers(procs, options::Options, verbosity)
     for proc in procs
         push!(
             futures,
-            @spawnat proc LibraryAugmentedSymbolicRegression.gen_random_tree(3, options, 5, TEST_TYPE)
+            @spawnat proc LibraryAugmentedSymbolicRegression.gen_random_tree(
+                3, options, 5, TEST_TYPE
+            )
         )
     end
     for future in futures

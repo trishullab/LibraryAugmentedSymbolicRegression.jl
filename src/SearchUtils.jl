@@ -125,7 +125,7 @@ macro sr_spawner(expr, kws...)
     end |> esc
 end
 
-function init_dummy_pops(
+@unstable function init_dummy_pops(
     npops::Int, datasets::Vector{D}, options::Options
 ) where {T,L,D<:Dataset{T,L}}
     prototype = Population(

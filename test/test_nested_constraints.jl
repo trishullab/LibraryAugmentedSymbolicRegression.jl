@@ -34,21 +34,33 @@ tree = cos(exp(Node("x1")) + exp(exp(Node("x1") + exp(exp(exp(Node("x1")))))))
 x1 = Node("x1")
 options = create_options(nothing)
 tree = cos(cos(x1)) + cos(x1) + exp(cos(x1))
-@test !LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(tree, options)
+@test !LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(
+    tree, options
+)
 
 options = create_options([cos => [cos => 0]])
-@test LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(tree, options)
+@test LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(
+    tree, options
+)
 
 options = create_options([cos => [cos => 1]])
-@test !LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(tree, options)
+@test !LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(
+    tree, options
+)
 
 options = create_options([cos => [exp => 0]])
-@test !LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(tree, options)
+@test !LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(
+    tree, options
+)
 
 options = create_options([exp => [cos => 0]])
-@test LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(tree, options)
+@test LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(
+    tree, options
+)
 
 options = create_options([(+) => [(+) => 0]])
-@test LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(tree, options)
+@test LibraryAugmentedSymbolicRegression.CheckConstraintsModule.flag_illegal_nests(
+    tree, options
+)
 
 println("Passed.")

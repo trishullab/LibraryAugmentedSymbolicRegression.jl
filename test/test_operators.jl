@@ -79,7 +79,9 @@ end
         ],
     )
     for T in types_to_test
-        @test_nowarn LibraryAugmentedSymbolicRegression.assert_operators_well_defined(T, options)
+        @test_nowarn LibraryAugmentedSymbolicRegression.assert_operators_well_defined(
+            T, options
+        )
     end
 end
 
@@ -90,7 +92,9 @@ end
         unary_operators=[square, cube, log, log2, log10, log1p, sqrt, acosh, neg],
     )
     for T in types_to_test
-        @test_nowarn LibraryAugmentedSymbolicRegression.assert_operators_well_defined(T, options)
+        @test_nowarn LibraryAugmentedSymbolicRegression.assert_operators_well_defined(
+            T, options
+        )
     end
 end
 
@@ -115,7 +119,9 @@ end
         @test_throws "returned an output of type" LibraryAugmentedSymbolicRegression.assert_operators_well_defined(
             Float64, options
         )
-    @test_nowarn LibraryAugmentedSymbolicRegression.assert_operators_well_defined(Float32, options)
+    @test_nowarn LibraryAugmentedSymbolicRegression.assert_operators_well_defined(
+        Float32, options
+    )
 end
 
 @testset "Turbo mode should be the same" begin

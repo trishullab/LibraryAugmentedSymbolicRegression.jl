@@ -38,8 +38,9 @@ for reverse in [false, true]
         options=options
     )
     best_pop_member = [
-        LibraryAugmentedSymbolicRegression.best_of_sample(pop, dummy_running_stats, options).score for
-        j in 1:100
+        LibraryAugmentedSymbolicRegression.best_of_sample(
+            pop, dummy_running_stats, options
+        ).score for j in 1:100
     ]
 
     mean_value = sum(best_pop_member) / length(best_pop_member)

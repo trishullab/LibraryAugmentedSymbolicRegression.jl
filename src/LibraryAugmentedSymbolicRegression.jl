@@ -762,7 +762,7 @@ function _initialize_search!(
     ropt::RuntimeOptions,
     options::Options,
     saved_state,
-    idea_database_all,
+    idea_database_all::Vector{Vector{String}},
 ) where {T,L,N}
     nout = length(datasets)
 
@@ -922,7 +922,9 @@ function _main_search_loop!(
         window_size=options.populations * 2 * nout,
     )
     n_iterations = 0
-    llm_recorder(options.llm_options, string(div(n_iterations, options.populations)), "n_iterations")
+    llm_recorder(
+        options.llm_options, string(div(n_iterations, options.populations)), "n_iterations"
+    )
     worst_members = Vector{PopMember}()
     while sum(state.cycles_remaining) > 0
         kappa += 1
@@ -1135,7 +1137,9 @@ function _main_search_loop!(
         end
         ################################################################
     end
-    llm_recorder(options.llm_options, string(div(n_iterations, options.populations)), "n_iterations")
+    llm_recorder(
+        options.llm_options, string(div(n_iterations, options.populations)), "n_iterations"
+    )
     return nothing
 end
 function _tear_down!(state::SearchState, ropt::RuntimeOptions, options::Options)

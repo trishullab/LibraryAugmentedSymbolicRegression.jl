@@ -26,7 +26,13 @@ function Population(pop::Vector{<:PopMember})
     return Population(pop, size(pop, 1))
 end
 
-function gen_random_tree_pop(nlength, options, nfeatures, T, idea_database)
+@unstable function gen_random_tree_pop(
+    nlength::Int,
+    options::Options,
+    nfeatures::Int,
+    ::Type{T},
+    idea_database::Union{Vector{String},Nothing},
+) where {T<:DATA_TYPE}
     if options.llm_options.active && (rand() < options.llm_options.weights.llm_gen_random)
         gen_llm_random_tree(nlength, options, nfeatures, T, idea_database)
     else
@@ -37,18 +43,18 @@ end
 """
     Population(dataset::Dataset{T,L};
                population_size, nlength::Int=3, options::Options,
-               nfeatures::Int)
+               nfeatures::Int, idea_database::Vector{String})
 
-Create random population and score them on the dataset.
+Create random population with LLM and RNG and score them on the dataset.
 """
-function Population(
+@unstable function Population(
     dataset::Dataset{T,L};
     options::Options,
     population_size=nothing,
     nlength::Int=3,
     nfeatures::Int,
     npop=nothing,
-    idea_database=nothing,
+    idea_database::Union{Vector{String},Nothing}=nothing,
 ) where {T,L}
     @assert (population_size !== nothing) ⊻ (npop !== nothing)
     population_size = if npop === nothing

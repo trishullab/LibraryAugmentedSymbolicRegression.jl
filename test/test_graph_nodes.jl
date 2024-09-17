@@ -59,7 +59,8 @@ end
 
 @testitem "GraphNode break connection mutation" tags = [:part1] begin
     using LibraryAugmentedSymbolicRegression
-    using LibraryAugmentedSymbolicRegression.MutationFunctionsModule: break_random_connection!
+    using LibraryAugmentedSymbolicRegression.MutationFunctionsModule:
+        break_random_connection!
     using Random: MersenneTwister
 
     options = Options(;
@@ -92,7 +93,8 @@ end
 
 @testitem "GraphNode form connection mutation" tags = [:part1] begin
     using LibraryAugmentedSymbolicRegression
-    using LibraryAugmentedSymbolicRegression.MutationFunctionsModule: form_random_connection!
+    using LibraryAugmentedSymbolicRegression.MutationFunctionsModule:
+        form_random_connection!
     using Random: MersenneTwister
 
     options = Options(;

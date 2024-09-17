@@ -30,3 +30,17 @@ To cite symbolic distillation of neural networks, the following BibTeX entry can
     primaryClass={cs.LG}
 }
 ```
+
+To cite LaSR, please use the following BibTeX entry:
+
+```bibtex
+@misc{grayeli2024symbolicregressionlearnedconcept,
+	title={Symbolic Regression with a Learned Concept Library}, 
+	author={Arya Grayeli and Atharva Sehgal and Omar Costilla-Reyes and Miles Cranmer and Swarat Chaudhuri},
+	year={2024},
+	eprint={2409.09359},
+	archivePrefix={arXiv},
+	primaryClass={cs.LG},
+	url={https://arxiv.org/abs/2409.09359}, 
+}
+```
