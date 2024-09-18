@@ -23,8 +23,8 @@ a Python frontend.
 
 - [Benchmarking](#benchmarking)
 - [Quickstart](#quickstart)
+- [Search options](#search-options)
 - [Organization](#organization)
-- [LLM Utilities](#llm-utilities)
 
 ## Benchmarking
 
@@ -123,13 +123,18 @@ For fitting multiple outputs, one can use `MultitargetLaSRRegressor`
 (and pass an array of indices to `idx` in `predict` for selecting specific equations).
 For a full list of options available to each regressor, see the [API page](https://astroautomata.com/LibraryAugmentedSymbolicRegression.jl/dev/api/).
 
+
+## Search options
+
+Other than `LLMOptions`, We have the same search options as SymbolicRegression.jl. See https://astroautomata.com/SymbolicRegression.jl/stable/api/#Options
+
 ### LLM Options
 
 LaSR uses PromptingTools.jl for zero shot prompting. If you wish to make changes to the prompting options, you can pass an `LLMOptions` object to the `LaSRRegressor` constructor. The options available are:
 ```julia
 llm_options = LLMOptions(
     active=true,                                                                # Whether to use LLM inference or not
-    weights=LLMWeights(llm_mutate=0.5, llm_crossover=0.3, llm_gen_random=0.2),  # Probabilities of using LLM for mutation, crossover, and random generation
+    weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),  # Probability of using LLM for mutation, crossover, and random generation
     num_pareto_context=5,                                                       # Number of equations to sample from the Pareto frontier for summarization.
     prompt_evol=true,                                                           # Whether to evolve natural language concepts through LLM calls.
     prompt_concepts=true,                                                       # Whether to use natural language concepts in the search.
@@ -144,6 +149,13 @@ llm_options = LLMOptions(
 )
 ```
 
+### Best Practices
+
+1. Always make sure you cannot find a satisfactory solution with `active=false`. This will save you time and money.
+1. Start with a LLM OpenAI compatible server running on your local machine before moving onto paid services. There are many online resources to set up a local LLM server [1](https://ollama.com/blog/openai-compatibility) [2](https://docs.vllm.ai/en/latest/getting_started/installation.html) [3](https://github.com/sgl-project/sglang?tab=readme-ov-file#backend-sglang-runtime-srt) [4](https://old.reddit.com/r/LocalLLaMA/comments/16y95hk/a_starter_guide_for_playing_with_your_own_local_ai/)
+1. If you are using LLM, do a back-of-the-envelope calculation to estimate the cost of running LLM for your problem.  Each iteration will make around 60k calls to the LLM model. Each call to the LLM (with the default prompt) is around 1k tokens. This gives us an upper bound of 60M tokens per iteration if `p=1.00`. Running the model at `p=0.01` for 40 iterations will result in just under 25M tokens for each equation.
+
+
 ## Organization
 
 LibraryAugmentedSymbolicRegression.jl development is kept independent from the main codebase. However, to ensure LaSR can be used easily, it is integrated into SymbolicRegression.jl via the [`ext/SymbolicRegressionLaSRExt`](https://www.example.com) extension module. This, in turn, is loaded into PySR. This cartoon summarizes the interaction between the different packages:
@@ -152,8 +164,3 @@ LibraryAugmentedSymbolicRegression.jl development is kept independent from the m
 
 > [!NOTE]  
 > The `ext/SymbolicRegressionLaSRExt` module is not yet available in the released version of SymbolicRegression.jl. It will be available in the release `vX.X.X` of SymbolicRegression.jl.
-
-
-## Search options
-
-Other than `LLMOptions`, We have the same search options as SymbolicRegression.jl. See https://astroautomata.com/SymbolicRegression.jl/stable/api/#Options
