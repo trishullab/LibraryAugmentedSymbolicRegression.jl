@@ -1,12 +1,12 @@
-# LaSR: Language aided Symbolic Regression
+# LaSR: Library augmented Symbolic Regression
 
 <center style="font-weight: bold;">
     <a href="https://trishullab.github.io/lasr-web/">Website</a> | 
-    <a href="https://atharvas.net/static/lasr.pdf/">Paper</a> | 
+    <a href="https://arxiv.org/abs/2409.09359/">Paper</a> | 
     <a href="https://trishullab.github.io/lasr-web/static/lasr-slides.pdf"> Short Slide Deck</a>
 </center>
 
-**Purpose**: This branch contains code to run LaSR on the synthetic dataset and the Feynman Equations dataset. We hope this is useful for future work which wishes to compare against LaSR.
+**Purpose**: This branch contains code to run LaSR on the synthetic dataset, the Feynman Equations dataset, and the bigbench dataset. We hope this is useful for future work which wishes to compare against LaSR.
 
 ## Installation
 
