@@ -85,7 +85,7 @@ function test_mixed(i, batching::Bool, weighted::Bool, parallelism)
             X,
             y;
             weights=weights,
-            niterations=2,
+            niterations=5,
             options=options,
             parallelism=parallelism,
             numprocs=numprocs,
@@ -95,7 +95,7 @@ function test_mixed(i, batching::Bool, weighted::Bool, parallelism)
         (y, hallOfFame, dominating)
     else
         y = 2 * cos.(X[4, :])
-        niterations = 2
+        niterations = 5
         if multi
             # Copy the same output twice; make sure we can find it twice
             y = repeat(y, 1, 2)
