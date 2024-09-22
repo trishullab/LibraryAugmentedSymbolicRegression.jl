@@ -7,7 +7,7 @@ LibraryAugmentedSymbolicRegression.jl (LaSR.jl) accelerates the search for symbo
 
 | Latest release | Website | Forums | Paper |
 | :---: | :---: | :---: | :---: |
-| [![version](https://juliahub.com/docs/LibraryAugmentedSymbolicRegression/version.svg)](https://juliahub.com/ui/Packages/LibraryAugmentedSymbolicRegression/X2eIS) | [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://trishullab.github.io/lasr-web/) | [![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/discussions) | [![Paper](https://img.shields.io/badge/arXiv-2409.09359-b31b1b)](https://arxiv.org/abs/2409.09359) |
+| [![version](https://juliahub.com/docs/General/LibraryAugmentedSymbolicRegression/stable/version.svg)](https://juliahub.com/ui/Packages/General/LibraryAugmentedSymbolicRegression) | [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://trishullab.github.io/lasr-web/) | [![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/discussions) | [![Paper](https://img.shields.io/badge/arXiv-2409.09359-b31b1b)](https://arxiv.org/abs/2409.09359) |
 
 | Build status | Coverage |
 | :---: | :---: |
