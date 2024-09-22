@@ -58,14 +58,7 @@ function convertDict(d)::NamedTuple
 end
 
 function get_vars(options::Options)::String
-    if !isnothing(options.llm_options) && !isnothing(options.llm_options.var_order)
-        variable_names = [
-            options.llm_options.var_order[key] for
-            key in sort(collect(keys(options.llm_options.var_order)))
-        ]
-    else
-        variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
-    end
+    variable_names = get_variable_names(options.llm_options.var_order)
     return join(variable_names, ", ")
 end
 
@@ -287,16 +280,18 @@ function tree_to_expr(
 end
 
 function tree_to_expr(tree::AbstractExpressionNode{T}, options)::String where {T<:DATA_TYPE}
-    variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
-    if !isnothing(options.llm_options.var_order)
-        variable_names = [
-            options.llm_options.var_order[key] for
-            key in sort(collect(keys(options.llm_options.var_order)))
-        ]
-    end
+    variable_names = get_variable_names(options.llm_options.var_order)
     return string_tree(
         tree, options.operators; f_constant=sketch_const, variable_names=variable_names
     )
+end
+
+function get_variable_names(var_order::Dict)::Vector{String}
+    return [var_order[key] for key in sort(collect(keys(var_order)))]
+end
+
+function get_variable_names(var_order::Nothing)::Vector{String}
+    return ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
 end
 
 function handle_not_expr(::Type{T}, x, var_names)::Node{T} where {T<:DATA_TYPE}

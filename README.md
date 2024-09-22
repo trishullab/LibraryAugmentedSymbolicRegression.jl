@@ -1,11 +1,13 @@
+# LaSR: Library augmented Symbolic Regression
+LibraryAugmentedSymbolicRegression.jl (LaSR.jl) accelerates the search for symbolic expressions using library learning. 
+
+
 <!-- prettier-ignore-start -->
 <div align="center">
 
-LibraryAugmentedSymbolicRegression.jl (LaSR.jl) accelerates the search for symbolic expressions using library learning.
-
 | Latest release | Website | Forums | Paper |
 | :---: | :---: | :---: | :---: |
-| [![version](https://juliahub.com/docs/LibraryAugmentedSymbolicRegression/version.svg)](https://juliahub.com/ui/Packages/LibraryAugmentedSymbolicRegression/X2eIS) | [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://trishullab.github.io/lasr-web/) | [![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/discussions) | [![Paper](https://img.shields.io/badge/arXiv-2409.09359-b31b1b)](https://arxiv.org/abs/2409.09359) |
+| [![version](https://juliahub.com/docs/General/LibraryAugmentedSymbolicRegression/stable/version.svg)](https://juliahub.com/ui/Packages/General/LibraryAugmentedSymbolicRegression) | [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://trishullab.github.io/lasr-web/) | [![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/discussions) | [![Paper](https://img.shields.io/badge/arXiv-2409.09359-b31b1b)](https://arxiv.org/abs/2409.09359) |
 
 | Build status | Coverage |
 | :---: | :---: |
@@ -23,8 +25,8 @@ a Python frontend.
 
 - [Benchmarking](#benchmarking)
 - [Quickstart](#quickstart)
+- [Search options](#search-options)
 - [Organization](#organization)
-- [LLM Utilities](#llm-utilities)
 
 ## Benchmarking
 
@@ -32,7 +34,7 @@ If you'd like to compare with LaSR, we've archived the code used in the paper in
 ```bash
 $ git switch lasr-experiments
 ```
-to switch to the branch and follow the instructions in the README to reproduce our results. This directory contains the code for evaluating LaSR on the 
+to switch to the branch and follow the instructions in the README to reproduce our results. This directory contains the data and code for running and evaluating LaSR on the following datasets: 
 
 - [x] Feynman Equations dataset
 - [x] Synthetic equations dataset
@@ -50,12 +52,13 @@ using Pkg
 Pkg.add("LibraryAugmentedSymbolicRegression")
 ```
 
-LaSR uses the same interface as [SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl). The easiest way to use LibraryAugmentedSymbolicRegression.jl
-is with [MLJ](https://github.com/alan-turing-institute/MLJ.jl).
-Let's see an example:
+LaSR uses the same interface as [SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl), and is integrated into SymbolicRegression.jl through the [`SymbolicRegressionLaSRExt`](integration). However, LaSR can be directly used with [MLJ](https://github.com/alan-turing-institute/MLJ.jl) as well. The only difference is that you need to pass an `LLMOptions` object to the `LaSRRegressor` constructor.
+
+
+For example, we can modify the `example.jl` from the SymbolicRegression.jl documentation to use LaSR as follows:
 
 ```julia
-import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions
+import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMWeights
 import MLJ: machine, fit!, predict, report
 
 # Dataset with two named features:
@@ -72,56 +75,26 @@ model = LaSRRegressor(
     binary_operators=[+, -, *],
     unary_operators=[cos],
     llm_options=LLMOptions(
-      ...
+        active=true,
+        weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),
+        promtp_evol=true,
+        prompt_concepts=true,
+        api_key="token-abc123",
+        model="meta-llama/Meta-Llama-3-8B-Instruct",
+        api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+        var_order=Dict("a" => "angle", "b" => "bias")
     )
 )
-```
-
-Now, let's create and train this model
-on our data:
-
-```julia
 mach = machine(model, X, y)
 
 fit!(mach)
-```
-
-You will notice that expressions are printed
-using the column names of our table. If,
-instead of a table-like object,
-a simple array is passed
-(e.g., `X=randn(100, 2)`),
-`x1, ..., xn` will be used for variable names.
-
-Let's look at the expressions discovered:
-
-```julia
 report(mach)
-```
-
-Finally, we can make predictions with the expressions
-on new data:
-
-```julia
 predict(mach, X)
 ```
 
-This will make predictions using the expression
-selected by `model.selection_method`,
-which by default is a mix of accuracy and complexity.
+## Search options
 
-You can override this selection and select an equation from
-the Pareto front manually with:
-
-```julia
-predict(mach, (data=X, idx=2))
-```
-
-where here we choose to evaluate the second equation.
-
-For fitting multiple outputs, one can use `MultitargetLaSRRegressor`
-(and pass an array of indices to `idx` in `predict` for selecting specific equations).
-For a full list of options available to each regressor, see the [API page](https://astroautomata.com/LibraryAugmentedSymbolicRegression.jl/dev/api/).
+Other than `LLMOptions`, We have the same search options as SymbolicRegression.jl. See https://astroautomata.com/SymbolicRegression.jl/stable/api/#Options
 
 ### LLM Options
 
@@ -129,7 +102,7 @@ LaSR uses PromptingTools.jl for zero shot prompting. If you wish to make changes
 ```julia
 llm_options = LLMOptions(
     active=true,                                                                # Whether to use LLM inference or not
-    weights=LLMWeights(llm_mutate=0.5, llm_crossover=0.3, llm_gen_random=0.2),  # Probabilities of using LLM for mutation, crossover, and random generation
+    weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),  # Probability of using LLM for mutation, crossover, and random generation
     num_pareto_context=5,                                                       # Number of equations to sample from the Pareto frontier for summarization.
     prompt_evol=true,                                                           # Whether to evolve natural language concepts through LLM calls.
     prompt_concepts=true,                                                       # Whether to use natural language concepts in the search.
@@ -144,6 +117,13 @@ llm_options = LLMOptions(
 )
 ```
 
+### Best Practices
+
+1. Always make sure you cannot find a satisfactory solution with `active=false` before using LLM guidance.
+1. Start with a LLM OpenAI compatible server running on your local machine before moving onto paid services. There are many online resources to set up a local LLM server [1](https://ollama.com/blog/openai-compatibility) [2](https://docs.vllm.ai/en/latest/getting_started/installation.html) [3](https://github.com/sgl-project/sglang?tab=readme-ov-file#backend-sglang-runtime-srt) [4](https://old.reddit.com/r/LocalLLaMA/comments/16y95hk/a_starter_guide_for_playing_with_your_own_local_ai/)
+1. If you are using LLM, do a back-of-the-envelope calculation to estimate the cost of running LLM for your problem.  Each iteration will make around 60k calls to the LLM model. With the default prompts (in `prompts/`), each call usually requires generating 250 to 1000 tokens. This gives us an upper bound of 60M tokens per iteration if `p=1.00`. Hence, running the model at `p=0.01` for 40 iterations will result in 24M tokens for each equation.
+
+
 ## Organization
 
 LibraryAugmentedSymbolicRegression.jl development is kept independent from the main codebase. However, to ensure LaSR can be used easily, it is integrated into SymbolicRegression.jl via the [`ext/SymbolicRegressionLaSRExt`](https://www.example.com) extension module. This, in turn, is loaded into PySR. This cartoon summarizes the interaction between the different packages:
@@ -152,8 +132,3 @@ LibraryAugmentedSymbolicRegression.jl development is kept independent from the m
 
 > [!NOTE]  
 > The `ext/SymbolicRegressionLaSRExt` module is not yet available in the released version of SymbolicRegression.jl. It will be available in the release `vX.X.X` of SymbolicRegression.jl.
-
-
-## Search options
-
-Other than `LLMOptions`, We have the same search options as SymbolicRegression.jl. See https://astroautomata.com/SymbolicRegression.jl/stable/api/#Options
