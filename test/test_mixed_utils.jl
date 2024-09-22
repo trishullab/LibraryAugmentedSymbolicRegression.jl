@@ -17,7 +17,8 @@ function test_mixed(i, batching::Bool, weighted::Bool, parallelism)
     turbo = false
     bumper = false
     T = Float32
-
+    
+    niterations = 2
     if i == 0
         progress = true #Also try the progress bar.
         warmup_maxsize_by = 0.5f0 #Smaller maxsize at first, build up slowly
@@ -39,6 +40,7 @@ function test_mixed(i, batching::Bool, weighted::Bool, parallelism)
     elseif i == 5
         T = Float64
         turbo = true
+        niterations = 5
     end
 
     numprocs = parallelism == :multiprocessing ? 2 : nothing
@@ -85,7 +87,7 @@ function test_mixed(i, batching::Bool, weighted::Bool, parallelism)
             X,
             y;
             weights=weights,
-            niterations=5,
+            niterations=niterations,
             options=options,
             parallelism=parallelism,
             numprocs=numprocs,
@@ -95,7 +97,7 @@ function test_mixed(i, batching::Bool, weighted::Bool, parallelism)
         (y, hallOfFame, dominating)
     else
         y = 2 * cos.(X[4, :])
-        niterations = 5
+        niterations = niterations
         if multi
             # Copy the same output twice; make sure we can find it twice
             y = repeat(y, 1, 2)
