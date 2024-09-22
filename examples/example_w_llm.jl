@@ -7,15 +7,13 @@ y = 2 * cos.(X[4, :]) + X[1, :] .^ 2 .- 2
 
 llm_options = LibraryAugmentedSymbolicRegression.LLMOptions(;
     active=true,
-    weights=LibraryAugmentedSymbolicRegression.LLMWeights(;
-        llm_mutate=0.01, llm_crossover=0.01, llm_gen_random=0.01
-    ),
-    num_pareto_context=5,
-    prompt_evol=true,
+    weights=LLMWeights(; llm_mutate=0.01, llm_crossover=0.01, llm_gen_random=0.01),
+    promtp_evol=true,
     prompt_concepts=true,
     api_key="token-abc123",
     model="meta-llama/Meta-Llama-3-8B-Instruct",
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+    var_order=Dict("a" => "angle", "b" => "bias"),
 )
 
 options = LibraryAugmentedSymbolicRegression.Options(;
