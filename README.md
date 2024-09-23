@@ -30,7 +30,7 @@ a Python frontend.
 
 ## Benchmarking
 
-If you'd like to compare with LaSR, we've archived the code used in the paper in the `lasr-experiments` branch. Clone this repository and run:
+If you'd like to compare with LaSR, we've archived the code used in the paper in the [`lasr-experiments`](https://github.com/trishullab/LaSR.jl/tree/lasr-experiments) branch. Clone this repository and run:
 ```bash
 $ git switch lasr-experiments
 ```
@@ -41,6 +41,9 @@ to switch to the branch and follow the instructions in the README to reproduce o
     - [x] and generation code
 - [x] Bigbench experiments
     - [x] and evaluation code
+     
+> [!NOTE]
+> The code in the `lasr-experiments` branch directly modifies a 'frozen' version of SymbolicRegression.jl and PySR. While we gradually work on integrating LaSR into the main PySR repository, you can still use LaSR within Python by installing the pip package in this branch.
 
 
 ## Quickstart
