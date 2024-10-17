@@ -86,28 +86,28 @@ function create_utils_benchmark()
     suite["best_of_sample"] = @benchmarkable(
         best_of_sample(pop, rss, $options),
         setup = (
-            nfeatures = 1;
-            dataset = Dataset(randn(nfeatures, 32), randn(32));
-            pop = Population(dataset; npop=100, nlength=20, options=$options, nfeatures);
-            rss = RunningSearchStatistics(; options=$options)
+            nfeatures=1;
+            dataset=Dataset(randn(nfeatures, 32), randn(32));
+            pop=Population(dataset; npop=100, nlength=20, options=($options), nfeatures);
+            rss=RunningSearchStatistics(; options=($options))
         )
     )
 
     ntrees = 10
     suite["optimize_constants_x10"] = @benchmarkable(
         foreach(members) do member
-            optimize_constants(dataset, member, $options)
+            return optimize_constants(dataset, member, $options)
         end,
         seconds = 20,
         setup = (
-            nfeatures = 1;
-            T = Float64;
-            dataset = Dataset(randn(nfeatures, 512), randn(512));
-            ntrees = $ntrees;
-            trees = [
+            nfeatures=1;
+            T=Float64;
+            dataset=Dataset(randn(nfeatures, 512), randn(512));
+            ntrees=($ntrees);
+            trees=[
                 gen_random_tree_fixed_size(20, $options, nfeatures, T) for i in 1:ntrees
             ];
-            members = [
+            members=[
                 PopMember(dataset, tree, $options; deterministic=false) for tree in trees
             ]
         )
@@ -123,12 +123,12 @@ function create_utils_benchmark()
             )
             s[T] = @benchmarkable(
                 foreach(trees) do tree
-                    compute_complexity(tree, $options)
+                    return compute_complexity(tree, $options)
                 end,
                 setup = (
-                    T = Float64;
-                    nfeatures = 3;
-                    trees = [
+                    T=Float64;
+                    nfeatures=3;
+                    trees=[
                         gen_random_tree_fixed_size(20, $options, nfeatures, T) for
                         i in 1:($ntrees)
                     ]
@@ -153,12 +153,12 @@ function create_utils_benchmark()
     )
     suite["check_constraints_x10"] = @benchmarkable(
         foreach(trees) do tree
-            check_constraints(tree, $options, $options.maxsize)
+            return check_constraints(tree, $options, $options.maxsize)
         end,
         setup = (
-            T = Float64;
-            nfeatures = 3;
-            trees = [
+            T=Float64;
+            nfeatures=3;
+            trees=[
                 gen_random_tree_fixed_size(20, $options, nfeatures, T) for i in 1:($ntrees)
             ]
         )

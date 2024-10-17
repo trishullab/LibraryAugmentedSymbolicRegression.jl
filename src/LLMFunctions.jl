@@ -100,7 +100,7 @@ function construct_prompt(
     if n_occurrences < length(element_list)
         last_occurrence = findlast(x -> occursin(pattern, x), lines)
         @assert last_occurrence !== nothing "No occurrences of the element_id_tag found in the user prompt."
-        for i in reverse((n_occurrences + 1):length(element_list))
+        for i in reverse((n_occurrences+1):length(element_list))
             new_line = replace(lines[last_occurrence], string(n_occurrences) => string(i))
             insert!(lines, last_occurrence + 1, new_line)
         end
@@ -441,7 +441,7 @@ function sample_context(idea_database, N, idea_threshold)::Vector{String}
         for i in 1:(size(idea_database)[1])
             push!(assumptions, idea_database[i])
         end
-        for i in (size(idea_database)[1] + 1):N
+        for i in (size(idea_database)[1]+1):N
             push!(assumptions, "None")
         end
         return assumptions
@@ -671,7 +671,7 @@ function update_idea_database(idea_database, dominating, worst_members, options:
     pushfirst!(idea_database, chosen_idea1)
 
     if N > 1
-        b = rand(1:(N - 1))
+        b = rand(1:(N-1))
         if a == b
             b += 1
         end
@@ -899,7 +899,7 @@ function llm_crossover_trees(
         return t, tree2
     end
 
-    for i in 1:(2 * N)
+    for i in 1:(2*N)
         l = rand(1:N)
         t = expr_to_tree(
             T,

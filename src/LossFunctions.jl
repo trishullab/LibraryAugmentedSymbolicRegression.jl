@@ -148,7 +148,7 @@ function loss_to_score(
     use_baseline::Bool,
     baseline::L,
     member,
-    options::Options,
+    options::Options;
     complexity::Union{Int,Nothing}=nothing,
 )::L where {L<:LOSS_TYPE}
     # TODO: Come up with a more general normalization scheme.

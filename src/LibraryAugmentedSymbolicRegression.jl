@@ -607,7 +607,7 @@ function equation_search(
         datasets,
         RuntimeOptions(;
             niterations=niterations,
-            total_cycles=options.populations * niterations,
+            total_cycles=(options.populations * niterations),
             numprocs=_numprocs,
             init_procs=procs,
             addprocs_function=_addprocs_function,
@@ -917,9 +917,9 @@ function _main_search_loop!(
     resource_monitor = ResourceMonitor(;
         # Storing n times as many monitoring intervals as populations seems like it will
         # help get accurate resource estimates:
-        max_recordings=options.populations * 100 * nout,
-        start_reporting_at=options.populations * 3 * nout,
-        window_size=options.populations * 2 * nout,
+        max_recordings=(options.populations * 100 * nout),
+        start_reporting_at=(options.populations * 3 * nout),
+        window_size=(options.populations * 2 * nout),
     )
     n_iterations = 0
     llm_recorder(
@@ -1238,7 +1238,7 @@ using ConstructionBase: ConstructionBase as _
 include("precompile.jl")
 redirect_stdout(devnull) do
     redirect_stderr(devnull) do
-        do_precompilation(Val(:precompile))
+        return do_precompilation(Val(:precompile))
     end
 end
 

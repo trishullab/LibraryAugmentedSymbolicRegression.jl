@@ -60,9 +60,9 @@ and loss.
 function PopMember(
     t::AbstractExpression{T},
     score::L,
-    loss::L,
+    loss::L;
     options::Union{Options,Nothing}=nothing,
-    complexity::Union{Int,Nothing}=nothing;
+    complexity::Union{Int,Nothing}=nothing,
     ref::Int=-1,
     parent::Int=-1,
     deterministic=nothing,
@@ -108,8 +108,8 @@ Automatically compute the score for this tree.
 function PopMember(
     dataset::Dataset{T,L},
     tree::Union{AbstractExpressionNode{T},AbstractExpression{T}},
-    options::Options,
-    complexity::Union{Int,Nothing}=nothing;
+    options::Options;
+    complexity::Union{Int,Nothing}=nothing,
     ref::Int=-1,
     parent::Int=-1,
     deterministic=nothing,
