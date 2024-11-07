@@ -80,7 +80,7 @@ model = LaSRRegressor(
     llm_options=LLMOptions(
         active=true,
         weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),
-        promtp_evol=true,
+        prompt_evol=true,
         prompt_concepts=true,
         api_key="token-abc123",
         model="meta-llama/Meta-Llama-3-8B-Instruct",
