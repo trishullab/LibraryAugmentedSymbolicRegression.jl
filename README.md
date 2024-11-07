@@ -58,6 +58,9 @@ Pkg.add("LibraryAugmentedSymbolicRegression")
 LaSR uses the same interface as [SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl), and is integrated into SymbolicRegression.jl through the [`SymbolicRegressionLaSRExt`](integration). However, LaSR can be directly used with [MLJ](https://github.com/alan-turing-institute/MLJ.jl) as well. The only difference is that you need to pass an `LLMOptions` object to the `LaSRRegressor` constructor.
 
 
+> [!NOTE]
+> LaSR searches for a directory called `prompts/` at the location you start Julia. You can download and extract the `prompts.zip` folder located [here](prompts.zip) to the desired location. If you wish to use a different location, you can pass the path to the `LLMOptions` object.
+
 For example, we can modify the `example.jl` from the SymbolicRegression.jl documentation to use LaSR as follows:
 
 ```julia
@@ -83,14 +86,19 @@ model = LaSRRegressor(
         prompt_evol=true,
         prompt_concepts=true,
         api_key="token-abc123",
+        prompts_dir="prompts",
+        llm_recorder_dir="lasr_runs/debug_0",
         model="meta-llama/Meta-Llama-3-8B-Instruct",
         api_kwargs=Dict("url" => "http://localhost:11440/v1"),
         var_order=Dict("a" => "angle", "b" => "bias")
+        llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
     )
 )
 mach = machine(model, X, y)
 
+# ensure ./prompts/ exists. If not, download and extract the prompts.zip file from the repository.
 fit!(mach)
+# open ./lasr_runs/debug_0/llm_calls.txt to see the LLM interactions.
 report(mach)
 predict(mach, X)
 ```
@@ -113,10 +121,12 @@ llm_options = LLMOptions(
     model="meta-llama/Meta-Llama-3-8B-Instruct",                                # LLM model to use.
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),                      # Keyword arguments passed to server.
     http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),                    # Keyword arguments passed to HTTP requests.
+    prompts_dir="prompts",                                                      # Directory to look for zero shot prompts to the LLM.
     llm_recorder_dir="lasr_runs/debug_0",                                       # Directory to log LLM interactions.
     llm_context="",                                                             # Natural language concept to start with. You should also be able to initialize with a list of concepts.
     var_order=nothing,                                                          # Dict(variable_name => new_name).
     idea_threshold=30                                                           # Number of concepts to keep track of.
+    is_parametric=false,                                                        # This is a special flag to allow sampling parametric equations from LaSR. This won't be needed for most users.
 )
 ```
 
