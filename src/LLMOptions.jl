@@ -88,7 +88,7 @@ function validate_llm_options(options::LLMOptions)
             throw(ArgumentError("api_kwargs must have a 'url' key."))
         end
         if !isdir(options.prompts_dir)
-            throw(ArgumentError("prompts_dir must be a valid directory."))
+            throw(ArgumentError("options.prompts_dir not found."))
         end
     end
 end
