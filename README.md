@@ -58,10 +58,10 @@ Pkg.add("LibraryAugmentedSymbolicRegression")
 LaSR uses the same interface as [SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl), and is integrated into SymbolicRegression.jl through the [`SymbolicRegressionLaSRExt`](integration). However, LaSR can be directly used with [MLJ](https://github.com/alan-turing-institute/MLJ.jl) as well. The only difference is that you need to pass an `LLMOptions` object to the `LaSRRegressor` constructor.
 
 
-> [!NOTE]
-> LaSR searches for a directory called `prompts/` at the location you start Julia. You can download and extract the `prompts.zip` folder located [here](prompts.zip) to the desired location. If you wish to use a different location, you can pass the path to the `LLMOptions` object.
-
 For example, we can modify the `example.jl` from the SymbolicRegression.jl documentation to use LaSR as follows:
+
+> [!NOTE]
+> LaSR searches for the LLM query prompts in a  a directory called `prompts/` at the location you start Julia. You can download and extract the `prompts.zip` folder from [here](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/raw/refs/heads/master/prompts.zip) to the desired location. If you wish to use a different location, you can pass a different `prompts_dir` argument to the `LLMOptions` object.
 
 ```julia
 import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMWeights
