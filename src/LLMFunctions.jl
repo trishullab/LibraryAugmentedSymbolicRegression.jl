@@ -180,7 +180,7 @@ function gen_llm_random_tree(
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        llm_recorder(options.llm_options, "None", "gen_random|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "gen_random|failed")
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
     llm_recorder(options.llm_options, string(msg.content), "llm_output|gen_random")
@@ -499,7 +499,7 @@ function prompt_evol(idea_database, options::Options)
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        llm_recorder(options.llm_options, "None", "ideas|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "ideas|failed")
         return nothing
     end
     llm_recorder(options.llm_options, string(msg.content), "llm_output|ideas")
@@ -648,7 +648,7 @@ function update_idea_database(idea_database, dominating, worst_members, options:
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        llm_recorder(options.llm_options, "None", "ideas|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "ideas|failed")
         return nothing
     end
 
@@ -754,7 +754,8 @@ function llm_mutate_op(
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        llm_recorder(options.llm_options, "None", "mutate|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "mutate|failed")
+        # log error in llm_recorder
         return tree
     end
 
@@ -869,7 +870,7 @@ function llm_crossover_trees(
             http_kwargs=convertDict(options.llm_options.http_kwargs),
         )
     catch e
-        llm_recorder(options.llm_options, "None", "crossover|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "crossover|failed")
         return tree1, tree2
     end
 
