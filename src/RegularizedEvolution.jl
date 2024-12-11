@@ -44,7 +44,6 @@ function reg_evol_cycle(
                 running_search_statistics,
                 options;
                 tmp_recorder=mutation_recorder,
-                dominating=dominating,
                 idea_database=idea_database,
             )
             num_evals += tmp_num_evals
@@ -98,7 +97,6 @@ function reg_evol_cycle(
                 dataset,
                 curmaxsize,
                 options;
-                dominating=dominating,
                 idea_database=idea_database,
             )
             num_evals += tmp_num_evals
