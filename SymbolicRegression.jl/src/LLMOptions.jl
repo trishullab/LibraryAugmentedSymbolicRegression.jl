@@ -63,7 +63,7 @@ Base.@kwdef mutable struct LLMOptions
     prompts_dir::String = "prompts/"
     llm_context::AbstractString = ""
     var_order::Union{Dict,Nothing} = nothing
-    idea_threshold::UInt32 = 30
+    idea_threshold::Integer = 30
     is_parametric::Bool = false
 end
 

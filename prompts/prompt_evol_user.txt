@@ -4,11 +4,11 @@ Idea 3: {{idea3}}
 Idea 4: {{idea4}}
 Idea 5: {{idea5}}
 
-Propose {{N}} hypotheses that would be appropriate given the ideas. Provide short commentary for each of your decisions. Do not talk about topics related to the simplicity or complexity of the expressions. I want ideas that are unique and interesting enough to amaze the world's best mathematicians. End with a JSON list that enumerates the proposed hypotheses following this format:
+Based on these ideas, deduce {{N}} logical conclusions or hypotheses that directly follow from them. Provide a brief explanation for each conclusion, highlighting the logical connections between the ideas. Avoid discussing topics related to the simplicity or complexity of the expressions. Conclude with a JSON list that enumerates the proposed conclusions in the following format:
 ```json
-["hyp1",
- "hyp2",
+["Conclusion 1",
+ "Conclusion 2",
  ...
- "hyp{{N}}"
+ "Conclusion {{N}}"
 ]
 ```

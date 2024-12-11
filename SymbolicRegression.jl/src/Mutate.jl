@@ -102,7 +102,6 @@ function next_generation(
     running_search_statistics::RunningSearchStatistics,
     options::Options;
     tmp_recorder::RecordType,
-    dominating=nothing,
     idea_database=nothing,
 )::Tuple{
     P,Bool,Float64
@@ -145,7 +144,7 @@ function next_generation(
                 gen_random_tree_fixed_size(rand(1:curmaxsize), options, nfeatures, T)
             )
         end
-        tree = llm_mutate_op(tree, options, dominating, idea_database)
+        tree = llm_mutate_op(tree, options, idea_database)
         tree = simplify_tree!(tree, options.operators)
         tree = combine_operators(tree, options.operators)
         @recorder tmp_recorder["type"] = "llm_mutate"
@@ -419,7 +418,6 @@ end
 """Generate a generation via crossover of two members."""
 function crossover_generation(
     member1::P, member2::P, dataset::D, curmaxsize::Int, options::Options;
-    dominating=nothing,
     idea_database=nothing,
 )::Tuple{P,P,Bool,Float64} where {T,L,D<:Dataset{T,L},N,P<:PopMember{T,L,N}}
     tree1 = member1.tree
@@ -451,7 +449,7 @@ function crossover_generation(
     child_tree2 = nothing
     llm_skip = false
     if options.llm_options.active && (rand() < options.llm_options.weights.llm_crossover)
-        child_tree1, child_tree2 = llm_crossover_trees(tree1, tree2, options, dominating, idea_database)
+        child_tree1, child_tree2 = llm_crossover_trees(tree1, tree2, options, idea_database)
 
         child_tree1 = simplify_tree!(child_tree1, options.operators)
         child_tree1 = combine_operators(child_tree1, options.operators)

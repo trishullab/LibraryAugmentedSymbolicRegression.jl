@@ -44,7 +44,6 @@ function reg_evol_cycle(
                 running_search_statistics,
                 options;
                 tmp_recorder=mutation_recorder,
-                dominating=dominating,
                 idea_database=idea_database,
             )
             num_evals += tmp_num_evals
@@ -94,7 +93,6 @@ function reg_evol_cycle(
 
             baby1, baby2, crossover_accepted, tmp_num_evals = crossover_generation(
                 allstar1, allstar2, dataset, curmaxsize, options;
-                dominating=dominating,
                 idea_database=idea_database,
             )
             num_evals += tmp_num_evals

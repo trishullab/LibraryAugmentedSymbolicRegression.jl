@@ -21,11 +21,6 @@ $ vim pysr/juliapkg.jl
 # {
 #     "julia": "~1.6.7, ~1.7, ~1.8, ~1.9, =1.10.0, ^1.10.3",
 #     "packages": {
-#         "PromptingTools": {
-#             "uuid": "670122d1-24a8-4d70-bfce-740807c42192",
-#             "dev": true,
-#             "path": "<PREPEND WITH ABSOLUTE PATH TO PROJECT DIRECTORY>/PromptingTools.jl"
-#         },
 #         "SymbolicRegression": {
 #             "uuid": "8254be44-1295-4e6a-a16d-46603ac705cb",
 #             "dev": true,
