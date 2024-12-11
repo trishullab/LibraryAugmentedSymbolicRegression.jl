@@ -465,9 +465,7 @@ end
     child_tree2 = nothing
     llm_skip = false
     if options.llm_options.active && (rand() < options.llm_options.weights.llm_crossover)
-        child_tree1, child_tree2 = llm_crossover_trees(
-            tree1, tree2, options, idea_database
-        )
+        child_tree1, child_tree2 = llm_crossover_trees(tree1, tree2, options, idea_database)
 
         child_tree1 = simplify_tree!(child_tree1, options.operators)
         child_tree1 = combine_operators(child_tree1, options.operators)
