@@ -1,0 +1,10 @@
+[deps]
+Bumper = "8ce10254-0962-460f-a3d8-1f77fea1446e"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PromptingTools = "670122d1-24a8-4d70-bfce-740807c42192"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+SymbolicRegression = "8254be44-1295-4e6a-a16d-46603ac705cb"
