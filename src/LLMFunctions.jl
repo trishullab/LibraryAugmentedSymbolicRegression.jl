@@ -20,27 +20,29 @@ using DynamicExpressions:
     string_tree,
     AbstractOperatorEnum
 using Compat: Returns, @inline
-using ..CoreModule: Options, DATA_TYPE, binopmap, unaopmap, LLMOptions
-using ..MutationFunctionsModule: gen_random_tree_fixed_size, random_node_and_parent
+using SymbolicRegression:
+    Options, DATA_TYPE, gen_random_tree_fixed_size, random_node_and_parent, AbstractOptions
+using ..LLMOptionsModule: LaSROptions
 
 using PromptingTools:
     SystemMessage,
     UserMessage,
     AIMessage,
     aigenerate,
+    render,
     CustomOpenAISchema,
     OllamaSchema,
     OpenAISchema
 using JSON: parse
 
 """LLM Recoder records the LLM calls for debugging purposes."""
-function llm_recorder(options::LLMOptions, expr::String, mode::String="debug")
-    if options.active
+function llm_recorder(options::LaSROptions, expr::String, mode::String="debug")
+    if options.use_llm
         if !isdir(options.llm_recorder_dir)
             mkdir(options.llm_recorder_dir)
         end
         recorder = open(joinpath(options.llm_recorder_dir, "llm_calls.txt"), "a")
-        write(recorder, string("[", mode, "] ", expr, "\n[/", mode, "]\n"))
+        write(recorder, string("[", mode, "]\n", expr, "\n[/", mode, "]\n"))
         close(recorder)
     end
 end
@@ -49,6 +51,7 @@ function load_prompt(path::String)::String
     # load prompt file 
     f = open(path, "r")
     s = read(f, String)
+    s = strip(s)
     close(f)
     return s
 end
@@ -57,14 +60,14 @@ function convertDict(d)::NamedTuple
     return (; Dict(Symbol(k) => v for (k, v) in d)...)
 end
 
-function get_vars(options::Options)::String
-    variable_names = get_variable_names(options.llm_options.var_order)
+function get_vars(options::LaSROptions)::String
+    variable_names = get_variable_names(options.variable_names)
     return join(variable_names, ", ")
 end
 
-function get_ops(options::Options)::String
-    binary_operators = map(v -> string(v), map(binopmap, options.operators.binops))
-    unary_operators = map(v -> string(v), map(unaopmap, options.operators.unaops))
+function get_ops(options::LaSROptions)::String
+    binary_operators = map(v -> string(v), options.operators.binops)
+    unary_operators = map(v -> string(v), options.operators.unaops)
     # Binary Ops: +, *, -, /, safe_pow (^)
     # Unary Ops: exp, safe_log, safe_sqrt, sin, cos
     return replace(
@@ -126,58 +129,92 @@ function construct_prompt(
     return new_prompt
 end
 
-function gen_llm_random_tree(
-    node_count::Int,
-    options::Options,
+function llm_randomize_tree(
+    ex::AbstractExpression,
+    curmaxsize::Int,
+    options::AbstractOptions,
     nfeatures::Int,
-    ::Type{T},
-    idea_database::Union{Vector{String},Nothing},
-)::AbstractExpressionNode{T} where {T<:DATA_TYPE}
-    # Note that this base tree is just a placeholder; it will be replaced.
-    N = 5
-    # LLM prompt
-    # conversation = [
-    #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "gen_random_system.txt")),
-    #     UserMessage(load_prompt(options.llm_options.prompts_dir * "gen_random_user.txt"))]
-    assumptions = sample_context(
-        idea_database,
-        options.llm_options.num_pareto_context,
-        options.llm_options.idea_threshold,
+    rng::AbstractRNG=default_rng(),
+)
+    tree = get_contents(ex)
+    context = nothing
+    ex = with_contents_for_mutation(
+        ex, llm_randomize_tree(tree, curmaxsize, options, nfeatures, rng), context
     )
+    return ex
+end
+function llm_randomize_tree(
+    ::AbstractExpressionNode{T},
+    curmaxsize::Int,
+    options::AbstractOptions,
+    nfeatures::Int,
+    rng::AbstractRNG=default_rng(),
+) where {T<:DATA_TYPE}
+    tree_size_to_generate = rand(rng, 1:curmaxsize)
+    return _gen_llm_random_tree(tree_size_to_generate, options, nfeatures, T)
+end
 
-    if !options.llm_options.prompt_concepts
+function _gen_llm_random_tree(
+    node_count::Int, options::LaSROptions, nfeatures::Int, ::Type{T}
+)::AbstractExpressionNode{T} where {T<:DATA_TYPE}
+    if isnothing(options.idea_database)
+        assumptions = []
+    else
+        assumptions = sample_context(
+            options.idea_database,
+            min(options.num_pareto_context, length(options.idea_database)),
+            options.max_concepts,
+        )
+    end
+
+    if options.llm_context != ""
+        pushfirst!(assumptions, options.llm_context)
+    end
+
+    if !options.use_concepts
         assumptions = []
     end
 
     conversation = [
+        SystemMessage(load_prompt(options.prompts_dir * "gen_random_system.txt")),
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "gen_random_system.txt") *
-            "\n" *
             construct_prompt(
-                load_prompt(options.llm_options.prompts_dir * "gen_random_user.txt"),
+                load_prompt(options.prompts_dir * "gen_random_user.txt"),
                 assumptions,
                 "assump",
             ),
         ),
     ]
-    llm_recorder(options.llm_options, conversation[1].content, "llm_input|gen_random")
+    rendered_msg = join(
+        [
+            x["content"] for x in render(
+                CustomOpenAISchema(),
+                conversation;
+                variables=get_vars(options),
+                operators=get_ops(options),
+                N=options.num_generated_equations,
+                no_system_message=false,
+            )
+        ],
+        "\n",
+    )
 
-    if options.llm_options.llm_context != ""
-        pushfirst!(assumptions, options.llm_options.llm_context)
-    end
+    llm_recorder(options.llm_options, rendered_msg, "llm_input|gen_random")
 
     msg = nothing
     try
         msg = aigenerate(
             CustomOpenAISchema(),
-            conversation; #OllamaSchema(), conversation;
+            conversation;
             variables=get_vars(options),
-            operators=get_ops(options),
-            N=N,
-            api_key=options.llm_options.api_key,
-            model=options.llm_options.model,
-            api_kwargs=convertDict(options.llm_options.api_kwargs),
-            http_kwargs=convertDict(options.llm_options.http_kwargs),
+            operaotrs=get_ops(options),
+            N=options.num_generated_equations,
+            api_key=options.api_key,
+            model=options.model,
+            api_kwargs=convertDict(options.api_kwargs),
+            http_kwargs=convertDict(options.http_kwargs),
+            no_system_message=true,
+            verbose=false,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "gen_random|failed")
@@ -185,7 +222,7 @@ function gen_llm_random_tree(
     end
     llm_recorder(options.llm_options, string(msg.content), "llm_output|gen_random")
 
-    gen_tree_options = parse_msg_content(msg.content)
+    gen_tree_options = parse_msg_content(String(msg.content))
 
     N = min(size(gen_tree_options)[1], N)
 
@@ -274,23 +311,23 @@ function sketch_const(val)
 end
 
 function tree_to_expr(
-    ex::AbstractExpression{T}, options::Options
+    ex::AbstractExpression{T}, options::LaSROptions
 )::String where {T<:DATA_TYPE}
     return tree_to_expr(get_contents(ex), options)
 end
 
 function tree_to_expr(tree::AbstractExpressionNode{T}, options)::String where {T<:DATA_TYPE}
-    variable_names = get_variable_names(options.llm_options.var_order)
+    variable_names = get_variable_names(options.variable_names)
     return string_tree(
         tree, options.operators; f_constant=sketch_const, variable_names=variable_names
     )
 end
 
-function get_variable_names(var_order::Dict)::Vector{String}
-    return [var_order[key] for key in sort(collect(keys(var_order)))]
+function get_variable_names(variable_names::Dict)::Vector{String}
+    return [variable_names[key] for key in sort(collect(keys(variable_names)))]
 end
 
-function get_variable_names(var_order::Nothing)::Vector{String}
+function get_variable_names(variable_names::Nothing)::Vector{String}
     return ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
 end
 
@@ -372,10 +409,10 @@ function expr_to_tree_run(::Type{T}, x::String, options)::Node{T} where {T<:DATA
     try
         expr = Meta.parse(x)
         variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
-        if !isnothing(options.llm_options.var_order)
+        if !isnothing(options.variable_names)
             variable_names = [
-                options.llm_options.var_order[key] for
-                key in sort(collect(keys(options.llm_options.var_order)))
+                options.variable_names[key] for
+                key in sort(collect(keys(options.variable_names)))
             ]
         end
         if expr isa Expr
@@ -389,7 +426,7 @@ function expr_to_tree_run(::Type{T}, x::String, options)::Node{T} where {T<:DATA
 end
 
 function expr_to_tree(::Type{T}, x::String, options) where {T<:DATA_TYPE}
-    if options.llm_options.is_parametric
+    if options.is_parametric
         out = ParametricNode{T}(expr_to_tree_run(T, x, options))
     else
         out = Node{T}(expr_to_tree_run(T, x, options))
@@ -411,7 +448,7 @@ function format_pareto(dominating, options, num_pareto_context::Int)::Vector{Str
     return pareto
 end
 
-function sample_one_context(idea_database, idea_threshold)::String
+function sample_one_context(idea_database, max_concepts)::String
     if isnothing(idea_database)
         return "None"
     end
@@ -422,13 +459,13 @@ function sample_one_context(idea_database, idea_threshold)::String
     end
 
     try
-        idea_database[rand(1:min(idea_threshold, N))]
+        idea_database[rand(1:min(max_concepts, N))]
     catch e
         "None"
     end
 end
 
-function sample_context(idea_database, N, idea_threshold)::Vector{String}
+function sample_context(idea_database, N, max_concepts)::Vector{String}
     assumptions = Vector{String}()
     if isnothing(idea_database)
         for _ in 1:N
@@ -448,7 +485,7 @@ function sample_context(idea_database, N, idea_threshold)::Vector{String}
     end
 
     while size(assumptions)[1] < N
-        chosen_idea = sample_one_context(idea_database, idea_threshold)
+        chosen_idea = sample_one_context(idea_database, max_concepts)
         if chosen_idea in assumptions
             continue
         end
@@ -457,46 +494,46 @@ function sample_context(idea_database, N, idea_threshold)::Vector{String}
     return assumptions
 end
 
-function prompt_evol(idea_database, options::Options)
+function concept_evolution(idea_database, options::LaSROptions)
     num_ideas = size(idea_database)[1]
-    if num_ideas <= options.llm_options.idea_threshold
+    if num_ideas <= options.max_concepts
         return nothing
     end
 
-    idea1 = idea_database[rand((options.llm_options.idea_threshold + 1):num_ideas)]
-    idea2 = idea_database[rand((options.llm_options.idea_threshold + 1):num_ideas)] # they could be same (should be allowed)
-    idea3 = idea_database[rand((options.llm_options.idea_threshold + 1):num_ideas)] # they could be same (should be allowed)
-    idea4 = idea_database[rand((options.llm_options.idea_threshold + 1):num_ideas)] # they could be same (should be allowed)
-    idea5 = idea_database[rand((options.llm_options.idea_threshold + 1):num_ideas)] # they could be same (should be allowed)
-
-    N = 5
-
-    # conversation = [
-    #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "prompt_evol_system.txt")),
-    #     UserMessage(load_prompt(options.llm_options.prompts_dir * "prompt_evol_user.txt"))]
+    ideas = [idea_database[rand((options.idea_threshold + 1):num_ideas)] for _ in 1:n_ideas]
     conversation = [
+        SystemMessage(load_prompt(options.prompts_dir * "prompt_evol_system.txt")),
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "prompt_evol_system.txt") *
-            "\n" *
             construct_prompt(
-                load_prompt(options.llm_options.prompts_dir * "prompt_evol_user.txt"),
-                [idea1, idea2, idea3, idea4, idea5],
-                "idea",
+                load_prompt(options.prompts_dir * "prompt_evol_user.txt"), ideas, "idea"
             ),
         ),
     ]
-    llm_recorder(options.llm_options, conversation[1].content, "llm_input|ideas")
+    rendered_msg = join(
+        [
+            x["content"] for x in render(
+                CustomOpenAISchema(),
+                conversation;
+                variables=get_vars(options),
+                operators=get_ops(options),
+                N=options.num_generated_concepts,
+                no_system_message=false,
+            )
+        ],
+        "\n",
+    )
+    llm_recorder(options.llm_options, rendered_msg, "llm_input|ideas")
 
     msg = nothing
     try
         msg = aigenerate(
             CustomOpenAISchema(),
-            conversation; #OllamaSchema(), conversation;
-            N=N,
-            api_key=options.llm_options.api_key,
-            model=options.llm_options.model,
-            api_kwargs=convertDict(options.llm_options.api_kwargs),
-            http_kwargs=convertDict(options.llm_options.http_kwargs),
+            conversation;
+            N=options.num_generated_concepts,
+            api_key=options.api_key,
+            model=options.model,
+            api_kwargs=convertDict(options.api_kwargs),
+            http_kwargs=convertDict(options.http_kwargs),
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "ideas|failed")
@@ -504,7 +541,7 @@ function prompt_evol(idea_database, options::Options)
     end
     llm_recorder(options.llm_options, string(msg.content), "llm_output|ideas")
 
-    idea_options = parse_msg_content(msg.content)
+    idea_options = parse_msg_content(String(msg.content))
 
     N = min(size(idea_options)[1], N)
 
@@ -584,30 +621,21 @@ function parse_msg_content(msg_content)
     # new method (for Llama since it follows directions better):
 end
 
-function update_idea_database(idea_database, dominating, worst_members, options::Options)
+function update_idea_database(dominating, worst_members, options::LaSROptions)
     # turn dominating pareto curve into ideas as strings
     if isnothing(dominating)
         return nothing
     end
 
-    op = options.operators
-    num_pareto_context = 5 # options.mutation_weights.num_pareto_context # must be 5 right now for prompts
+    gexpr = format_pareto(dominating, options, options.num_pareto_context)
+    bexpr = format_pareto(worst_members, options, options.num_pareto_context)
 
-    gexpr = format_pareto(dominating, options, num_pareto_context)
-    bexpr = format_pareto(worst_members, options, num_pareto_context)
-
-    N = 5
-
-    # conversation = [
-    #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "extract_idea_system.txt")),
-    #     UserMessage(load_prompt(options.llm_options.prompts_dir * "extract_idea_user.txt"))]
     conversation = [
+        SystemMessage(load_prompt(options.prompts_dir * "extract_idea_system.txt")),
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "extract_idea_system.txt") *
-            "\n" *
             construct_prompt(
                 construct_prompt(
-                    load_prompt(options.llm_options.prompts_dir * "extract_idea_user.txt"),
+                    load_prompt(options.prompts_dir * "extract_idea_user.txt"),
                     gexpr,
                     "gexpr",
                 ),
@@ -616,36 +644,36 @@ function update_idea_database(idea_database, dominating, worst_members, options:
             ),
         ),
     ]
-    llm_recorder(options.llm_options, conversation[1].content, "llm_input|gen_random")
+    rendered_msg = join(
+        [
+            x["content"] for x in render(
+                CustomOpenAISchema(),
+                conversation;
+                variables=get_vars(options),
+                operators=get_ops(options),
+                N=options.num_generated_concepts,
+                no_system_message=false,
+            )
+        ],
+        "\n",
+    )
+
+    llm_recorder(options.llm_options, rendered_msg, "llm_input|gen_random")
 
     msg = nothing
     try
-        # msg = aigenerate(OpenAISchema(), conversation; #OllamaSchema(), conversation;
-        #         variables=get_vars(options),
-        #         operators=get_ops(options),
-        #         N=N,
-        #         gexpr1=gexpr[1],
-        #         gexpr2=gexpr[2],
-        #         gexpr3=gexpr[3],
-        #         gexpr4=gexpr[4],
-        #         gexpr5=gexpr[5],
-        #         bexpr1=bexpr[1],
-        #         bexpr2=bexpr[2],
-        #         bexpr3=bexpr[3],
-        #         bexpr4=bexpr[4],
-        #         bexpr5=bexpr[5],
-        #         model="gpt-3.5-turbo-0125"
-        #         )
         msg = aigenerate(
             CustomOpenAISchema(),
-            conversation; #OllamaSchema(), conversation;
+            conversation;
             variables=get_vars(options),
             operators=get_ops(options),
-            N=N,
-            api_key=options.llm_options.api_key,
-            model=options.llm_options.model,
-            api_kwargs=convertDict(options.llm_options.api_kwargs),
-            http_kwargs=convertDict(options.llm_options.http_kwargs),
+            N=options.num_generated_concepts,
+            api_key=options.api_key,
+            model=options.model,
+            api_kwargs=convertDict(options.api_kwargs),
+            http_kwargs=convertDict(options.http_kwargs),
+            no_system_message=true,
+            verbose=false,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "ideas|failed")
@@ -654,7 +682,7 @@ function update_idea_database(idea_database, dominating, worst_members, options:
 
     llm_recorder(options.llm_options, string(msg.content), "llm_output|ideas")
 
-    idea_options = parse_msg_content(msg.content)
+    idea_options = parse_msg_content(String(msg.content))
 
     N = min(size(idea_options)[1], N)
 
@@ -668,7 +696,7 @@ function update_idea_database(idea_database, dominating, worst_members, options:
     chosen_idea1 = String(strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']']))
 
     llm_recorder(options.llm_options, chosen_idea1, "ideas")
-    pushfirst!(idea_database, chosen_idea1)
+    pushfirst!(options.idea_database, chosen_idea1)
 
     if N > 1
         b = rand(1:(N - 1))
@@ -679,65 +707,70 @@ function update_idea_database(idea_database, dominating, worst_members, options:
 
         llm_recorder(options.llm_options, chosen_idea2, "ideas")
 
-        pushfirst!(idea_database, chosen_idea2)
+        pushfirst!(options.idea_database, chosen_idea2)
     end
 
     num_add = 2
     for _ in 1:num_add
-        out = prompt_evol(idea_database, options)
+        out = concept_evolution(options.idea_database, options)
         if !isnothing(out)
-            pushfirst!(idea_database, out)
+            pushfirst!(options.idea_database, out)
         end
     end
 end
 
-function llm_mutate_op(
-    ex::AbstractExpression{T}, options::Options, dominating, idea_database
+function llm_mutate_tree(
+    ex::AbstractExpression{T}, options::LaSROptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
     tree = get_contents(ex)
-    ex = with_contents(ex, llm_mutate_op(tree, options, dominating, idea_database))
+    ex = with_contents(ex, llm_mutate_tree(tree, options))
     return ex
 end
 
 """LLM Mutation on a tree"""
-function llm_mutate_op(
-    tree::AbstractExpressionNode{T}, options::Options, dominating, idea_database
+function llm_mutate_tree(
+    tree::AbstractExpressionNode{T}, options::LaSROptions
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
-    expr = tree_to_expr(tree, options) # TODO: change global expr right now, could do it by subtree (weighted near root more)
-    N = 5
-    # LLM prompt
-    # TODO: we can use async map to do concurrent requests (useful for trying multiple prompts), see: https://github.com/svilupp/PromptingTools.jl?tab=readme-ov-file#asynchronous-execution
+    expr = tree_to_expr(tree, options)
 
-    # conversation = [
-    #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "mutate_system.txt")),
-    #     UserMessage(load_prompt(options.llm_options.prompts_dir * "mutate_user.txt"))]
-
-    assumptions = sample_context(
-        idea_database,
-        options.llm_options.num_pareto_context,
-        options.llm_options.idea_threshold,
-    )
-    pareto = format_pareto(dominating, options, options.llm_options.num_pareto_context)
-    if !options.llm_options.prompt_concepts
+    if isnothing(options.idea_database)
         assumptions = []
-        pareto = []
+    else
+        assumptions = sample_context(
+            options.idea_database, options.num_pareto_context, options.max_concepts
+        )
     end
+
+    if !options.use_concepts
+        assumptions = []
+    end
+    if options.llm_context != ""
+        pushfirst!(assumptions, options.llm_context)
+    end
+
     conversation = [
+        SystemMessage(load_prompt(options.prompts_dir * "mutate_system.txt")),
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "mutate_system.txt") *
-            "\n" *
             construct_prompt(
-                load_prompt(options.llm_options.prompts_dir * "mutate_user.txt"),
-                assumptions,
-                "assump",
+                load_prompt(options.prompts_dir * "mutate_user.txt"), assumptions, "assump"
             ),
         ),
     ]
-    llm_recorder(options.llm_options, conversation[1].content, "llm_input|mutate")
+    rendered_msg = join(
+        [
+            x["content"] for x in render(
+                CustomOpenAISchema(),
+                conversation;
+                variables=get_vars(options),
+                operators=get_ops(options),
+                N=options.num_generated_equations,
+                no_system_message=false,
+            )
+        ],
+        "\n",
+    )
 
-    if options.llm_options.llm_context != ""
-        pushfirst!(assumptions, options.llm_options.llm_context)
-    end
+    llm_recorder(options.llm_options, rendered_msg, "llm_input|mutate")
 
     msg = nothing
     try
@@ -746,12 +779,14 @@ function llm_mutate_op(
             conversation; #OllamaSchema(), conversation;
             variables=get_vars(options),
             operators=get_ops(options),
-            N=N,
+            N=options.num_generated_equations,
             expr=expr,
-            api_key=options.llm_options.api_key,
-            model=options.llm_options.model,
-            api_kwargs=convertDict(options.llm_options.api_kwargs),
-            http_kwargs=convertDict(options.llm_options.http_kwargs),
+            api_key=options.api_key,
+            model=options.model,
+            api_kwargs=convertDict(options.api_kwargs),
+            http_kwargs=convertDict(options.http_kwargs),
+            no_system_message=true,
+            verbose=false,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "mutate|failed")
@@ -761,7 +796,7 @@ function llm_mutate_op(
 
     llm_recorder(options.llm_options, string(msg.content), "llm_output|mutate")
 
-    mut_tree_options = parse_msg_content(msg.content)
+    mut_tree_options = parse_msg_content(String(msg.content))
 
     N = min(size(mut_tree_options)[1], N)
 
@@ -796,11 +831,11 @@ function llm_mutate_op(
 end
 
 function llm_crossover_trees(
-    ex1::E, ex2::E, options::Options, dominating, idea_database
+    ex1::E, ex2::E, options::LaSROptions
 )::Tuple{E,E} where {T,E<:AbstractExpression{T}}
     tree1 = get_contents(ex1)
     tree2 = get_contents(ex2)
-    tree1, tree2 = llm_crossover_trees(tree1, tree2, options, dominating, idea_database)
+    tree1, tree2 = llm_crossover_trees(tree1, tree2, options)
     ex1 = with_contents(ex1, tree1)
     ex2 = with_contents(ex2, tree2)
     return ex1, ex2
@@ -808,66 +843,71 @@ end
 
 """LLM Crossover between two expressions"""
 function llm_crossover_trees(
-    tree1::AbstractExpressionNode{T},
-    tree2::AbstractExpressionNode{T},
-    options::Options,
-    dominating,
-    idea_database,
+    tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}, options::LaSROptions
 )::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
     expr1 = tree_to_expr(tree1, options)
     expr2 = tree_to_expr(tree2, options)
-    N = 5
 
-    # LLM prompt
-    # conversation = [
-    #     SystemMessage(load_prompt(options.llm_options.prompts_dir * "crossover_system.txt")),
-    #     UserMessage(load_prompt(options.llm_options.prompts_dir * "crossover_user.txt"))]
-    assumptions = sample_context(
-        idea_database,
-        options.llm_options.num_pareto_context,
-        options.llm_options.idea_threshold,
-    )
-    pareto = format_pareto(dominating, options, options.llm_options.num_pareto_context)
-    if !options.llm_options.prompt_concepts
+    if isnothing(options.idea_database)
         assumptions = []
-        pareto = []
+    else
+        assumptions = sample_context(
+            options.idea_database,
+            min(options.num_pareto_context, length(options.idea_database)),
+            options.max_concepts,
+        )
+    end
+
+    if !options.use_concepts
+        assumptions = []
+    end
+
+    if options.llm_context != ""
+        pushfirst!(assumptions, options.llm_context)
     end
 
     conversation = [
+        SystemMessage(load_prompt(options.prompts_dir * "crossover_system.txt")),
         UserMessage(
-            load_prompt(options.llm_options.prompts_dir * "crossover_system.txt") *
-            "\n" *
             construct_prompt(
-                load_prompt(options.llm_options.prompts_dir * "crossover_user.txt"),
+                load_prompt(options.prompts_dir * "crossover_user.txt"),
                 assumptions,
                 "assump",
             ),
         ),
     ]
+    rendered_msg = join(
+        [
+            x["content"] for x in render(
+                CustomOpenAISchema(),
+                conversation;
+                variables=get_vars(options),
+                operators=get_ops(options),
+                N=options.num_generated_equations,
+                no_system_message=false,
+            )
+        ],
+        "\n",
+    )
 
-    if options.llm_options.llm_context != ""
-        pushfirst!(assumptions, options.llm_options.llm_context)
-    end
-
-    llm_recorder(options.llm_options, conversation[1].content, "llm_input|crossover")
+    llm_recorder(options.llm_options, rendered_msg, "llm_input|crossover")
 
     msg = nothing
     try
         msg = aigenerate(
             CustomOpenAISchema(),
-            conversation; #OllamaSchema(), conversation;
+            conversation;
             variables=get_vars(options),
             operators=get_ops(options),
-            N=N,
-            # pareto1=pareto[1],
-            # pareto2=pareto[2],
-            # pareto3=pareto[3],
+            N=options.num_generated_equations,
             expr1=expr1,
             expr2=expr2,
-            api_key=options.llm_options.api_key,
-            model=options.llm_options.model,
-            api_kwargs=convertDict(options.llm_options.api_kwargs),
-            http_kwargs=convertDict(options.llm_options.http_kwargs),
+            api_key=options.api_key,
+            model=options.model,
+            api_kwargs=convertDict(options.api_kwargs),
+            http_kwargs=convertDict(options.http_kwargs),
+            no_system_message=true,
+            verbose=false,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "crossover|failed")
@@ -876,7 +916,7 @@ function llm_crossover_trees(
 
     llm_recorder(options.llm_options, string(msg.content), "llm_output|crossover")
 
-    cross_tree_options = parse_msg_content(msg.content)
+    cross_tree_options = parse_msg_content(String(msg.content))
 
     cross_tree1 = nothing
     cross_tree2 = nothing

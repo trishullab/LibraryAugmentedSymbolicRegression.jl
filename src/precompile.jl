@@ -1,5 +1,4 @@
 using PrecompileTools: @compile_workload, @setup_workload
-
 macro maybe_setup_workload(mode, ex)
     precompile_ex = Expr(
         :macrocall, Symbol("@setup_workload"), LineNumberNode(@__LINE__), ex
@@ -41,11 +40,12 @@ function do_precompilation(::Val{mode}) where {mode}
             X = randn(T, 3, N)
             y = start ? randn(T, N) : randn(T, nout, N)
             @maybe_compile_workload mode begin
-                options = LibraryAugmentedSymbolicRegression.Options(;
+                options = LibraryAugmentedSymbolicRegression.LaSROptions(;
                     binary_operators=[+, *, /, -, ^],
                     unary_operators=[sin, cos, exp, log, sqrt, abs],
                     populations=3,
                     population_size=start ? 50 : 12,
+                    tournament_selection_n=6,
                     ncycles_per_iteration=start ? 30 : 1,
                     mutation_weights=MutationWeights(;
                         mutate_constant=1.0,
@@ -57,13 +57,12 @@ function do_precompilation(::Val{mode}) where {mode}
                         simplify=1.0,
                         randomize=1.0,
                         do_nothing=1.0,
-                        optimize=PRECOMPILE_OPTIMIZATION ? 1.0 : 0.0,
+                        optimize=1.0,
                     ),
                     fraction_replaced=0.2,
                     fraction_replaced_hof=0.2,
                     define_helper_functions=false,
-                    optimizer_probability=PRECOMPILE_OPTIMIZATION ? 0.05 : 0.0,
-                    should_optimize_constants=PRECOMPILE_OPTIMIZATION,
+                    optimizer_probability=0.05,
                     save_to_file=false,
                 )
                 state = equation_search(
@@ -90,4 +89,4 @@ function do_precompilation(::Val{mode}) where {mode}
         end
     end
     return nothing
-end
+    end

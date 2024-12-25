@@ -26,9 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         test:
-          - "part1"
-          - "part2"
-          - "part3"
+          - "llm"
         julia-version:
           - "1.10"
           - "1"
@@ -37,32 +35,13 @@ jobs:
         include:
           - os: windows-latest
             julia-version: "1"
-            test: "part1"
-          - os: windows-latest
-            julia-version: "1"
-            test: "part2"
-          - os: windows-latest
-            julia-version: "1"
-            test: "part3"
+            test: "llm"
           - os: macOS-latest
             julia-version: "1"
-            test: "part1"
-          - os: macOS-latest
-            julia-version: "1"
-            test: "part2"
-          - os: macOS-latest
-            julia-version: "1"
-            test: "part3"
+            test: "llm"
           - os: ubuntu-latest
             julia-version: "~1.11.0-0"
-            test: "part1"
-          - os: ubuntu-latest
-            julia-version: "~1.11.0-0"
-            test: "part2"
-          - os: ubuntu-latest
-            julia-version: "~1.11.0-0"
-            test: "part3"
-
+            test: "llm"
     steps:
       - uses: actions/checkout@v4
       - name: "Set up Julia"

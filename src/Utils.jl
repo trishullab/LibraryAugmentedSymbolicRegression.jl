@@ -1,7 +1,6 @@
 """Useful functions to be used throughout the library."""
 module UtilsModule
 
-using Printf: @printf
 using MacroTools: splitdef
 
 macro ignore(args...) end
