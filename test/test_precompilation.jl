@@ -1,0 +1,3 @@
+using LibraryAugmentedSymbolicRegression
+
+LibraryAugmentedSymbolicRegression.do_precompilation(Val(:compile))

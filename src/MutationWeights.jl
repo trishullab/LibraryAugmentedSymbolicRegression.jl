@@ -1,5 +1,6 @@
 module LaSRMutationWeightsModule
 
+using DispatchDoctor: @unstable
 using Base
 using SymbolicRegression
 
@@ -29,22 +30,29 @@ end
 
 Defines the composite weights for all the mutation operations in the LaSR module.
 """
-mutable struct LaSRMutationWeights{W<:SymbolicRegression.MutationWeights} <: SymbolicRegression.AbstractMutationWeights
+mutable struct LaSRMutationWeights{W<:SymbolicRegression.MutationWeights} <:
+               SymbolicRegression.AbstractMutationWeights
     sr_weights::W
     llm_weights::LLMMutationProbabilities
 end
 const LLM_MUTATION_WEIGHTS_KEYS = fieldnames(LLMMutationProbabilities)
 
-function LaSRMutationWeights(; kws...)
+@unstable function LaSRMutationWeights(; kws...)
     sr_weights_keys = filter(k -> !(k in LLM_MUTATION_WEIGHTS_KEYS), keys(kws))
-    sr_weights = SymbolicRegression.MutationWeights(; NamedTuple(sr_weights_keys .=> Tuple(kws[k] for k in sr_weights_keys))...)
+    sr_weights = SymbolicRegression.MutationWeights(;
+        NamedTuple(sr_weights_keys .=> Tuple(kws[k] for k in sr_weights_keys))...
+    )
     sr_weights_vec = [getfield(sr_weights, f) for f in fieldnames(typeof(sr_weights))]
 
     llm_weights_keys = filter(k -> k in LLM_MUTATION_WEIGHTS_KEYS, keys(kws))
-    llm_weights = LLMMutationProbabilities(; NamedTuple(llm_weights_keys .=> Tuple(kws[k] for k in llm_weights_keys))...)
+    llm_weights = LLMMutationProbabilities(;
+        NamedTuple(llm_weights_keys .=> Tuple(kws[k] for k in llm_weights_keys))...
+    )
     llm_weights_vec = [getfield(llm_weights, f) for f in fieldnames(typeof(llm_weights))]
 
-    norm_sr_weights = SymbolicRegression.MutationWeights(sr_weights_vec * (1 - sum(llm_weights_vec))...)
+    norm_sr_weights = SymbolicRegression.MutationWeights(
+        sr_weights_vec * (1 - sum(llm_weights_vec))...
+    )
     norm_llm_weights = LLMMutationProbabilities(llm_weights_vec * sum(sr_weights_vec)...)
 
     return LaSRMutationWeights(norm_sr_weights, norm_llm_weights)
@@ -58,6 +66,8 @@ function Base.getproperty(weights::LaSRMutationWeights, k::Symbol)
     end
 end
 
-Base.propertynames(weights::LaSRMutationWeights) = (LLM_MUTATION_WEIGHTS_KEYS..., SymbolicRegression.MUTATION_WEIGHTS_KEYS...)
+function Base.propertynames(weights::LaSRMutationWeights)
+    return (LLM_MUTATION_WEIGHTS_KEYS..., SymbolicRegression.MUTATION_WEIGHTS_KEYS...)
+end
 
 end

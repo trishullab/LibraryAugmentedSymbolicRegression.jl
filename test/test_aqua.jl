@@ -1,0 +1,6 @@
+using LibraryAugmentedSymbolicRegression
+using Aqua
+
+Aqua.test_all(LibraryAugmentedSymbolicRegression; ambiguities=false)
+
+Aqua.test_ambiguities(LibraryAugmentedSymbolicRegression)

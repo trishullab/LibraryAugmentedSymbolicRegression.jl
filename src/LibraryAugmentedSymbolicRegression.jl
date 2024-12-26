@@ -10,11 +10,28 @@ export Population,
     Node,
     LaSRRegressor,
     MultitargetLaSRRegressor,
-    #Functions:
+    # Options:
+    LLMOperationWeights,
+    LLMOptions,
+    LaSROptions,
+    LLMMutationProbabilities,
+    LaSRMutationWeights,
+    # Functions:
     llm_randomize_tree,
     llm_crossover_trees,
-    llm_mutate_tree
-    
+    llm_mutate_tree,
+    crossover_trees,
+    concept_evolution,
+    update_idea_database,
+    mutate!,
+    crossover_generation,
+    # Utilities:
+    render_expr,
+    parse_expr,
+    parse_msg_content,
+    llm_recorder,
+    construct_prompt
+
 using Distributed
 using PackageExtensionCompat: @require_extensions
 using Pkg: Pkg
@@ -36,13 +53,17 @@ end
 
 using DispatchDoctor: @stable
 @reexport using SymbolicRegression
-using .SymbolicRegression: @recorder, @sr_spawner, AbstractSearchState, AbstractRuntimeOptions
+using .SymbolicRegression:
+    @recorder, @sr_spawner, AbstractSearchState, AbstractRuntimeOptions
 
 @stable default_mode = "disable" begin
     include("Utils.jl")
+    include("Parse.jl")
     include("MutationWeights.jl")
     include("LLMOptions.jl")
+    include("LLMUtils.jl")
     include("LLMFunctions.jl")
+    include("Mutate.jl")
     include("Core.jl")
 end
 
@@ -54,11 +75,17 @@ using .CoreModule:
     LaSRMutationWeights
 
 using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
-using .LLMFunctionsModule: update_idea_database, llm_recorder
-# @stable default_mode = "disable" begin
-#     include("Configure.jl")
-# end
-
+using .LLMFunctionsModule:
+    llm_randomize_tree,
+    llm_mutate_tree,
+    crossover_trees,
+    llm_crossover_trees,
+    concept_evolution,
+    parse_msg_content,
+    update_idea_database
+using .LLMUtilsModule: construct_prompt, llm_recorder
+using .ParseModule: render_expr, parse_expr
+using .MutateModule: mutate!, crossover_generation
 
 """
 @TODO: Modularize _main_search_loop! function so that I don't have to change the
@@ -171,7 +198,7 @@ function _main_search_loop!(
 
             # Dominating pareto curve - must be better than all simpler equations
             dominating = calculate_pareto_frontier(state.halls_of_fame[j])
-            
+
             worst_member = nothing
             for member in cur_pop.members
                 if worst_member === nothing || member.loss > worst_member.loss
@@ -183,12 +210,11 @@ function _main_search_loop!(
                 push!(worst_members, worst_member)
             end
 
-            if options.use_llm && options.use_prompt_evol && (n_iterations % options.populations == 0)
+            if options.use_llm &&
+                options.use_prompt_evol &&
+                (n_iterations % options.populations == 0)
                 state.idea_database = update_idea_database(
-                    state.idea_database,
-                    dominating,
-                    worst_members,
-                    options
+                    state.idea_database, dominating, worst_members, options
                 )
             end
 

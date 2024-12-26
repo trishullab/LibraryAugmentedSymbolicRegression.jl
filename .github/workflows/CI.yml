@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         test:
-          - "llm"
+          - "online"
         julia-version:
           - "1.10"
           - "1"
@@ -35,13 +35,13 @@ jobs:
         include:
           - os: windows-latest
             julia-version: "1"
-            test: "llm"
+            test: "online"
           - os: macOS-latest
             julia-version: "1"
-            test: "llm"
+            test: "online"
           - os: ubuntu-latest
             julia-version: "~1.11.0-0"
-            test: "llm"
+            test: "online"
     steps:
       - uses: actions/checkout@v4
       - name: "Set up Julia"

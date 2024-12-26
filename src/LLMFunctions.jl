@@ -23,7 +23,16 @@ using Compat: Returns, @inline
 using SymbolicRegression:
     Options, DATA_TYPE, gen_random_tree_fixed_size, random_node_and_parent, AbstractOptions
 using ..LLMOptionsModule: LaSROptions
-
+using ..LLMUtilsModule:
+    llm_recorder,
+    load_prompt,
+    convertDict,
+    get_vars,
+    get_ops,
+    construct_prompt,
+    format_pareto,
+    sample_context
+using ..ParseModule: render_expr, parse_expr
 using PromptingTools:
     SystemMessage,
     UserMessage,
@@ -34,100 +43,6 @@ using PromptingTools:
     OllamaSchema,
     OpenAISchema
 using JSON: parse
-
-"""LLM Recoder records the LLM calls for debugging purposes."""
-function llm_recorder(options::LaSROptions, expr::String, mode::String="debug")
-    if options.use_llm
-        if !isdir(options.llm_recorder_dir)
-            mkdir(options.llm_recorder_dir)
-        end
-        recorder = open(joinpath(options.llm_recorder_dir, "llm_calls.txt"), "a")
-        write(recorder, string("[", mode, "]\n", expr, "\n[/", mode, "]\n"))
-        close(recorder)
-    end
-end
-
-function load_prompt(path::String)::String
-    # load prompt file 
-    f = open(path, "r")
-    s = read(f, String)
-    s = strip(s)
-    close(f)
-    return s
-end
-
-function convertDict(d)::NamedTuple
-    return (; Dict(Symbol(k) => v for (k, v) in d)...)
-end
-
-function get_vars(options::LaSROptions)::String
-    variable_names = get_variable_names(options.variable_names)
-    return join(variable_names, ", ")
-end
-
-function get_ops(options::LaSROptions)::String
-    binary_operators = map(v -> string(v), options.operators.binops)
-    unary_operators = map(v -> string(v), options.operators.unaops)
-    # Binary Ops: +, *, -, /, safe_pow (^)
-    # Unary Ops: exp, safe_log, safe_sqrt, sin, cos
-    return replace(
-        replace(
-            "binary operators: " *
-            join(binary_operators, ", ") *
-            ", and unary operators: " *
-            join(unary_operators, ", "),
-            "safe_" => "",
-        ),
-        "pow" => "^",
-    )
-end
-
-"""
-Constructs a prompt by replacing the element_id_tag with the corresponding element in the element_list.
-If the element_list is longer than the number of occurrences of the element_id_tag, the missing elements are added after the last occurrence.
-If the element_list is shorter than the number of occurrences of the element_id_tag, the extra ids are removed.
-"""
-function construct_prompt(
-    user_prompt::String, element_list::Vector, element_id_tag::String
-)::String
-    # Split the user prompt into lines
-    lines = split(user_prompt, "\n")
-
-    # Filter lines that match the pattern "... : {{element_id_tag[1-9]}}
-    pattern = r"^.*: \{\{" * element_id_tag * r"\d+\}\}$"
-
-    # find all occurrences of the element_id_tag
-    n_occurrences = count(x -> occursin(pattern, x), lines)
-
-    # if n_occurrences is less than |element_list|, add the missing elements after the last occurrence
-    if n_occurrences < length(element_list)
-        last_occurrence = findlast(x -> occursin(pattern, x), lines)
-        @assert last_occurrence !== nothing "No occurrences of the element_id_tag found in the user prompt."
-        for i in reverse((n_occurrences + 1):length(element_list))
-            new_line = replace(lines[last_occurrence], string(n_occurrences) => string(i))
-            insert!(lines, last_occurrence + 1, new_line)
-        end
-    end
-
-    new_prompt = ""
-    idx = 1
-    for line in lines
-        # if the line matches the pattern
-        if occursin(pattern, line)
-            if idx > length(element_list)
-                continue
-            end
-            # replace the element_id_tag with the corresponding element
-            new_prompt *=
-                replace(line, r"\{\{" * element_id_tag * r"\d+\}\}" => element_list[idx]) *
-                "\n"
-            idx += 1
-        else
-            new_prompt *= line * "\n"
-        end
-    end
-    return new_prompt
-end
 
 function llm_randomize_tree(
     ex::AbstractExpression,
@@ -233,7 +148,7 @@ function _gen_llm_random_tree(
 
     for i in 1:N
         l = rand(1:N)
-        t = expr_to_tree(
+        t = parse_expr(
             T,
             String(strip(gen_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
@@ -241,16 +156,16 @@ function _gen_llm_random_tree(
         if t.val == 1 && t.constant
             continue
         end
-        llm_recorder(options.llm_options, tree_to_expr(t, options), "gen_random")
+        llm_recorder(options.llm_options, render_expr(t, options), "gen_random")
 
         return t
     end
 
-    out = expr_to_tree(
+    out = parse_expr(
         T, String(strip(gen_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
 
-    llm_recorder(options.llm_options, tree_to_expr(out, options), "gen_random")
+    llm_recorder(options.llm_options, render_expr(out, options), "gen_random")
 
     if out.val == 1 && out.constant
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
@@ -290,208 +205,6 @@ function crossover_trees(
         tree2 = node1
     end
     return tree1, tree2
-end
-
-function sketch_const(val)
-    does_not_need_brackets = (typeof(val) <: Union{Real,AbstractArray})
-
-    if does_not_need_brackets
-        if isinteger(val) && (abs(val) < 5) # don't abstract integer constants from -4 to 4, useful for exponents
-            string(val)
-        else
-            "C"
-        end
-    else
-        if isinteger(val) && (abs(val) < 5) # don't abstract integer constants from -4 to 4, useful for exponents
-            "(" * string(val) * ")"
-        else
-            "(C)"
-        end
-    end
-end
-
-function tree_to_expr(
-    ex::AbstractExpression{T}, options::LaSROptions
-)::String where {T<:DATA_TYPE}
-    return tree_to_expr(get_contents(ex), options)
-end
-
-function tree_to_expr(tree::AbstractExpressionNode{T}, options)::String where {T<:DATA_TYPE}
-    variable_names = get_variable_names(options.variable_names)
-    return string_tree(
-        tree, options.operators; f_constant=sketch_const, variable_names=variable_names
-    )
-end
-
-function get_variable_names(variable_names::Dict)::Vector{String}
-    return [variable_names[key] for key in sort(collect(keys(variable_names)))]
-end
-
-function get_variable_names(variable_names::Nothing)::Vector{String}
-    return ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
-end
-
-function handle_not_expr(::Type{T}, x, var_names)::Node{T} where {T<:DATA_TYPE}
-    if x isa Real
-        Node{T}(; val=convert(T, x)) # old:  Node(T, 0, true, convert(T,x))
-    elseif x isa Symbol
-        if x === :C # constant that got abstracted
-            Node{T}(; val=convert(T, 1)) # old: Node(T, 0, true, convert(T,1))
-        else
-            feature = findfirst(isequal(string(x)), var_names)
-            if isnothing(feature) # invalid var name, just assume its x0
-                feature = 1
-            end
-            Node{T}(; feature=feature) # old: Node(T, 0, false, nothing, feature)
-        end
-    else
-        Node{T}(; val=convert(T, 1)) # old: Node(T, 0, true, convert(T,1)) # return a constant being 0
-    end
-end
-
-function expr_to_tree_recurse(
-    ::Type{T}, node::Expr, op::AbstractOperatorEnum, var_names
-)::Node{T} where {T<:DATA_TYPE}
-    args = node.args
-    x = args[1]
-    degree = length(args)
-
-    if degree == 1
-        handle_not_expr(T, x, var_names)
-    elseif degree == 2
-        unary_operators = map(v -> string(v), map(unaopmap, op.unaops))
-        idx = findfirst(isequal(string(x)), unary_operators)
-        if isnothing(idx) # if not used operator, make it the first one
-            idx = findfirst(isequal("safe_" * string(x)), unary_operators)
-            if isnothing(idx)
-                idx = 1
-            end
-        end
-
-        left = if (args[2] isa Expr)
-            expr_to_tree_recurse(T, args[2], op, var_names)
-        else
-            handle_not_expr(T, args[2], var_names)
-        end
-
-        Node(; op=idx, l=left) # old: Node(1, false, nothing, 0, idx, left)
-    elseif degree == 3
-        if x === :^
-            x = :pow
-        end
-        binary_operators = map(v -> string(v), map(binopmap, op.binops))
-        idx = findfirst(isequal(string(x)), binary_operators)
-        if isnothing(idx) # if not used operator, make it the first one
-            idx = findfirst(isequal("safe_" * string(x)), binary_operators)
-            if isnothing(idx)
-                idx = 1
-            end
-        end
-
-        left = if (args[2] isa Expr)
-            expr_to_tree_recurse(T, args[2], op, var_names)
-        else
-            handle_not_expr(T, args[2], var_names)
-        end
-        right = if (args[3] isa Expr)
-            expr_to_tree_recurse(T, args[3], op, var_names)
-        else
-            handle_not_expr(T, args[3], var_names)
-        end
-
-        Node(; op=idx, l=left, r=right) # old: Node(2, false, nothing, 0, idx, left, right)
-    else
-        Node{T}(; val=convert(T, 1))  # old: Node(T, 0, true, convert(T,1)) # return a constant being 1
-    end
-end
-
-function expr_to_tree_run(::Type{T}, x::String, options)::Node{T} where {T<:DATA_TYPE}
-    try
-        expr = Meta.parse(x)
-        variable_names = ["x", "y", "z", "k", "j", "l", "m", "n", "p", "a", "b"]
-        if !isnothing(options.variable_names)
-            variable_names = [
-                options.variable_names[key] for
-                key in sort(collect(keys(options.variable_names)))
-            ]
-        end
-        if expr isa Expr
-            expr_to_tree_recurse(T, expr, options.operators, variable_names)
-        else
-            handle_not_expr(T, expr, variable_names)
-        end
-    catch
-        Node{T}(; val=convert(T, 1)) # old: Node(T, 0, true, convert(T,1)) # return a constant being 1
-    end
-end
-
-function expr_to_tree(::Type{T}, x::String, options) where {T<:DATA_TYPE}
-    if options.is_parametric
-        out = ParametricNode{T}(expr_to_tree_run(T, x, options))
-    else
-        out = Node{T}(expr_to_tree_run(T, x, options))
-    end
-    return out
-end
-
-function format_pareto(dominating, options, num_pareto_context::Int)::Vector{String}
-    pareto = Vector{String}()
-    if !isnothing(dominating) && size(dominating)[1] > 0
-        idx = randperm(size(dominating)[1])
-        for i in 1:min(size(dominating)[1], num_pareto_context)
-            push!(pareto, tree_to_expr(dominating[idx[i]].tree, options))
-        end
-    end
-    while size(pareto)[1] < num_pareto_context
-        push!(pareto, "None")
-    end
-    return pareto
-end
-
-function sample_one_context(idea_database, max_concepts)::String
-    if isnothing(idea_database)
-        return "None"
-    end
-
-    N = size(idea_database)[1]
-    if N == 0
-        return "None"
-    end
-
-    try
-        idea_database[rand(1:min(max_concepts, N))]
-    catch e
-        "None"
-    end
-end
-
-function sample_context(idea_database, N, max_concepts)::Vector{String}
-    assumptions = Vector{String}()
-    if isnothing(idea_database)
-        for _ in 1:N
-            push!(assumptions, "None")
-        end
-        return assumptions
-    end
-
-    if size(idea_database)[1] < N
-        for i in 1:(size(idea_database)[1])
-            push!(assumptions, idea_database[i])
-        end
-        for i in (size(idea_database)[1] + 1):N
-            push!(assumptions, "None")
-        end
-        return assumptions
-    end
-
-    while size(assumptions)[1] < N
-        chosen_idea = sample_one_context(idea_database, max_concepts)
-        if chosen_idea in assumptions
-            continue
-        end
-        push!(assumptions, chosen_idea)
-    end
-    return assumptions
 end
 
 function concept_evolution(idea_database, options::LaSROptions)
@@ -731,7 +444,7 @@ end
 function llm_mutate_tree(
     tree::AbstractExpressionNode{T}, options::LaSROptions
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
-    expr = tree_to_expr(tree, options)
+    expr = render_expr(tree, options)
 
     if isnothing(options.idea_database)
         assumptions = []
@@ -807,7 +520,7 @@ function llm_mutate_tree(
 
     for i in 1:N
         l = rand(1:N)
-        t = expr_to_tree(
+        t = parse_expr(
             T,
             String(strip(mut_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
@@ -816,16 +529,16 @@ function llm_mutate_tree(
             continue
         end
 
-        llm_recorder(options.llm_options, tree_to_expr(t, options), "mutate")
+        llm_recorder(options.llm_options, render_expr(t, options), "mutate")
 
         return t
     end
 
-    out = expr_to_tree(
+    out = parse_expr(
         T, String(strip(mut_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
 
-    llm_recorder(options.llm_options, tree_to_expr(out, options), "mutate")
+    llm_recorder(options.llm_options, render_expr(out, options), "mutate")
 
     return out
 end
@@ -845,8 +558,8 @@ end
 function llm_crossover_trees(
     tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}, options::LaSROptions
 )::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
-    expr1 = tree_to_expr(tree1, options)
-    expr2 = tree_to_expr(tree2, options)
+    expr1 = render_expr(tree1, options)
+    expr2 = render_expr(tree2, options)
 
     if isnothing(options.idea_database)
         assumptions = []
@@ -929,20 +642,20 @@ function llm_crossover_trees(
     end
 
     if N == 1
-        t = expr_to_tree(
+        t = parse_expr(
             T,
             String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
 
-        llm_recorder(options.llm_options, tree_to_expr(t, options), "crossover")
+        llm_recorder(options.llm_options, render_expr(t, options), "crossover")
 
         return t, tree2
     end
 
     for i in 1:(2 * N)
         l = rand(1:N)
-        t = expr_to_tree(
+        t = parse_expr(
             T,
             String(strip(cross_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
@@ -960,7 +673,7 @@ function llm_crossover_trees(
     end
 
     if isnothing(cross_tree1)
-        cross_tree1 = expr_to_tree(
+        cross_tree1 = parse_expr(
             T,
             String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
@@ -968,7 +681,7 @@ function llm_crossover_trees(
     end
 
     if isnothing(cross_tree2)
-        cross_tree2 = expr_to_tree(
+        cross_tree2 = parse_expr(
             T,
             String(strip(cross_tree_options[2], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
@@ -976,7 +689,7 @@ function llm_crossover_trees(
     end
 
     recording_str =
-        tree_to_expr(cross_tree1, options) * " && " * tree_to_expr(cross_tree2, options)
+        render_expr(cross_tree1, options) * " && " * render_expr(cross_tree2, options)
     llm_recorder(options.llm_options, recording_str, "crossover")
 
     return cross_tree1, cross_tree2

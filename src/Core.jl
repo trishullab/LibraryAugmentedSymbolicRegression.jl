@@ -7,9 +7,6 @@ include("MutationWeights.jl")
 include("LLMOptions.jl")
 
 using .LaSRMutationWeightsModule: LLMMutationProbabilities, LaSRMutationWeights
-using .LLMOptionsModule:
-    LLMOperationWeights,
-    LLMOptions,
-    LaSROptions
+using .LLMOptionsModule: LLMOperationWeights, LLMOptions, LaSROptions
 
 end

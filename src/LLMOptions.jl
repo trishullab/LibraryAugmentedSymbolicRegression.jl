@@ -1,10 +1,10 @@
 module LLMOptionsModule
 
+using DispatchDoctor: @unstable
 using StatsBase: StatsBase
 using Base: isvalid
 using SymbolicRegression
 using ..LaSRMutationWeightsModule: LaSRMutationWeights
-
 
 """
     LLMOperationWeights(;kws...)
@@ -141,11 +141,15 @@ end
 const LLM_OPTIONS_KEYS = fieldnames(LLMOptions)
 
 # Constructor with both sets of parameters:
-function LaSROptions(; kws...)
+@unstable function LaSROptions(; kws...)
     llm_options_keys = filter(k -> k in LLM_OPTIONS_KEYS, keys(kws))
-    llm_options = LLMOptions(; NamedTuple(llm_options_keys .=> Tuple(kws[k] for k in llm_options_keys))...)
+    llm_options = LLMOptions(;
+        NamedTuple(llm_options_keys .=> Tuple(kws[k] for k in llm_options_keys))...
+    )
     sr_options_keys = filter(k -> !(k in LLM_OPTIONS_KEYS), keys(kws))
-    sr_options = SymbolicRegression.Options(; NamedTuple(sr_options_keys .=> Tuple(kws[k] for k in sr_options_keys))...)
+    sr_options = SymbolicRegression.Options(;
+        NamedTuple(sr_options_keys .=> Tuple(kws[k] for k in sr_options_keys))...
+    )
     return LaSROptions(llm_options, sr_options)
 end
 
@@ -158,6 +162,8 @@ function Base.getproperty(options::LaSROptions, k::Symbol)
     end
 end
 
-Base.propertynames(options::LaSROptions) = (LLM_OPTIONS_KEYS..., fieldnames(SymbolicRegression.Options)...)
+function Base.propertynames(options::LaSROptions)
+    return (LLM_OPTIONS_KEYS..., fieldnames(SymbolicRegression.Options)...)
+end
 
 end # module
