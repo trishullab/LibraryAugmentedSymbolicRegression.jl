@@ -1,11 +1,12 @@
 # LaSR uses prompt templates specified as txt files to generate LLM prompts. This test ensures that the parser can correctly parse these templates.
 println("Testing LaSR prompt construction")
 using LibraryAugmentedSymbolicRegression: construct_prompt, load_prompt
-using PromptingTools: render, CustomOpenAISchema, SystemMessage, UserMessage, AbstractChatMessage
+using PromptingTools:
+    render, CustomOpenAISchema, SystemMessage, UserMessage, AbstractChatMessage
 
 all_prompts = Dict(
-    replace(filepath, ".txt" => "") => load_prompt("static/test_prompts/" * filepath)
-    for filepath in readdir("static/test_prompts/"; join=false)
+    replace(filepath, ".txt" => "") => load_prompt("static/test_prompts/" * filepath) for
+    filepath in readdir("static/test_prompts/"; join=false)
 )
 
 # loads expected_constructions
