@@ -30,7 +30,8 @@ export Population,
     parse_expr,
     parse_msg_content,
     llm_recorder,
-    construct_prompt
+    construct_prompt,
+    load_prompt
 
 using Distributed
 using PackageExtensionCompat: @require_extensions
@@ -83,7 +84,7 @@ using .LLMFunctionsModule:
     concept_evolution,
     parse_msg_content,
     update_idea_database
-using .LLMUtilsModule: construct_prompt, llm_recorder
+using .LLMUtilsModule: load_prompt, construct_prompt, llm_recorder
 using .ParseModule: render_expr, parse_expr
 using .MutateModule: mutate!, crossover_generation
 

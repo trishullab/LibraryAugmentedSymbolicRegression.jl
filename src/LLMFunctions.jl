@@ -123,14 +123,14 @@ function _gen_llm_random_tree(
             CustomOpenAISchema(),
             conversation;
             variables=get_vars(options),
-            operaotrs=get_ops(options),
+            operators=get_ops(options),
             N=options.num_generated_equations,
             api_key=options.api_key,
             model=options.model,
             api_kwargs=convertDict(options.api_kwargs),
             http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=true,
-            verbose=false,
+            no_system_message=false,
+            verbose=options.verbose,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "gen_random|failed")
@@ -373,8 +373,8 @@ function update_idea_database(dominating, worst_members, options::LaSROptions)
             model=options.model,
             api_kwargs=convertDict(options.api_kwargs),
             http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=true,
-            verbose=false,
+            no_system_message=false,
+            verbose=options.verbose,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "ideas|failed")
@@ -486,8 +486,8 @@ function llm_mutate_tree(
             model=options.model,
             api_kwargs=convertDict(options.api_kwargs),
             http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=true,
-            verbose=false,
+            no_system_message=false,
+            verbose=options.verbose,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "mutate|failed")
@@ -607,8 +607,8 @@ function llm_crossover_trees(
             model=options.model,
             api_kwargs=convertDict(options.api_kwargs),
             http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=true,
-            verbose=false,
+            no_system_message=false,
+            verbose=options.verbose,
         )
     catch e
         llm_recorder(options.llm_options, "None " * string(e), "crossover|failed")

@@ -31,7 +31,8 @@ using SymbolicRegression.ComplexityModule: compute_complexity
 using SymbolicRegression.HallOfFameModule: HallOfFame, format_hall_of_fame
 using SymbolicRegression.UtilsModule: subscriptify, @ignore
 using SymbolicRegression.LoggingModule: AbstractSRLogger
-import SymbolicRegression.MLJInterfaceModule: AbstractMultitargetSRRegressor, 
+import SymbolicRegression.MLJInterfaceModule:
+    AbstractMultitargetSRRegressor,
     AbstractSingletargetSRRegressor,
     AbstractMultitargetSRRegressor,
     modelexpr,

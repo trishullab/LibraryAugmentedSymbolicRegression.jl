@@ -48,6 +48,7 @@ this module serves as the entry point to define new options for the LLM inferenc
 - `llm_context::AbstractString`: Context AbstractString for LLM.
 - `variable_names::Union{Dict,Nothing}`: Variable order for LLM. (default: nothing)
 - `max_concepts::UInt32`: Number of concepts to keep track of. (default: 30)
+- `verbose::Bool`: Output LLM generation query statistics. (default: true)
 """
 Base.@kwdef mutable struct LLMOptions
     # LaSR Ablation Modifiers
@@ -78,6 +79,7 @@ Base.@kwdef mutable struct LLMOptions
     model::AbstractString = ""
     api_kwargs::Dict = Dict("max_tokens" => 1000)
     http_kwargs::Dict = Dict("retries" => 3, "readtimeout" => 3600)
+    verbose::Bool = true
 end
 
 const llm_mutations = fieldnames(LLMOperationWeights)
