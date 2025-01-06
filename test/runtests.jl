@@ -13,6 +13,18 @@ end
     include("test_lasr_parser.jl")
 end
 
+@testitem "Test expression parser round trips" tags = [:online] begin
+    include("test_lasr_parser_roundtrips.jl")
+end
+
+@testitem "Test llm output parser" tags = [:online] begin
+    include("test_lasr_gen_parsing.jl")
+end
+
+@testitem "Test SymbolicRegression.jl backwards compatibility" tags = [:online] begin
+    include("test_backwards_compat.jl")
+end
+
 @testitem "Test whether the precompilation script works." tags = [:online] begin
     include("test_precompilation.jl")
 end

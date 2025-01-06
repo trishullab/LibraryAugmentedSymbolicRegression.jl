@@ -162,6 +162,15 @@ function Base.getproperty(options::LaSROptions, k::Symbol)
     end
 end
 
+# Add setproperty! for `Options` and `llm_options`
+function Base.setproperty!(options::LaSROptions, k::Symbol, v)
+    if k in LLM_OPTIONS_KEYS
+        return setproperty!(getfield(options, :llm_options), k, v)
+    else
+        return setproperty!(getfield(options, :sr_options), k, v)
+    end
+end
+
 function Base.propertynames(options::LaSROptions)
     return (LLM_OPTIONS_KEYS..., fieldnames(SymbolicRegression.Options)...)
 end

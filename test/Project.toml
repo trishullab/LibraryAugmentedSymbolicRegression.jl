@@ -17,7 +17,3 @@ Aqua = "0.8"
 
 [preferences.LibraryAugmentedSymbolicRegression]
 instability_check = "error"
-Random = "1.11.0"
-SymbolicRegression = "1"
-Optim = "1.10.0"
-LineSearches = "7.3.0"

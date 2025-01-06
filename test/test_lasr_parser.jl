@@ -12,8 +12,8 @@ options = LaSROptions(;
 
 rng = MersenneTwister(314159)
 
-for depth in [5, 10]
-    for nvar in [5, 10]
+for depth in [5, 9]
+    for nvar in [5, 9]
         random_trees = [gen_random_tree(depth, options, nvar, Float32, rng) for _ in 1:1e3]
         data = rand(Float32, nvar, 1000)
 

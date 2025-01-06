@@ -1,6 +1,7 @@
 module LLMFunctionsModule
 
 using Random: default_rng, AbstractRNG, rand, randperm
+using DispatchDoctor: @unstable
 using DynamicExpressions:
     Node,
     AbstractExpressionNode,
@@ -273,53 +274,12 @@ function concept_evolution(idea_database, options::LaSROptions)
     return chosen_idea
 end
 
-function parse_msg_content(msg_content)
-    content = msg_content
-    try
-        content = match(r"```json(.*?)```"s, msg_content).captures[1]
-    catch e
-        try
-            content = match(r"```(.*?)```"s, msg_content).captures[1]
-        catch e2
-            try
-                content = match(r"\[(.*?)\]"s, msg_content).match
-            catch e3
-                content = msg_content
-            end
-        end
-    end
+@unstable function try_capture(pattern::Regex, text::String)::Union{Nothing,AbstractString}
+    m = match(pattern, text)
+    return m === nothing ? nothing : get(m.captures, 1, nothing)
+end
 
-    try
-        out = parse(content) # json parse
-        if out === nothing
-            return []
-        end
-        if out isa Dict
-            return [out[key] for key in keys(out)]
-        end
-
-        if out isa Vector && all(x -> isa(x, String), out)
-            return out
-        end
-    catch e
-        try
-            content = strip(content, [' ', '\n', '"', ',', '.', '[', ']'])
-            content = replace(content, "\n" => " ")
-            out_list = split(content, "\", \"")
-            return out_list
-        catch e2
-            return []
-        end
-    end
-
-    try
-        content = strip(content, [' ', '\n', '"', ',', '.', '[', ']'])
-        content = replace(content, "\n" => " ")
-        out_list = split(content, "\", \"")
-        return out_list
-    catch e3
-        return []
-    end
+function parse_msg_content(msg_content::String)::Vector{String}
     # old method:
     # find first JSON list
     # first_idx = findfirst('[', content)
@@ -332,6 +292,34 @@ function parse_msg_content(msg_content)
     # end
 
     # new method (for Llama since it follows directions better):
+    # Attempt extraction with several patterns in order
+    patterns = [r"```json(.*?)```"s, r"```(.*?)```"s, r"(\[.*?\])"s]
+
+    content = nothing
+    for pat in patterns
+        content = try_capture(pat, msg_content)
+        content !== nothing && break
+    end
+
+    content = content === nothing ? msg_content : content
+
+    out = nothing
+    try
+        out = parse(content)
+    catch
+    end
+
+    try
+        out = eval(Meta.parse(msg_content))
+    catch
+    end
+
+    if out isa Dict && all(x -> isa(x, String), values(out))
+        return collect(values(out))
+    elseif out isa Vector && all(x -> isa(x, String), out)
+        return out
+    end
+    return String[]
 end
 
 function update_idea_database(dominating, worst_members, options::LaSROptions)

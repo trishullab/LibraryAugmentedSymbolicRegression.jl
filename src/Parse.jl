@@ -20,10 +20,14 @@ function parse_expr(
 end
 
 function _make_constant_node(val::Number, ::Type{T}) where {T<:DATA_TYPE}
-    return Node{T}(; val=float(val))
+    return Node{T}(; val=convert(T, val))
 end
 
 function _make_variable_node(sym::Symbol, ::Type{T}) where {T<:DATA_TYPE}
+    if sym === :C
+        return Node{T}(; val=convert(T, 1))
+    end
+
     local idx = parse(Int, String(sym)[2:end])  # e.g. x5 => 5
     return Node{T}(; feature=idx)
 end
