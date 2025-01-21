@@ -1,32 +1,20 @@
 module LLMOptionsModule
 
 using DispatchDoctor: @unstable
-using StatsBase: StatsBase
-using Base: isvalid
 using SymbolicRegression
-using ..LaSRMutationWeightsModule: LaSRMutationWeights
+using ..LLMOptionsStructModule:
+    LaSROptions, LLM_OPTIONS_KEYS, LaSRMutationWeights, LLMOperationWeights, LLMOptions
+using ..UtilsModule: @save_kwargs, @ignore
 
-"""
-    LLMOperationWeights(;kws...)
+create_lasr_mutation_weights(w::LaSRMutationWeights) = w
+create_lasr_mutation_weights(w::NamedTuple) = LaSRMutationWeights(; w...)
 
-Defines the probability of different LLM-based mutation operations.
-NOTE: The LLM operations can be significantly slower than their symbolic counterparts,
-so higher probabilities will result in slower operations. By default, we set all probs to 0.0.
-The maximum value for these parameters is 1.0 (100% of the time).
-# Arguments
-- `llm_crossover::Float64`: Probability of calling LLM version of crossover.
-"""
-Base.@kwdef mutable struct LLMOperationWeights
-    llm_crossover::Float64 = 0.0
-end
+create_llm_operation_weights(w::LLMOperationWeights) = w
+create_llm_operation_weights(w::NamedTuple) = LLMOperationWeights(; w...)
 
-"""
-    LLMOptions(;kws...)
+@ignore const LASR_DEFAULT_OPTIONS = ()
 
-This defines how to call the LLM inference functions. LLM inference is managed by PromptingTools.jl but
-this module serves as the entry point to define new options for the LLM inference.
-# Arguments
-- `use_llm::Bool`: Whether to use LLM inference or not. (default: false)
+const LASR_OPTIONS_DESCRIPTION = """- `use_llm::Bool`: Whether to use LLM inference or not. (default: false)
 - `use_concepts::Bool`: Whether to summarize programs into concepts and use the concepts to guide the search. (default: false)
     NOTE: If `use_llm` is false, then `use_concepts` will be ignored.
 - `use_concept_evolution::Bool`: Whether to evolve the concepts after every iteration. (default: false)
@@ -50,103 +38,140 @@ this module serves as the entry point to define new options for the LLM inferenc
 - `max_concepts::UInt32`: Number of concepts to keep track of. (default: 30)
 - `verbose::Bool`: Output LLM generation query statistics. (default: true)
 """
-Base.@kwdef mutable struct LLMOptions
-    # LaSR Ablation Modifiers
-    use_llm::Bool = false
-    use_concepts::Bool = false
-    use_concept_evolution::Bool = false
-    lasr_mutation_weights::LaSRMutationWeights = LaSRMutationWeights()
-    llm_operation_weights::LLMOperationWeights = LLMOperationWeights()
-
-    # LaSR Performance Modifiers
-    num_pareto_context::Int64 = 5
-    num_generated_equations::Int64 = 5
-    num_generated_concepts::Int64 = 5
-    max_concepts::Int64 = 30
-    # This is a cheeky hack to not have to deal with parametric types in LLMFunctions.jl. TODO: High priority rectify.
-    is_parametric::Bool = false
-    llm_context::AbstractString = ""
-
-    # LaSR Bookkeeping Utilities
-    # llm_logger::Union{SymbolicRegression.AbstractSRLogger, Nothing} = nothing
-    llm_recorder_dir::AbstractString = "lasr_runs/"
-    variable_names::Union{Dict,Nothing} = nothing
-    prompts_dir::AbstractString = "prompts/"
-    idea_database::Vector{AbstractString} = []
-
-    # LaSR LLM API Options
-    api_key::AbstractString = ""
-    model::AbstractString = ""
-    api_kwargs::Dict = Dict("max_tokens" => 1000)
-    http_kwargs::Dict = Dict("retries" => 3, "readtimeout" => 3600)
-    verbose::Bool = true
-end
-
-const llm_mutations = fieldnames(LLMOperationWeights)
-const v_llm_mutations = Symbol[llm_mutations...]
-
-# Validate some options are set correctly.
-"""Validate some options are set correctly.
-Specifically, need to check
-- If `use_llm` is true, then `api_key` and `model` must be set.
-- If `use_llm` is true, then `api_kwargs` must have a `url` key and it must be a valid URL.
-- If `use_llm` is true, then `llm_recorder_dir` must be a valid directory.
-"""
-function validate_llm_options(options::LLMOptions)
-    if options.use_llm
-        if options.api_key == ""
-            throw(ArgumentError("api_key must be set if LLM is use_llm."))
-        end
-        if options.model == ""
-            throw(ArgumentError("model must be set if LLM is use_llm."))
-        end
-        if !haskey(options.api_kwargs, "url")
-            throw(ArgumentError("api_kwargs must have a 'url' key."))
-        end
-        if !isdir(options.prompts_dir)
-            throw(ArgumentError("options.prompts_dir not found."))
-        end
-    end
-end
-
-"""
-    LaSROptions(;kws...)
-
-This defines the options for the LibraryAugmentedSymbolicRegression module. It is a composite
-type that contains both the LLMOptions and the SymbolicRegression.Options.
-# Arguments
-- `llm_options::LLMOptions`: Options for the LLM inference.
-- `sr_options::SymbolicRegression.Options`: Options for the SymbolicRegression module.
-
-# Example
-```julia
-llm_options = LLMOptions(;
-    ...
-)
-
-options = Options(;
-    binary_operators = (+, *, -, /, ^),
-    unary_operators = (cos, log),
-    nested_constraints = [(^) => [(^) => 0, cos => 0, log => 0], (/) => [(/) => 1], (cos) => [cos => 0, log => 0], log => [log => 0, cos => 0, (^) => 0]],
-    constraints = [(^) => (3, 1), log => 5, cos => 7],
-    populations=20,
-)
-
-lasr_options = LaSROptions(llm_options, options)
-```
-
-"""
-struct LaSROptions{O<:SymbolicRegression.Options} <: SymbolicRegression.AbstractOptions
-    llm_options::LLMOptions
-    sr_options::O
-end
-const LLM_OPTIONS_KEYS = fieldnames(LLMOptions)
 
 # Constructor with both sets of parameters:
-@unstable function LaSROptions(; kws...)
-    llm_options_keys = filter(k -> k in LLM_OPTIONS_KEYS, keys(kws))
-    llm_options = LLMOptions(;
-        NamedTuple(llm_options_keys .=> Tuple(kws[k] for k in llm_options_keys))...
+"""
+    LaSROptions(;kws...) <: SymbolicRegression.AbstractOptions
+
+Construct options for `equation_search` and other functions. Also read: SymbolicRegression.Options
+
+# Arguments
+$(LASR_OPTIONS_DESCRIPTION)
+"""
+@unstable @save_kwargs LASR_DEFAULT_OPTIONS function LaSROptions(;
+    # LLM Search Options.
+    ## 1. LaSR Ablation Modifiers
+    use_llm::Bool=false,
+    use_concepts::Bool=false,
+    use_concept_evolution::Bool=false,
+    @nospecialize(
+        lasr_mutation_weights::Union{
+            LaSRMutationWeights,AbstractVector,NamedTuple,Nothing
+        } = nothing
+    ),
+    @nospecialize(
+        llm_operation_weights::Union{
+            LLMOperationWeights,AbstractVector,NamedTuple,Nothing
+        } = nothing
+    ),
+
+    ## 2. LaSR Performance Modifiers
+    num_pareto_context::Integer=5,
+    num_generated_equations::Integer=5,
+    num_generated_concepts::Integer=5,
+    max_concepts::Integer=30,
+    is_parametric::Bool=false,
+    llm_context::Union{String,Nothing}=nothing,
+
+    ## 3. LaSR Bookkeeping Utilities
+    llm_recorder_dir::Union{String,Nothing}=nothing,
+    variable_names::Union{Dict,Nothing}=nothing,
+    prompts_dir::Union{String,Nothing}=nothing,
+    idea_database::Union{Vector{AbstractString},Nothing}=nothing,
+
+    ## 4. LaSR LLM API Options
+    api_key::Union{String,Nothing}=nothing,
+    model::Union{String,Nothing}=nothing,
+    api_kwargs::Union{Dict,Nothing}=nothing,
+    http_kwargs::Union{Dict,Nothing}=nothing,
+    verbose::Bool=true,
+    kws...,
+)
+    if use_llm
+        if isnothing(model)
+            @warn "model is not set in LaSROptions. This might be required for your LLM Inference backend."
+        end
+
+        if isnothing(api_key)
+            @warn "api_key is not set in LaSROptions. This might be required for your LLM Inference backend."
+        end
+
+        if isnothing(api_kwargs) ||
+            !haskey(api_kwargs, "max_tokens") ||
+            isnothing(api_kwargs["max_tokens"])
+            @warn "api_kwargs.max_tokens is not set in LaSROptions. Defaulting to 1000."
+        end
+
+        if isnothing(api_kwargs) ||
+            !haskey(api_kwargs, "url") ||
+            isnothing(api_kwargs["url"])
+            error(
+                "api_kwargs.url is not set in LaSROptions. No backend URL to send the request to.",
+            )
+        end
+    end
+
+    #################################
+    #### Supply defaults ############
+    #! format: off
+    _default_options = default_options()
+    use_llm = something(use_llm, _default_options.use_llm)
+    use_concepts = something(use_concepts, _default_options.use_concepts)
+    use_concept_evolution = something(use_concept_evolution, _default_options.use_concept_evolution)
+    lasr_mutation_weights = something(lasr_mutation_weights, _default_options.lasr_mutation_weights)
+    llm_operation_weights = something(llm_operation_weights, _default_options.llm_operation_weights)
+    num_pareto_context = something(num_pareto_context, _default_options.num_pareto_context)
+    num_generated_equations = something(num_generated_equations, _default_options.num_generated_equations)
+    num_generated_concepts = something(num_generated_concepts, _default_options.num_generated_concepts)
+    max_concepts = something(max_concepts, _default_options.max_concepts)
+    is_parametric = something(is_parametric, _default_options.is_parametric)
+    llm_context = something(llm_context, _default_options.llm_context)
+    llm_recorder_dir = something(llm_recorder_dir, _default_options.llm_recorder_dir)
+    variable_names = something(variable_names, _default_options.variable_names)
+    prompts_dir = something(prompts_dir, _default_options.prompts_dir)
+    idea_database = something(idea_database, _default_options.idea_database)
+    api_key = something(api_key, _default_options.api_key)
+    model = something(model, _default_options.model)
+    api_kwargs = something(api_kwargs, _default_options.api_kwargs)
+    http_kwargs = something(http_kwargs, _default_options.http_kwargs)
+    verbose = something(verbose, _default_options.verbose)
+    #! format: on
+    #################################
+
+    if !isdir(prompts_dir)
+        @warn "Prompts directory does not exist. Creating one at $prompts_dir."
+        mkdir(prompts_dir)
+    end
+
+    if !isdir(llm_recorder_dir)
+        @warn "LLM Recorder directory does not exist. Creating one at $llm_recorder_dir."
+        mkdir(llm_recorder_dir)
+    end
+
+    set_lasr_mutation_weights = create_lasr_mutation_weights(lasr_mutation_weights)
+    set_llm_operation_weights = create_llm_operation_weights(llm_operation_weights)
+
+    llm_options = LLMOptions(
+        use_llm,
+        use_concepts,
+        use_concept_evolution,
+        set_lasr_mutation_weights,
+        set_llm_operation_weights,
+        num_pareto_context,
+        num_generated_equations,
+        num_generated_concepts,
+        max_concepts,
+        is_parametric,
+        llm_context,
+        llm_recorder_dir,
+        variable_names,
+        prompts_dir,
+        idea_database,
+        api_key,
+        model,
+        api_kwargs,
+        http_kwargs,
+        verbose,
     )
     sr_options_keys = filter(k -> !(k in LLM_OPTIONS_KEYS), keys(kws))
     sr_options = SymbolicRegression.Options(;
@@ -175,6 +200,38 @@ end
 
 function Base.propertynames(options::LaSROptions)
     return (LLM_OPTIONS_KEYS..., fieldnames(SymbolicRegression.Options)...)
+end
+
+function default_options()
+    return (;
+        # LaSR Ablation Modifiers
+        use_llm=false,
+        use_concepts=false,
+        use_concept_evolution=false,
+        lasr_mutation_weights=LaSRMutationWeights(; llm_mutate=0.0, llm_randomize=0.0),
+        llm_operation_weights=LLMOperationWeights(; llm_crossover=0.0),
+
+        # LaSR Performance Modifiers
+        num_pareto_context=5,
+        num_generated_equations=5,
+        num_generated_concepts=5,
+        max_concepts=30,
+        is_parametric=false,
+        llm_context="",
+
+        # LaSR Bookkeeping Utilities
+        llm_recorder_dir="lasr_runs/",
+        variable_names=Dict(),
+        prompts_dir="prompts/",
+        idea_database=Vector{AbstractString}(),
+
+        # LaSR LLM API Options
+        api_key="",
+        model="",
+        api_kwargs=Dict("max_tokens" => 1000),
+        http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),
+        verbose=true,
+    )
 end
 
 end # module

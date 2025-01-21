@@ -64,7 +64,7 @@ For example, we can modify the `example.jl` from the SymbolicRegression.jl docum
 > LaSR searches for the LLM query prompts in a  a directory called `prompts/` at the location you start Julia. You can download and extract the `prompts.zip` folder from [here](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/raw/refs/heads/master/prompts.zip) to the desired location. If you wish to use a different location, you can pass a different `prompts_dir` argument to the `LLMOptions` object.
 
 ```julia
-import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMWeights
+import LibraryAugmentedSymbolicRegression: LaSROptions, LaSRRegressor, LaSRMutationWeights, LLMOperationWeights
 import MLJ: machine, fit!, predict, report
 
 # Dataset with two named features:
@@ -80,19 +80,21 @@ model = LaSRRegressor(
     niterations=50,
     binary_operators=[+, -, *],
     unary_operators=[cos],
-    llm_options=LLMOptions(
-        use_llm=true,
-        lasr_weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),
-        use_concept_evolution=true,
-        use_concepts=true,
-        api_key="token-abc123",
-        prompts_dir="prompts/",
-        llm_recorder_dir="lasr_runs/debug_0/",
-        model="meta-llama/Meta-Llama-3-8B-Instruct",
-        api_kwargs=Dict("url" => "http://localhost:11440/v1"),
-        variable_names=Dict("a" => "angle", "b" => "bias"),
-        llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
-    )
+    use_llm=true,
+    use_concepts=true,
+    use_concept_evolution=true,
+    lasr_mutation_weights=LaSRMutationWeights(llm_mutate=0.1, llm_randomize=0.1),
+    llm_operation_weights=LLMOperationWeights(llm_crossover=0.1),
+    llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
+
+    llm_recorder_dir="lasr_runs/debug_0/",
+    variable_names=Dict("a" => "angle", "b" => "bias"),
+    prompts_dir="prompts/",
+
+    api_key="token-abc123",
+    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+    verbose=true,
 )
 mach = machine(model, X, y)
 

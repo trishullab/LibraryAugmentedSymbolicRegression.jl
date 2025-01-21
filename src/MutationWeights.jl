@@ -66,6 +66,14 @@ function Base.getproperty(weights::LaSRMutationWeights, k::Symbol)
     end
 end
 
+function Base.setproperty!(weights::LaSRMutationWeights, k::Symbol, v)
+    if k in LLM_MUTATION_WEIGHTS_KEYS
+        setproperty!(getfield(weights, :llm_weights), k, v)
+    else
+        setproperty!(getfield(weights, :sr_weights), k, v)
+    end
+end
+
 function Base.propertynames(weights::LaSRMutationWeights)
     return (LLM_MUTATION_WEIGHTS_KEYS..., SymbolicRegression.MUTATION_WEIGHTS_KEYS...)
 end

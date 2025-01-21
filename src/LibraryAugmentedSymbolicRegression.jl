@@ -61,6 +61,7 @@ using .SymbolicRegression:
     include("Utils.jl")
     include("Parse.jl")
     include("MutationWeights.jl")
+    include("LLMOptionsStruct.jl")
     include("LLMOptions.jl")
     include("LLMUtils.jl")
     include("LLMFunctions.jl")

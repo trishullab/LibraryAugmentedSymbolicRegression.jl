@@ -9,6 +9,14 @@ tags_to_run = let t = get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,offline
 end
 @eval @run_package_tests filter = ti -> !isdisjoint(ti.tags, $tags_to_run) verbose = true
 
+@testitem "Test handshake" tags = [:offline] begin
+    include("test_handshake.jl")
+end
+
+@testitem "Test tutorial" tags = [:offline] begin
+    include("test_tutorial.jl")
+end
+
 @testitem "Test expression parser" tags = [:online] begin
     include("test_lasr_parser.jl")
 end

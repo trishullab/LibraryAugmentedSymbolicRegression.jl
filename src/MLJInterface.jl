@@ -1,7 +1,6 @@
 module MLJInterfaceModule
 using Optim: Optim
 using LineSearches: LineSearches
-using Logging: AbstractLogger
 using MLJModelInterface: MLJModelInterface as MMI
 using ADTypes: AbstractADType
 using DynamicExpressions:
@@ -29,13 +28,12 @@ using SymbolicRegression.CoreModule:
 using SymbolicRegression.CoreModule.OptionsModule: DEFAULT_OPTIONS, OPTION_DESCRIPTIONS
 using SymbolicRegression.ComplexityModule: compute_complexity
 using SymbolicRegression.HallOfFameModule: HallOfFame, format_hall_of_fame
-using SymbolicRegression.UtilsModule: subscriptify, @ignore
+using SymbolicRegression.UtilsModule: subscriptify
 using SymbolicRegression.LoggingModule: AbstractSRLogger
 import SymbolicRegression.MLJInterfaceModule:
-    AbstractMultitargetSRRegressor,
+    AbstractSymbolicRegressor,
     AbstractSingletargetSRRegressor,
     AbstractMultitargetSRRegressor,
-    modelexpr,
     getsymb,
     get_options,
     full_report,
@@ -52,7 +50,17 @@ import SymbolicRegression.MLJInterfaceModule:
     dimension_with_fallback,
     clean_units,
     compat_ustrip,
-    SRFitResult
+    SRFitResultTypes
+
+using ..CoreModule:
+    LLMMutationProbabilities,
+    LaSRMutationWeights,
+    LLMOperationWeights,
+    LLMOptions,
+    LaSROptions,
+    LASR_DEFAULT_OPTIONS
+
+using ..UtilsModule: @ignore
 
 @ignore mutable struct LaSRRegressor <: AbstractSingletargetSRRegressor
     selection_method::Function
@@ -60,6 +68,60 @@ end
 
 @ignore mutable struct MultitargetLaSRRegressor <: AbstractMultitargetSRRegressor
     selection_method::Function
+end
+
+"""Generate an `SRRegressor` struct containing all the fields in `Options`."""
+function modelexpr(model_name::Symbol, parent_type::Symbol=:AbstractSymbolicRegressor)
+    struct_def = :(Base.@kwdef mutable struct $(model_name){
+        D<:AbstractDimensions,L,E<:AbstractExpression
+    } <: $parent_type
+        niterations::Int = 100
+        parallelism::Symbol = :multithreading
+        numprocs::Union{Int,Nothing} = nothing
+        procs::Union{Vector{Int},Nothing} = nothing
+        addprocs_function::Union{Function,Nothing} = nothing
+        heap_size_hint_in_bytes::Union{Integer,Nothing} = nothing
+        worker_imports::Union{Vector{Symbol},Nothing} = nothing
+        logger::Union{AbstractSRLogger,Nothing} = nothing
+        runtests::Bool = true
+        run_id::Union{String,Nothing} = nothing
+        loss_type::Type{L} = Nothing
+        selection_method::Function = choose_best
+        dimensions_type::Type{D} = SymbolicDimensions{DEFAULT_DIM_BASE_TYPE}
+    end)
+    # TODO: store `procs` from initial run if parallelism is `:multiprocessing`
+    fields = last(last(struct_def.args).args).args
+
+    # @TODO: Make a default options for LaSR and use it here instead.
+    DEFAULT_OPTIONS_MERGED = [DEFAULT_OPTIONS; LASR_DEFAULT_OPTIONS]
+
+    # Add everything from `Options` constructor directly to struct:
+    for (i, option) in enumerate(DEFAULT_OPTIONS_MERGED)
+        if getsymb(first(option.args)) == :expression_type
+            continue
+        end
+        insert!(fields, i, Expr(:(=), option.args...))
+        if getsymb(first(option.args)) == :node_type
+            # Manually add `expression_type` above, so it can be depended on by `node_type`
+            insert!(fields, i - 1, :(expression_type::Type{E} = Expression))
+        end
+    end
+
+    # We also need to create the `get_options` function, based on this:
+    constructor = :(LaSROptions(;))
+    constructor_fields = last(constructor.args).args
+
+    for option in DEFAULT_OPTIONS_MERGED
+        symb = getsymb(first(option.args))
+        push!(constructor_fields, Expr(:kw, symb, Expr(:(.), :m, Core.QuoteNode(symb))))
+    end
+
+    return quote
+        $struct_def
+        function get_options(m::$(model_name))
+            return $constructor
+        end
+    end
 end
 
 eval(modelexpr(:LaSRRegressor, :AbstractSingletargetSRRegressor))
