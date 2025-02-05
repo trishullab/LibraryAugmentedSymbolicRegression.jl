@@ -6,14 +6,13 @@ using PromptingTools:
 
 # Helper function to normalize Windows line endings to Unix style.
 function normalize_line_endings(str::AbstractString)
-    replace(str, "\r\n" => "\n")
+    return replace(str, "\r\n" => "\n")
 end
-
 
 test_prompts_dir = joinpath("static", "test_prompts")
 all_prompts = Dict(
-    replace(filepath, ".txt" => "") => load_prompt(joinpath(test_prompts_dir, filepath))
-    for filepath in readdir(test_prompts_dir; join=false)
+    replace(filepath, ".txt" => "") => load_prompt(joinpath(test_prompts_dir, filepath)) for
+    filepath in readdir(test_prompts_dir; join=false)
 )
 
 # loads expected_constructions
@@ -56,7 +55,8 @@ user_messages = [
     ),
 ]
 
-@test render_conversation(system_message, user_messages) == normalize_line_endings(expected_constructions[1])
+@test render_conversation(system_message, user_messages) ==
+    normalize_line_endings(expected_constructions[1])
 
 # crossover: Handle <3 suggestions and references
 user_messages = [
@@ -67,7 +67,8 @@ user_messages = [
     ),
 ]
 
-@test render_conversation(system_message, user_messages) == normalize_line_endings(expected_constructions[2])
+@test render_conversation(system_message, user_messages) ==
+    normalize_line_endings(expected_constructions[2])
 
 # crossover: Handle 1 suggestion and 2 references
 user_messages = [
@@ -78,7 +79,8 @@ user_messages = [
     ),
 ]
 
-@test render_conversation(system_message, user_messages) == normalize_line_endings(expected_constructions[3])
+@test render_conversation(system_message, user_messages) ==
+    normalize_line_endings(expected_constructions[3])
 
 # crossover: Handle 1 suggestion and 2 references with default arguments
 @test render_conversation(
@@ -101,7 +103,8 @@ user_messages = [
     ),
 ]
 
-@test render_conversation(system_message, user_messages) == normalize_line_endings(expected_constructions[5])
+@test render_conversation(system_message, user_messages) ==
+    normalize_line_endings(expected_constructions[5])
 
 # Gen random: Handle default case
 system_message = all_prompts["gen_random_system"]
@@ -109,7 +112,8 @@ user_messages = [
     construct_prompt(all_prompts["gen_random_user"], nlist("suggestion-#", 3), "assump")
 ]
 
-@test render_conversation(system_message, user_messages) == normalize_line_endings(expected_constructions[6])
+@test render_conversation(system_message, user_messages) ==
+    normalize_line_endings(expected_constructions[6])
 
 # Prompt evolution: Handle default case
 system_message = all_prompts["prompt_evol_system"]
@@ -117,10 +121,12 @@ user_messages = [
     construct_prompt(all_prompts["prompt_evol_user"], nlist("idea-#", 3), "idea")
 ]
 
-@test render_conversation(system_message, user_messages) == normalize_line_endings(expected_constructions[7])
+@test render_conversation(system_message, user_messages) ==
+    normalize_line_endings(expected_constructions[7])
 
 # Prompt evolution: Handle no ideas.
 user_messages = [construct_prompt(all_prompts["prompt_evol_user"], [], "idea")]
 
-@test render_conversation(system_message, user_messages) == normalize_line_endings(expected_constructions[8])
+@test render_conversation(system_message, user_messages) ==
+    normalize_line_endings(expected_constructions[8])
 println("All tests passed!")
