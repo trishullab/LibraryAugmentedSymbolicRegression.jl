@@ -22,7 +22,7 @@ export Population,
     llm_mutate_tree,
     crossover_trees,
     concept_evolution,
-    update_idea_database,
+    generate_concepts,
     mutate!,
     crossover_generation,
     # Utilities:
@@ -84,7 +84,7 @@ using .LLMFunctionsModule:
     llm_crossover_trees,
     concept_evolution,
     parse_msg_content,
-    update_idea_database
+    generate_concepts
 using .LLMUtilsModule: load_prompt, construct_prompt, llm_recorder
 using .ParseModule: render_expr, parse_expr
 using .MutateModule: mutate!, crossover_generation
@@ -215,7 +215,7 @@ function _main_search_loop!(
             if options.use_llm &&
                 options.use_prompt_evol &&
                 (n_iterations % options.populations == 0)
-                state.idea_database = update_idea_database(
+                state.idea_database = generate_concepts(
                     state.idea_database, dominating, worst_members, options
                 )
             end

@@ -92,10 +92,10 @@ function _gen_llm_random_tree(
     end
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "gen_random_system.txt")),
+        SystemMessage(load_prompt(options.prompts_dir * "gen_random_system.prompt")),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "gen_random_user.txt"),
+                load_prompt(options.prompts_dir * "gen_random_user.prompt"),
                 assumptions,
                 "assump",
             ),
@@ -133,7 +133,7 @@ function _gen_llm_random_tree(
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "gen_random|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "failed|gen_random")
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
     llm_recorder(options.llm_options, string(msg.content), "llm_output|gen_random")
@@ -143,7 +143,7 @@ function _gen_llm_random_tree(
     N = min(size(gen_tree_options)[1], N)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "gen_random|failed")
+        llm_recorder(options.llm_options, "None", "failed|gen_random")
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
@@ -216,10 +216,12 @@ function concept_evolution(idea_database, options::LaSROptions)
 
     ideas = [idea_database[rand((options.idea_threshold + 1):num_ideas)] for _ in 1:n_ideas]
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "prompt_evol_system.txt")),
+        SystemMessage(load_prompt(options.prompts_dir * "concept_evolution_system.prompt")),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "prompt_evol_user.txt"), ideas, "idea"
+                load_prompt(options.prompts_dir * "concept_evolution_user.prompt"),
+                ideas,
+                "idea",
             ),
         ),
     ]
@@ -236,7 +238,7 @@ function concept_evolution(idea_database, options::LaSROptions)
         ],
         "\n",
     )
-    llm_recorder(options.llm_options, rendered_msg, "llm_input|ideas")
+    llm_recorder(options.llm_options, rendered_msg, "llm_input|concept_evolution")
 
     msg = nothing
     try
@@ -250,17 +252,17 @@ function concept_evolution(idea_database, options::LaSROptions)
             http_kwargs=convertDict(options.http_kwargs),
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "ideas|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "failed|concept_evolution")
         return nothing
     end
-    llm_recorder(options.llm_options, string(msg.content), "llm_output|ideas")
+    llm_recorder(options.llm_options, string(msg.content), "llm_output|concept_evolution")
 
     idea_options = parse_msg_content(String(msg.content))
 
     N = min(size(idea_options)[1], N)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "ideas|failed")
+        llm_recorder(options.llm_options, "None", "failed|concept_evolution")
         return nothing
     end
 
@@ -269,7 +271,7 @@ function concept_evolution(idea_database, options::LaSROptions)
         strip(idea_options[rand(1:N)], [' ', '\n', '"', ',', '.', '[', ']'])
     )
 
-    llm_recorder(options.llm_options, chosen_idea, "ideas")
+    llm_recorder(options.llm_options, chosen_idea, "chosen|concept_evolution")
 
     return chosen_idea
 end
@@ -322,7 +324,7 @@ function parse_msg_content(msg_content::String)::Vector{String}
     return String[]
 end
 
-function update_idea_database(dominating, worst_members, options::LaSROptions)
+function generate_concepts(dominating, worst_members, options::LaSROptions)
     # turn dominating pareto curve into ideas as strings
     if isnothing(dominating)
         return nothing
@@ -332,11 +334,11 @@ function update_idea_database(dominating, worst_members, options::LaSROptions)
     bexpr = format_pareto(worst_members, options, options.num_pareto_context)
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "extract_idea_system.txt")),
+        SystemMessage(load_prompt(options.prompts_dir * "generate_concepts_system.prompt")),
         UserMessage(
             construct_prompt(
                 construct_prompt(
-                    load_prompt(options.prompts_dir * "extract_idea_user.txt"),
+                    load_prompt(options.prompts_dir * "generate_concepts_user.prompt"),
                     gexpr,
                     "gexpr",
                 ),
@@ -359,7 +361,7 @@ function update_idea_database(dominating, worst_members, options::LaSROptions)
         "\n",
     )
 
-    llm_recorder(options.llm_options, rendered_msg, "llm_input|gen_random")
+    llm_recorder(options.llm_options, rendered_msg, "llm_input|generate_concepts")
 
     msg = nothing
     try
@@ -377,18 +379,18 @@ function update_idea_database(dominating, worst_members, options::LaSROptions)
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "ideas|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "failed|generate_concepts")
         return nothing
     end
 
-    llm_recorder(options.llm_options, string(msg.content), "llm_output|ideas")
+    llm_recorder(options.llm_options, string(msg.content), "llm_output|generate_concepts")
 
     idea_options = parse_msg_content(String(msg.content))
 
     N = min(size(idea_options)[1], N)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "ideas|failed")
+        llm_recorder(options.llm_options, "None", "failed|generate_concepts")
         return nothing
     end
 
@@ -396,7 +398,7 @@ function update_idea_database(dominating, worst_members, options::LaSROptions)
 
     chosen_idea1 = String(strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']']))
 
-    llm_recorder(options.llm_options, chosen_idea1, "ideas")
+    llm_recorder(options.llm_options, chosen_idea1, "chosen|generate_concepts")
     pushfirst!(options.idea_database, chosen_idea1)
 
     if N > 1
@@ -406,7 +408,7 @@ function update_idea_database(dominating, worst_members, options::LaSROptions)
         end
         chosen_idea2 = String(strip(idea_options[b], [' ', '\n', '"', ',', '.', '[', ']']))
 
-        llm_recorder(options.llm_options, chosen_idea2, "ideas")
+        llm_recorder(options.llm_options, chosen_idea2, "chosen|generate_concepts")
 
         pushfirst!(options.idea_database, chosen_idea2)
     end
@@ -450,10 +452,12 @@ function llm_mutate_tree(
     end
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "mutate_system.txt")),
+        SystemMessage(load_prompt(options.prompts_dir * "mutate_system.prompt")),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "mutate_user.txt"), assumptions, "assump"
+                load_prompt(options.prompts_dir * "mutate_user.prompt"),
+                assumptions,
+                "assump",
             ),
         ),
     ]
@@ -490,7 +494,7 @@ function llm_mutate_tree(
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "mutate|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "failed|mutate")
         # log error in llm_recorder
         return tree
     end
@@ -502,7 +506,7 @@ function llm_mutate_tree(
     N = min(size(mut_tree_options)[1], N)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "mutate|failed")
+        llm_recorder(options.llm_options, "None", "failed|mutate")
         return tree
     end
 
@@ -517,7 +521,7 @@ function llm_mutate_tree(
             continue
         end
 
-        llm_recorder(options.llm_options, render_expr(t, options), "mutate")
+        llm_recorder(options.llm_options, render_expr(t, options), "chosen|mutate")
 
         return t
     end
@@ -526,7 +530,7 @@ function llm_mutate_tree(
         T, String(strip(mut_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
 
-    llm_recorder(options.llm_options, render_expr(out, options), "mutate")
+    llm_recorder(options.llm_options, render_expr(out, options), "chosen|mutate")
 
     return out
 end
@@ -568,10 +572,10 @@ function llm_crossover_trees(
     end
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "crossover_system.txt")),
+        SystemMessage(load_prompt(options.prompts_dir * "crossover_system.prompt")),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "crossover_user.txt"),
+                load_prompt(options.prompts_dir * "crossover_user.prompt"),
                 assumptions,
                 "assump",
             ),
@@ -611,7 +615,7 @@ function llm_crossover_trees(
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "crossover|failed")
+        llm_recorder(options.llm_options, "None " * string(e), "failed|crossover")
         return tree1, tree2
     end
 
@@ -625,7 +629,7 @@ function llm_crossover_trees(
     N = min(size(cross_tree_options)[1], N)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "crossover|failed")
+        llm_recorder(options.llm_options, "None", "failed|crossover")
         return tree1, tree2
     end
 
@@ -636,7 +640,7 @@ function llm_crossover_trees(
             options,
         )
 
-        llm_recorder(options.llm_options, render_expr(t, options), "crossover")
+        llm_recorder(options.llm_options, render_expr(t, options), "chosen|crossover")
 
         return t, tree2
     end
@@ -678,7 +682,7 @@ function llm_crossover_trees(
 
     recording_str =
         render_expr(cross_tree1, options) * " && " * render_expr(cross_tree2, options)
-    llm_recorder(options.llm_options, recording_str, "crossover")
+    llm_recorder(options.llm_options, recording_str, "chosen|crossover")
 
     return cross_tree1, cross_tree2
 end
