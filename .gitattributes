@@ -1,4 +1,3 @@
-benchmark/* linguist-documentation
 docs/* linguist-documentation
 test/* linguist-documentation
 .github/workflows/* linguist-documentation
