@@ -80,7 +80,7 @@ function construct_prompt(
     user_prompt::String, element_list::Vector, element_id_tag::String
 )::String
     # Split the user prompt into lines
-    lines = split(user_prompt, "\n")
+    lines = split(user_prompt, r"\n|\r\n")
 
     # Filter lines that match the pattern "... : {{element_id_tag[1-9]}}
     pattern = r"^.*: \{\{" * element_id_tag * r"\d+\}\}$"
@@ -92,13 +92,14 @@ function construct_prompt(
     if n_occurrences < length(element_list)
         last_occurrence = findlast(x -> occursin(pattern, x), lines)
         @assert last_occurrence !== nothing "No occurrences of the element_id_tag found in the user prompt."
+
         for i in reverse((n_occurrences + 1):length(element_list))
             new_line = replace(lines[last_occurrence], string(n_occurrences) => string(i))
             insert!(lines, last_occurrence + 1, new_line)
         end
     end
 
-    new_prompt = ""
+    output_lines = String[]
     idx = 1
     for line in lines
         # if the line matches the pattern
@@ -107,15 +108,16 @@ function construct_prompt(
                 continue
             end
             # replace the element_id_tag with the corresponding element
-            new_prompt *=
-                replace(line, r"\{\{" * element_id_tag * r"\d+\}\}" => element_list[idx]) *
-                "\n"
+            push!(
+                output_lines,
+                replace(line, r"\{\{" * element_id_tag * r"\d+\}\}" => element_list[idx]),
+            )
             idx += 1
         else
-            new_prompt *= line * "\n"
+            push!(output_lines, line)
         end
     end
-    return new_prompt
+    return join(output_lines, "\n")
 end
 
 function format_pareto(dominating, options, num_pareto_context::Int)::Vector{String}
