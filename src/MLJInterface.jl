@@ -52,6 +52,7 @@ import SymbolicRegression.MLJInterfaceModule:
     compat_ustrip,
     AbstractExpressionSpec,
     SRFitResultTypes
+using SymbolicUtils: node_to_symbolic, symbolic_to_node
 
 using ..CoreModule:
     LLMMutationProbabilities,
