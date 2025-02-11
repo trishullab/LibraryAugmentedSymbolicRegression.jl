@@ -50,6 +50,7 @@ import SymbolicRegression.MLJInterfaceModule:
     dimension_with_fallback,
     clean_units,
     compat_ustrip,
+    AbstractExpressionSpec,
     SRFitResultTypes
 
 using ..CoreModule:
@@ -70,25 +71,36 @@ end
     selection_method::Function
 end
 
+@ignore mutable struct LaSRTestRegressor <: AbstractSingletargetSRRegressor
+    selection_method::Function
+end
+
+@ignore mutable struct MultitargetLaSRTestRegressor <: AbstractMultitargetSRRegressor
+    selection_method::Function
+end
+
 """Generate an `SRRegressor` struct containing all the fields in `Options`."""
-function modelexpr(model_name::Symbol, parent_type::Symbol=:AbstractSymbolicRegressor)
-    struct_def = :(Base.@kwdef mutable struct $(model_name){
-        D<:AbstractDimensions,L,E<:AbstractExpression
-    } <: $parent_type
-        niterations::Int = 100
-        parallelism::Symbol = :multithreading
-        numprocs::Union{Int,Nothing} = nothing
-        procs::Union{Vector{Int},Nothing} = nothing
-        addprocs_function::Union{Function,Nothing} = nothing
-        heap_size_hint_in_bytes::Union{Integer,Nothing} = nothing
-        worker_imports::Union{Vector{Symbol},Nothing} = nothing
-        logger::Union{AbstractSRLogger,Nothing} = nothing
-        runtests::Bool = true
-        run_id::Union{String,Nothing} = nothing
-        loss_type::Type{L} = Nothing
-        selection_method::Function = choose_best
-        dimensions_type::Type{D} = SymbolicDimensions{DEFAULT_DIM_BASE_TYPE}
-    end)
+function modelexpr(
+    model_name::Symbol,
+    parent_type::Symbol=:AbstractSymbolicRegressor;
+    default_niterations=100,
+)
+    struct_def =
+        :(Base.@kwdef mutable struct $(model_name){D<:AbstractDimensions,L} <: $parent_type
+            niterations::Int = $(default_niterations)
+            parallelism::Symbol = :multithreading
+            numprocs::Union{Int,Nothing} = nothing
+            procs::Union{Vector{Int},Nothing} = nothing
+            addprocs_function::Union{Function,Nothing} = nothing
+            heap_size_hint_in_bytes::Union{Integer,Nothing} = nothing
+            worker_imports::Union{Vector{Symbol},Nothing} = nothing
+            logger::Union{AbstractSRLogger,Nothing} = nothing
+            runtests::Bool = true
+            run_id::Union{String,Nothing} = nothing
+            loss_type::Type{L} = Nothing
+            selection_method::Function = choose_best
+            dimensions_type::Type{D} = SymbolicDimensions{DEFAULT_DIM_BASE_TYPE}
+        end)
     # TODO: store `procs` from initial run if parallelism is `:multiprocessing`
     fields = last(last(struct_def.args).args).args
 
@@ -97,14 +109,7 @@ function modelexpr(model_name::Symbol, parent_type::Symbol=:AbstractSymbolicRegr
 
     # Add everything from `Options` constructor directly to struct:
     for (i, option) in enumerate(DEFAULT_OPTIONS_MERGED)
-        if getsymb(first(option.args)) == :expression_type
-            continue
-        end
         insert!(fields, i, Expr(:(=), option.args...))
-        if getsymb(first(option.args)) == :node_type
-            # Manually add `expression_type` above, so it can be depended on by `node_type`
-            insert!(fields, i - 1, :(expression_type::Type{E} = Expression))
-        end
     end
 
     # We also need to create the `get_options` function, based on this:
@@ -127,25 +132,8 @@ end
 eval(modelexpr(:LaSRRegressor, :AbstractSingletargetSRRegressor))
 eval(modelexpr(:MultitargetLaSRRegressor, :AbstractMultitargetSRRegressor))
 
-MMI.metadata_pkg(
-    LaSRRegressor;
-    name="LibraryAugmentedSymbolicRegression",
-    uuid="158930c3-947c-4174-974b-74b39e64a28f",
-    url="https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl",
-    julia=true,
-    license="Apache-2.0",
-    is_wrapper=false,
-)
-
-MMI.metadata_pkg(
-    MultitargetLaSRRegressor;
-    name="LibraryAugmentedSymbolicRegression",
-    uuid="158930c3-947c-4174-974b-74b39e64a28f",
-    url="https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl",
-    julia=true,
-    license="Apache-2.0",
-    is_wrapper=false,
-)
+eval(modelexpr(:LaSRTestRegressor, :AbstractSingletargetSRRegressor; default_niterations=1))
+eval(modelexpr(:MultitargetLaSRTestRegressor, :AbstractMultitargetSRRegressor; default_niterations=1))
 
 const input_scitype = Union{
     MMI.Table(MMI.Continuous),
@@ -153,24 +141,34 @@ const input_scitype = Union{
     MMI.Table(MMI.Continuous, MMI.Count),
 }
 
-# TODO: Allow for Count data, and coerce it into Continuous as needed.
-MMI.metadata_model(
-    LaSRRegressor;
-    input_scitype,
-    target_scitype=AbstractVector{<:Any},
-    supports_weights=true,
-    reports_feature_importances=false,
-    load_path="LibraryAugmentedSymbolicRegression.MLJInterfaceModule.LaSRRegressor",
-    human_name="Symbolic Regression accelerated with LLM guidance",
-)
-MMI.metadata_model(
-    MultitargetLaSRRegressor;
-    input_scitype,
-    target_scitype=Union{MMI.Table(Any),AbstractMatrix{<:Any}},
-    supports_weights=true,
-    reports_feature_importances=false,
-    load_path="LibraryAugmentedSymbolicRegression.MLJInterfaceModule.MultitargetLaSRRegressor",
-    human_name="Multi-Target Symbolic Regression accelerated with LLM guidance",
-)
+for model in [:LaSRRegressor, :LaSRTestRegressor]
+    @eval begin 
+        MMI.metadata_model(
+            $model;
+            input_scitype,
+            target_scitype=AbstractVector{<:Any},
+            supports_weights=true,
+            reports_feature_importances=false,
+            load_path=$("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)),
+            human_name="Symbolic Regression accelerated with LLM guidance",
+        )
+    end
+end
+
+for model in [:MultitargetLaSRRegressor, :MultitargetLaSRTestRegressor]
+    @eval begin
+        MMI.metadata_model(
+            $model;
+            input_scitype,
+            target_scitype=Union{
+                MMI.Table(MMI.Continuous),AbstractMatrix{<:MMI.Continuous}
+            },
+            supports_weights=true,
+            reports_feature_importances=false,
+            load_path=$("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)),
+            human_name="Multi-Target Symbolic Regression accelerated with LLM guidance",
+        )
+    end
+end
 
 end
