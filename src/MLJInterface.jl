@@ -133,7 +133,13 @@ eval(modelexpr(:LaSRRegressor, :AbstractSingletargetSRRegressor))
 eval(modelexpr(:MultitargetLaSRRegressor, :AbstractMultitargetSRRegressor))
 
 eval(modelexpr(:LaSRTestRegressor, :AbstractSingletargetSRRegressor; default_niterations=1))
-eval(modelexpr(:MultitargetLaSRTestRegressor, :AbstractMultitargetSRRegressor; default_niterations=1))
+eval(
+    modelexpr(
+        :MultitargetLaSRTestRegressor,
+        :AbstractMultitargetSRRegressor;
+        default_niterations=1,
+    ),
+)
 
 const input_scitype = Union{
     MMI.Table(MMI.Continuous),
@@ -142,14 +148,16 @@ const input_scitype = Union{
 }
 
 for model in [:LaSRRegressor, :LaSRTestRegressor]
-    @eval begin 
+    @eval begin
         MMI.metadata_model(
             $model;
             input_scitype,
             target_scitype=AbstractVector{<:Any},
             supports_weights=true,
             reports_feature_importances=false,
-            load_path=$("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)),
+            load_path=$(
+                "LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)
+            ),
             human_name="Symbolic Regression accelerated with LLM guidance",
         )
     end
@@ -165,7 +173,9 @@ for model in [:MultitargetLaSRRegressor, :MultitargetLaSRTestRegressor]
             },
             supports_weights=true,
             reports_feature_importances=false,
-            load_path=$("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)),
+            load_path=$(
+                "LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)
+            ),
             human_name="Multi-Target Symbolic Regression accelerated with LLM guidance",
         )
     end

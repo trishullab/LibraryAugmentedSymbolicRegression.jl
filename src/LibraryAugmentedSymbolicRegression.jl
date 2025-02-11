@@ -367,7 +367,8 @@ function _main_search_loop!(
     return nothing
 end
 include("MLJInterface.jl")
-using .MLJInterfaceModule: LaSRRegressor, LaSRTestRegressor, MultitargetLaSRRegressor, MultitargetLaSRTestRegressor 
+using .MLJInterfaceModule:
+    LaSRRegressor, LaSRTestRegressor, MultitargetLaSRRegressor, MultitargetLaSRTestRegressor
 
 function __init__()
     @require_extensions

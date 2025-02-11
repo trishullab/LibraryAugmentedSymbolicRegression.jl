@@ -2,12 +2,17 @@
 # They are meant to test the backwards compatibility of the LaSROptions struct through
 # the MLJInterface.jl module.
 @testitem "Generic interface tests" tags = [:online] begin
-    using LibraryAugmentedSymbolicRegression: LaSRTestRegressor, MultitargetLaSRTestRegressor
+    using LibraryAugmentedSymbolicRegression:
+        LaSRTestRegressor, MultitargetLaSRTestRegressor
     using MLJTestInterface: MLJTestInterface as MTI
     include("test_params.jl")
 
     failures, summary = MTI.test(
-        [LaSRTestRegressor, ], MTI.make_regression()...; mod=@__MODULE__, verbosity=0, throw=true
+        [LaSRTestRegressor],
+        MTI.make_regression()...;
+        mod=@__MODULE__,
+        verbosity=0,
+        throw=true,
     )
     @test isempty(failures)
 
