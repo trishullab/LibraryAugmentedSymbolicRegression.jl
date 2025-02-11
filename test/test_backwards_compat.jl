@@ -30,7 +30,7 @@ end
     using LibraryAugmentedSymbolicRegression
     using LibraryAugmentedSymbolicRegression: Node
     using MLJBase
-    using SymbolicUtils
+    using SymbolicUtils: node_to_symbolic, symbolic_to_node
     using Random: MersenneTwister
 
     include("test_params.jl")
