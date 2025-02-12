@@ -22,6 +22,7 @@ TestItems = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
 
 [compat]
 Aqua = "0.8"
+SymbolicRegression = ">=1.7.1"
 
 [preferences.LibraryAugmentedSymbolicRegression]
-instability_check = "error"
+dispatch_doctor_mode = "error"

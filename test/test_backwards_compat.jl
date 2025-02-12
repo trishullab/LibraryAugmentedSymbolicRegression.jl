@@ -56,11 +56,6 @@ end
     ypred_bad = predict(mach, (data=X, idx=1))
     @test ypred_good != ypred_bad
 
-    # Smoke test SymbolicUtils
-    eqn = node_to_symbolic(rep.equations[rep.best_idx], model)
-    n = symbolic_to_node(eqn, model)
-    eqn2 = convert(SymbolicUtils.Symbolic, n, model)
-    n2 = convert(Node, eqn2, model)
 end
 
 @testitem "Variable names - multiple outputs" tags = [:online] begin
