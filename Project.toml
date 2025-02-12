@@ -28,6 +28,9 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 SymbolicRegression = "8254be44-1295-4e6a-a16d-46603ac705cb"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
+[weakdeps]
+SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+
 [compat]
 ADTypes = "^1.4.0"
 Compat = "^4.16"
@@ -50,6 +53,7 @@ PromptingTools = "0.65 - 0.70"
 Random = "<0.0.1, 1"
 Reexport = "1"
 StatsBase = "0.33, 0.34"
-SymbolicRegression = ">=1.6.0"
+SymbolicRegression = ">=1.7.1"
+SymbolicUtils = "0.19, ^1.0.5, 2, 3"
 TOML = "<0.0.1, 1"
 julia = "1.10"
