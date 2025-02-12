@@ -55,7 +55,6 @@ end
 
     ypred_bad = predict(mach, (data=X, idx=1))
     @test ypred_good != ypred_bad
-
 end
 
 @testitem "Variable names - multiple outputs" tags = [:online] begin
