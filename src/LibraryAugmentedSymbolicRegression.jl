@@ -74,7 +74,12 @@ using .CoreModule:
     LLMOptions,
     LaSROptions,
     LLMMutationProbabilities,
-    LaSRMutationWeights
+    LaSRMutationWeights,
+    async_run_llm_server,
+    DEFAULT_LLAMAFILE_MODEL,
+    DEFAULT_LLAMAFILE_PATH,
+    DEFAULT_LLAMAFILE_URL,
+    DEFAULT_PORT
 
 using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
 using .LLMFunctionsModule:
@@ -372,6 +377,18 @@ using .MLJInterfaceModule:
 
 function __init__()
     @require_extensions
+
+    should_start_llamafile =
+        get(ENV, "START_LLAMASERVER", "false") == "true" ||
+        get(ENV, "SYMBOLIC_REGRESSION_TEST", "false") == "true"
+    if should_start_llamafile
+        @info "Starting LLM server..."
+        async_run_llm_server(;
+            llm_url=DEFAULT_LLAMAFILE_URL,
+            llm_path=DEFAULT_LLAMAFILE_PATH,
+            port=DEFAULT_PORT
+        )
+    end
 end
 
 # Hack to get static analysis to work from within tests:
