@@ -6,14 +6,14 @@ X = randn(Float32, 5, 100)
 y = 2 * cos.(X[4, :]) + X[1, :] .^ 2 .- 2
 
 llm_options = LibraryAugmentedSymbolicRegression.LLMOptions(;
-    active=true,
-    weights=LLMWeights(; llm_mutate=0.01, llm_crossover=0.01, llm_gen_random=0.01),
+    use_llm=true,
+    lasr_weights=LLMWeights(; llm_mutate=0.01, llm_crossover=0.01, llm_gen_random=0.01),
     promtp_evol=true,
-    prompt_concepts=true,
+    use_concepts=true,
     api_key="token-abc123",
     model="meta-llama/Meta-Llama-3-8B-Instruct",
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),
-    var_order=Dict("a" => "angle", "b" => "bias"),
+    variable_names=Dict("a" => "angle", "b" => "bias"),
 )
 
 options = LibraryAugmentedSymbolicRegression.Options(;

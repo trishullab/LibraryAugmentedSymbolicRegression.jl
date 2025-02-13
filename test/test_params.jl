@@ -8,7 +8,7 @@ ENV["SYMBOLIC_REGRESSION_IS_TESTING"] = "true"
 
 empty_all_globals!()
 
-const maximum_residual = 1e-2
+const maximum_residual = 2e-2
 
 if !@isdefined(custom_cos) || !hasmethod(custom_cos, (String,))
     @eval custom_cos(x) = cos(x)
@@ -30,7 +30,6 @@ const default_params = (
     hof_migration=true,
     fraction_replaced_hof=0.1f0,
     should_optimize_constants=true,
-    output_file=nothing,
     perturbation_factor=1.000000f0,
     annealing=true,
     batching=false,

@@ -1,6 +1,6 @@
 // See https://github.com/julia-vscode/julia-devcontainer/blob/master/Dockerfile for image contents
 {
-	"name": "SymbolicRegression.jl",
+	"name": "LibraryAugmentedSymbolicRegression.jl",
 	"image": "ghcr.io/julia-vscode/julia-devcontainer",
 	// Configure tool-specific properties.
 	"customizations": {
