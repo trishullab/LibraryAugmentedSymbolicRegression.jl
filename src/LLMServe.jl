@@ -1,6 +1,5 @@
 module LLMServeModule
 using Downloads
-using Printf
 using Logging
 using Base: dirname, isdir, mkdir
 
