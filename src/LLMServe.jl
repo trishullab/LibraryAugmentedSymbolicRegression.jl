@@ -101,11 +101,11 @@ executable (or renamed on Windows), and then **asynchronously** launches the
 server on the given `port`. Returns the process object.
 
 Example:
-`
+```
 proc = async_run_llm_server()
 # do stuff ...
 wait(proc)  # Wait for server to end
-`
+```
 """
 function async_run_llm_server(
     llm_url::String=DEFAULT_LLAMAFILE_URL,

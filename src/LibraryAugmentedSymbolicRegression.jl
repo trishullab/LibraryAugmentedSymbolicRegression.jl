@@ -383,11 +383,7 @@ function __init__()
         get(ENV, "SYMBOLIC_REGRESSION_TEST", "false") == "true"
     if should_start_llamafile
         @info "Starting LLM server..."
-        async_run_llm_server(;
-            llm_url=DEFAULT_LLAMAFILE_URL,
-            llm_path=DEFAULT_LLAMAFILE_PATH,
-            port=DEFAULT_PORT,
-        )
+        async_run_llm_server(DEFAULT_LLAMAFILE_URL, DEFAULT_LLAMAFILE_PATH, DEFAULT_PORT)
     end
 end
 
