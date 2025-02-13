@@ -64,7 +64,7 @@ For example, we can modify the `example.jl` from the SymbolicRegression.jl docum
 > LaSR searches for the LLM query prompts in a  a directory called `prompts/` at the location you start Julia. You can download and extract the `prompts.zip` folder from [here](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/raw/refs/heads/master/prompts.zip) to the desired location. If you wish to use a different location, you can pass a different `prompts_dir` argument to the `LLMOptions` object.
 
 ```julia
-import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMWeights
+import LibraryAugmentedSymbolicRegression: LaSROptions, LaSRRegressor, LaSRMutationWeights, LLMOperationWeights
 import MLJ: machine, fit!, predict, report
 
 # Dataset with two named features:
@@ -80,19 +80,21 @@ model = LaSRRegressor(
     niterations=50,
     binary_operators=[+, -, *],
     unary_operators=[cos],
-    llm_options=LLMOptions(
-        active=true,
-        weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),
-        prompt_evol=true,
-        prompt_concepts=true,
-        api_key="token-abc123",
-        prompts_dir="prompts/",
-        llm_recorder_dir="lasr_runs/debug_0/",
-        model="meta-llama/Meta-Llama-3-8B-Instruct",
-        api_kwargs=Dict("url" => "http://localhost:11440/v1"),
-        var_order=Dict("a" => "angle", "b" => "bias"),
-        llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
-    )
+    use_llm=true,
+    use_concepts=true,
+    use_concept_evolution=true,
+    lasr_mutation_weights=LaSRMutationWeights(llm_mutate=0.1, llm_randomize=0.1),
+    llm_operation_weights=LLMOperationWeights(llm_crossover=0.1),
+    llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
+
+    llm_recorder_dir="lasr_runs/debug_0/",
+    variable_names=Dict("a" => "angle", "b" => "bias"),
+    prompts_dir="prompts/",
+
+    api_key="token-abc123",
+    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+    verbose=true,
 )
 mach = machine(model, X, y)
 
@@ -112,11 +114,11 @@ Other than `LLMOptions`, We have the same search options as SymbolicRegression.j
 LaSR uses PromptingTools.jl for zero shot prompting. If you wish to make changes to the prompting options, you can pass an `LLMOptions` object to the `LaSRRegressor` constructor. The options available are:
 ```julia
 llm_options = LLMOptions(
-    active=true,                                                                # Whether to use LLM inference or not
-    weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),  # Probability of using LLM for mutation, crossover, and random generation
+    use_llm=true,                                                                # Whether to use LLM inference or not
+    lasr_weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),  # Probability of using LLM for mutation, crossover, and random generation
     num_pareto_context=5,                                                       # Number of equations to sample from the Pareto frontier for summarization.
-    prompt_evol=true,                                                           # Whether to evolve natural language concepts through LLM calls.
-    prompt_concepts=true,                                                       # Whether to use natural language concepts in the search.
+    use_concept_evolution=true,                                                           # Whether to evolve natural language concepts through LLM calls.
+    use_concepts=true,                                                       # Whether to use natural language concepts in the search.
     api_key="token-abc123",                                                     # API key to OpenAI API compatible server.
     model="meta-llama/Meta-Llama-3-8B-Instruct",                                # LLM model to use.
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),                      # Keyword arguments passed to server.
@@ -124,15 +126,15 @@ llm_options = LLMOptions(
     prompts_dir="prompts/",                                                      # Directory to look for zero shot prompts to the LLM.
     llm_recorder_dir="lasr_runs/debug_0/",                                       # Directory to log LLM interactions.
     llm_context="",                                                             # Natural language concept to start with. You should also be able to initialize with a list of concepts.
-    var_order=nothing,                                                          # Dict(variable_name => new_name).
-    idea_threshold=30                                                           # Number of concepts to keep track of.
+    variable_names=nothing,                                                          # Dict(variable_name => new_name).
+    max_concepts=30                                                           # Number of concepts to keep track of.
     is_parametric=false,                                                        # This is a special flag to allow sampling parametric equations from LaSR. This won't be needed for most users.
 )
 ```
 
 ### Best Practices
 
-1. Always make sure you cannot find a satisfactory solution with `active=false` before using LLM guidance.
+1. Always make sure you cannot find a satisfactory solution with `use_llm=false` before using LLM guidance.
 1. Start with a LLM OpenAI compatible server running on your local machine before moving onto paid services. There are many online resources to set up a local LLM server [1](https://ollama.com/blog/openai-compatibility) [2](https://docs.vllm.ai/en/latest/getting_started/installation.html) [3](https://github.com/sgl-project/sglang?tab=readme-ov-file#backend-sglang-runtime-srt) [4](https://old.reddit.com/r/LocalLLaMA/comments/16y95hk/a_starter_guide_for_playing_with_your_own_local_ai/)
 1. If you are using LLM, do a back-of-the-envelope calculation to estimate the cost of running LLM for your problem.  Each iteration will make around 60k calls to the LLM model. With the default prompts (in `prompts/`), each call usually requires generating 250 to 1000 tokens. This gives us an upper bound of 60M tokens per iteration if `p=1.00`. Hence, running the model at `p=0.01` for 40 iterations will result in 24M tokens for each equation.
 
@@ -215,16 +217,16 @@ model = LaSRRegressor(
     binary_operators=[+, -, *],
     unary_operators=[cos],
     llm_options=LLMOptions(
-        active=true,
-        weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),
-        prompt_evol=true,
-        prompt_concepts=true,
+        use_llm=true,
+        lasr_weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),
+        use_concept_evolution=true,
+        use_concepts=true,
         api_key="token-abc123",
         prompts_dir="prompts/",
         llm_recorder_dir="lasr_runs/debug_0/",
         model="llama3.1:latest",
         api_kwargs=Dict("url" => "http://127.0.0.1:11434/v1"),
-        var_order=Dict("a" => "angle", "b" => "bias"),
+        variable_names=Dict("a" => "angle", "b" => "bias"),
         llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias."
     )
 )

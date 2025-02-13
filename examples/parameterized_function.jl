@@ -6,7 +6,7 @@ using Test
 
 rng = MersenneTwister(0)
 X = NamedTuple{(:x1, :x2, :x3, :x4, :x5)}(ntuple(_ -> randn(rng, Float32, 30), Val(5)))
-X = (; X..., classes=rand(rng, 1:2, 30))
+X = (; X..., class=rand(rng, 1:2, 30))
 p1 = [0.0f0, 3.2f0]
 p2 = [1.5f0, 0.5f0]
 
