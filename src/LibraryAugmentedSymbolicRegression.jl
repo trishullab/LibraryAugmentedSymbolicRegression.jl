@@ -386,7 +386,7 @@ function __init__()
         async_run_llm_server(;
             llm_url=DEFAULT_LLAMAFILE_URL,
             llm_path=DEFAULT_LLAMAFILE_PATH,
-            port=DEFAULT_PORT
+            port=DEFAULT_PORT,
         )
     end
 end
