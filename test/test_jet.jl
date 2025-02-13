@@ -1,5 +1,5 @@
 # Copied over from SymbolicRegression.jl
-if !(VERSION >= v"1.10.0" && VERSION < v"1.11.0-DEV.0")
+if !(VERSION >= v"1.10.0" && VERSION < v"1.12.0-DEV.0")
     exit(0)
 end
 
@@ -17,10 +17,10 @@ Pkg.add(["JET", "Preferences", "DynamicExpressions"]; io=devnull)
 using Preferences
 cd(dir)
 Preferences.set_preferences!(
-    "LibraryAugmentedSymbolicRegression", "instability_check" => "disable"; force=true
+    "LibraryAugmentedSymbolicRegression", "dispatch_doctor_mode" => "disable"; force=true
 )
 Preferences.set_preferences!(
-    "DynamicExpressions", "instability_check" => "disable"; force=true
+    "DynamicExpressions", "dispatch_doctor_mode" => "disable"; force=true
 )
 
 using LibraryAugmentedSymbolicRegression
