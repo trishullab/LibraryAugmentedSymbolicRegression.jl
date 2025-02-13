@@ -64,33 +64,32 @@ For example, we can modify the `example.jl` from the SymbolicRegression.jl docum
 > LaSR searches for the LLM query prompts in a  a directory called `prompts/` at the location you start Julia. You can download and extract the `prompts.zip` folder from [here](https://github.com/trishullab/LibraryAugmentedSymbolicRegression.jl/raw/refs/heads/master/prompts.zip) to the desired location. If you wish to use a different location, you can pass a different `prompts_dir` argument to the `LLMOptions` object.
 
 ```julia
-import LibraryAugmentedSymbolicRegression: LaSROptions, LaSRRegressor, LaSRMutationWeights, LLMOperationWeights
+import LibraryAugmentedSymbolicRegression:
+    LaSROptions, LaSRRegressor, LaSRMutationWeights, LLMOperationWeights
 import MLJ: machine, fit!, predict, report
 
 # Dataset with two named features:
-X = (a = rand(500), b = rand(500))
+X = (a=rand(500), b=rand(500))
 
 # and one target:
-y = @. 2 * cos(X.a * 23.5) - X.b ^ 2
+y = @. 2 * cos(X.a * 23.5) - X.b^2
 
 # with some noise:
 y = y .+ randn(500) .* 1e-3
 
-model = LaSRRegressor(
+model = LaSRRegressor(;
     niterations=50,
     binary_operators=[+, -, *],
     unary_operators=[cos],
     use_llm=true,
     use_concepts=true,
     use_concept_evolution=true,
-    lasr_mutation_weights=LaSRMutationWeights(llm_mutate=0.1, llm_randomize=0.1),
-    llm_operation_weights=LLMOperationWeights(llm_crossover=0.1),
+    lasr_mutation_weights=LaSRMutationWeights(; llm_mutate=0.1, llm_randomize=0.1),
+    llm_operation_weights=LLMOperationWeights(; llm_crossover=0.1),
     llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
-
-    llm_recorder_dir="lasr_runs/debug_0/",
+    llm_recorder_dir="lasr_runs/",
     variable_names=Dict("a" => "angle", "b" => "bias"),
     prompts_dir="prompts/",
-
     api_key="token-abc123",
     model="meta-llama/Meta-Llama-3-8B-Instruct",
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),
@@ -113,22 +112,61 @@ Other than `LLMOptions`, We have the same search options as SymbolicRegression.j
 
 LaSR uses PromptingTools.jl for zero shot prompting. If you wish to make changes to the prompting options, you can pass an `LLMOptions` object to the `LaSRRegressor` constructor. The options available are:
 ```julia
-llm_options = LLMOptions(
-    use_llm=true,                                                                # Whether to use LLM inference or not
-    lasr_weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),  # Probability of using LLM for mutation, crossover, and random generation
-    num_pareto_context=5,                                                       # Number of equations to sample from the Pareto frontier for summarization.
-    use_concept_evolution=true,                                                           # Whether to evolve natural language concepts through LLM calls.
-    use_concepts=true,                                                       # Whether to use natural language concepts in the search.
-    api_key="token-abc123",                                                     # API key to OpenAI API compatible server.
-    model="meta-llama/Meta-Llama-3-8B-Instruct",                                # LLM model to use.
-    api_kwargs=Dict("url" => "http://localhost:11440/v1"),                      # Keyword arguments passed to server.
-    http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),                    # Keyword arguments passed to HTTP requests.
-    prompts_dir="prompts/",                                                      # Directory to look for zero shot prompts to the LLM.
-    llm_recorder_dir="lasr_runs/debug_0/",                                       # Directory to log LLM interactions.
-    llm_context="",                                                             # Natural language concept to start with. You should also be able to initialize with a list of concepts.
-    variable_names=nothing,                                                          # Dict(variable_name => new_name).
-    max_concepts=30                                                           # Number of concepts to keep track of.
-    is_parametric=false,                                                        # This is a special flag to allow sampling parametric equations from LaSR. This won't be needed for most users.
+llm_options = LaSRRegressor(
+    ...
+    # SR.jl options
+    use_llm=true,
+    # Whether to use LLM inference or not. (default: false)
+
+    use_concepts=true,
+    # Whether to use natural language concepts in the search. (default: false)
+    # This makes the algorithm equivanlent to a specialization of FunSearch.
+
+    use_concept_evolution=true,
+    # Whether to evolve the concepts after every iteration. (default: false)
+
+    lasr_mutation_weights=LaSRMutationWeights(; llm_mutate=0.1, llm_randomize=0.1),
+    # Unnormalized mutation weights for the mutation operators.
+
+    llm_operation_weights=LLMOperationWeights(; llm_crossover=0.1),
+    # Normalized probability of using the LLM for crossover v/s using symbolic crossover.
+
+    num_pareto_context=5
+    # Number of equations to sample from the Pareto frontier for summarization.
+    num_generated_equations=5,
+    # Number of equations to generate from the LLM.
+    num_generated_concepts=5,
+    # Number of concepts to generate from the LLM.
+    max_concepts=30,
+    # Size of the concept library. Only active if use_concepts=true.
+    is_parametric::Bool=false,
+    # @TODO: Need to change the interface to use node_type.
+    # This boolean variable is a special flag to allow sampling parametric equations from LaSR.
+    llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
+    # A natural language concept to start with.
+
+
+    llm_recorder_dir="lasr_runs/",
+    # Directory to log LLM interactions. Creates a file called llm_calls.txt in this directory.
+    variable_names=Dict("a" => "angle", "b" => "bias"),
+    # The variable name that is passed to the LLM. This is useful to introduce domain knowledge to the LLM.
+    prompts_dir="prompts/",
+    # The location of the zero-shot prompts for the LLM. Specialize these prompts to your problem for better performance.
+    idea_database=[],
+    # A list of concepts that we will use to seed the LLM. Starts with an empty
+    # list. Concepts are chosen uniformly at random from this list.
+
+    api_key="token-abc123",
+    # API key to OpenAI API compatible server.
+    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    # Model name for the OpenAI API compatible server.
+    api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+    # Keyword arguments passed to server. URL is the only required argument.
+    http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),
+    # Keyword arguments passed to HTTP requests.
+    verbose=true,
+    # Whether to print the tokens generated for each LLM call.
+    # (Useful for debugging to get a general sense of the performance of the LLM server.)
 )
 ```
 

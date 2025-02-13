@@ -14,29 +14,32 @@ create_llm_operation_weights(w::NamedTuple) = LLMOperationWeights(; w...)
 
 @ignore const LASR_DEFAULT_OPTIONS = ()
 
-const LASR_OPTIONS_DESCRIPTION = """- `use_llm::Bool`: Whether to use LLM inference or not. (default: false)
-- `use_concepts::Bool`: Whether to summarize programs into concepts and use the concepts to guide the search. (default: false)
-    NOTE: If `use_llm` is false, then `use_concepts` will be ignored.
+const LASR_OPTIONS_DESCRIPTION = """
+- `use_llm::Bool`: Whether to use LLM inference. (default: false)
+- `use_concepts::Bool`: Whether to summarize candidate programs into natural-language concepts and use those concepts to guide the search (i.e., a specialization of FunSearch). (default: false)
+    NOTE: If `use_llm` is false, then `use_concepts` is ignored.
 - `use_concept_evolution::Bool`: Whether to evolve the concepts after every iteration. (default: false)
-    NOTE: If `use_concepts` is false, then `use_concept_evolution` will be ignored.
-- `lasr_weights::LLMWeights`: lasr_weights for different LLM operations.
-- `num_pareto_context::Int64`: Number of equations to sample from pareto frontier.
-- `use_concepts::Bool`: Use natural language concepts in the LLM prompts. 
-- `use_concept_evolution::Bool`: Evolve natural language concepts through succesive LLM
-    calls.
-- api_key::AbstractString: OpenAI API key. Required.
-- model::AbstractString: OpenAI model to use. Required.
-- api_kwargs::Dict: Additional keyword arguments to pass to the OpenAI API.
-    - url::AbstractString: URL to send the request to. Required.
-    - max_tokens::Int: Maximum number of tokens to generate. (default: 1000)
-- http_kwargs::Dict: Additional keyword arguments for the HTTP request.
-    - retries::Int: Number of retries to attempt. (default: 3)
-    - readtimeout::Int: Read timeout for the HTTP request (in seconds; default is 1 hour).
-- `llm_recorder_dir::AbstractString`: File to save LLM logs to. Useful for debugging.
-- `llm_context::AbstractString`: Context AbstractString for LLM.
-- `variable_names::Union{Dict,Nothing}`: Variable order for LLM. (default: nothing)
-- `max_concepts::UInt32`: Number of concepts to keep track of. (default: 30)
-- `verbose::Bool`: Output LLM generation query statistics. (default: true)
+    NOTE: If `use_concepts` is false, then `use_concept_evolution` is ignored.
+- `lasr_mutation_weights::LaSRMutationWeights`: Unnormalized mutation weights for the mutation operators (e.g., `llm_mutate`, `llm_randomize`).
+- `llm_operation_weights::LLMOperationWeights`: Normalized probabilities of using LLM-based crossover vs. symbolic crossover.
+- `num_pareto_context::Int64`: Number of equations to sample from the Pareto frontier for summarization.
+- `num_generated_equations::Int64`: Number of new equations to generate from the LLM per iteration.
+- `num_generated_concepts::Int64`: Number of new concepts to generate from the LLM per iteration.
+- `max_concepts::UInt32`: Maximum number of concepts to retain in the concept library. (default: 30)
+- `is_parametric::Bool`: A special flag to allow sampling parametric equations from LaSR. (default: false)
+- `llm_context::AbstractString`: A natural-language hint or context string passed to the LLM.
+- `llm_recorder_dir::AbstractString`: Directory to log LLM interactions (creates `llm_calls.txt`). (default: "lasr_runs/")
+- `variable_names::Union{Dict,Nothing}`: A mapping of symbolic variable names to domain-meaningful names. (default: nothing)
+- `prompts_dir::AbstractString`: The location of zero-shot prompts for the LLM. Specialize these prompts to your domain for better performance. (default: "prompts/")
+- `idea_database::Vector{AbstractString}`: A list of natural-language concept “ideas” for seeding the LLM. (default: [])
+- `api_key::AbstractString`: An API key for an OpenAI-compatible server. Required.
+- `model::AbstractString`: The LLM model name for the OpenAI-compatible server. Required.
+- `api_kwargs::Dict`: Additional keyword arguments for the LLM's API. Must include `url::AbstractString` to specify the endpoint. (default: `Dict("url" => "...")`)
+    - For example: `Dict("url" => "http://localhost:11440/v1", "max_tokens" => 1000)`
+- `http_kwargs::Dict`: Additional keyword arguments for HTTP requests.
+    - `retries::Int`: Number of retries. (default: 3)
+    - `readtimeout::Int`: Read timeout in seconds. (default: 3600)
+- `verbose::Bool`: Whether to print tokens and additional debugging info for each LLM call. (default: true)
 """
 
 # Constructor with both sets of parameters:
