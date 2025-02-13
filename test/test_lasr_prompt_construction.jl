@@ -129,4 +129,4 @@ user_messages = [construct_prompt(all_prompts["prompt_evol_user"], [], "idea")]
 
 @test render_conversation(system_message, user_messages) ==
     normalize_line_endings(expected_constructions[8])
-println("All tests passed!")
+println("Passed.")
