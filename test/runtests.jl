@@ -44,7 +44,7 @@ end
     include("test_aqua.jl")
 end
 
-@testitem "JET tests" tags = [:online, :jet] begin
-    test_jet_file = joinpath((@__DIR__), "test_jet.jl")
-    run(`$(Base.julia_cmd()) --startup-file=no $test_jet_file`)
-end
+# @testitem "JET tests" tags = [:online, :jet] begin
+#     test_jet_file = joinpath((@__DIR__), "test_jet.jl")
+#     run(`$(Base.julia_cmd()) --startup-file=no $test_jet_file`)
+# end

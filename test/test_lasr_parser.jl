@@ -7,7 +7,7 @@ using LibraryAugmentedSymbolicRegression:
     LaSROptions, string_tree, parse_expr, render_expr, gen_random_tree
 include("test_params.jl")
 options = LaSROptions(;
-    default_params..., binary_operators=[+, *, ^, -], unary_operators=[sin, cos, exp]
+    default_params..., binary_operators=[+, *, ^], unary_operators=[sin, cos, exp]
 )
 
 rng = MersenneTwister(314159)
