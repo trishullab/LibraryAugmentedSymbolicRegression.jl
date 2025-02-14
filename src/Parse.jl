@@ -12,7 +12,7 @@ Given a string (e.g., from `string_tree`) and an options object (containing
 operators, variable naming conventions, etc.), reconstruct an
 AbstractExpressionNode.
 """
-function parse_expr(
+@unstable function parse_expr(
     expr_str::String, options::AbstractOptions, ::Type{T}
 ) where {T<:DATA_TYPE}
     parsed = Meta.parse(expr_str)
