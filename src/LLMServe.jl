@@ -81,14 +81,14 @@ function serve_llm(llm_path::String, port::Int=DEFAULT_PORT; waitfor::Bool=false
 
     if waitfor
         @info "Running server in blocking mode (will not return until process exits)."
-        run(cmd)
-        return nothing
+        proc = run(cmd; wait=true)
+        @info "LLM server has exited."
     else
         proc = run(cmd; wait=false)
         pid = getpid(proc)
         @info "LLM server spawned asynchronously (pid: $(pid))."
-        return proc
     end
+    return proc
 end
 
 """
