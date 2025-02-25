@@ -15,9 +15,75 @@ so higher probabilities will result in slower operations. By default, we set all
 The maximum value for these parameters is 1.0 (100% of the time).
 # Arguments
 - `llm_crossover::Float64`: Probability of calling LLM version of crossover.
+- `llm_mutate::Float64`: Probability of calling LLM version of mutation.
+- `llm_gen_random::Float64`: Probability of calling LLM version of gen_random.
 """
 Base.@kwdef mutable struct LLMOperationWeights
     llm_crossover::Float64 = 0.0
+    llm_mutate::Float64 = 0.0
+    llm_randomize::Float64 = 0.0
+end
+
+"""
+    set_llm_mutation_weights(mutation_weights::LaSRMutationWeights, llm_operation_weights::LLMOperationWeights)
+
+Set the mutation weights for a LaSR model based on the provided LLM operation weights.
+
+# Arguments
+- `mutation_weights::LaSRMutationWeights`: An instance of `LaSRMutationWeights` containing the current mutation weights.
+- `llm_operation_weights::LLMOperationWeights`: An instance of `LLMOperationWeights` containing the weights for LLM operations.
+
+# Returns
+- `mutation_weights::LaSRMutationWeights`: The updated `mutation_weights` with modified values based on the LLM operation weights.
+
+# Description
+This function adjusts the mutation weights of a LaSR model by incorporating the weights from LLM operations. It performs the following steps:
+1. Extracts the `randomize` weight from `mutation_weights`.
+2. Creates a dictionary of other mutation weights excluding those starting with `llm_` or `randomize`.
+3. Computes new values for `llm_randomize` and `llm_mutate` based on the LLM operation weights and the current mutation weights.
+4. Updates the original mutation weights by scaling them with the complementary LLM operation weights.
+5. Sets the new values for `llm_randomize` and `llm_mutate` in the `mutation_weights`.
+
+The function returns the updated `mutation_weights` with the new values.
+"""
+function set_llm_mutation_weights(
+    mutation_weights::LaSRMutationWeights, llm_operation_weights::LLMOperationWeights
+)::LaSRMutationWeights
+    randomize_w = mutation_weights.randomize
+    oth_mutations = Dict([
+        sym => getproperty(mutation_weights, sym) for
+        sym in fieldnames(typeof(mutation_weights)) if
+        !startswith(string(sym), r"llm_|randomize")
+    ])
+
+    llm_randomize_w = llm_operation_weights.llm_randomize * randomize_w
+    llm_mutate_w = llm_operation_weights.llm_mutate * sum(values(oth_mutations))
+
+    # modify the original values of the mutation weights
+    mutation_weights.randomize = (1 - llm_operation_weights.llm_randomize) * randomize_w
+    for (sym, val) in oth_mutations
+        setproperty!(mutation_weights, sym, (1 - llm_operation_weights.llm_mutate) * val)
+    end
+
+    # if llm_randomize or llm_mutate are not 0.0, we should respect user values.
+    mutation_weights.llm_randomize = if mutation_weights.llm_randomize == 0.0
+        llm_randomize_w
+    else
+        mutation_weights.llm_mutate
+    end
+    mutation_weights.llm_mutate =
+        mutation_weights.llm_mutate == 0.0 ? llm_mutate_w : mutation_weights.llm_mutate
+
+    return mutation_weights
+end
+
+function set_llm_mutation_weights(
+    mutation_weights::NamedTuple, llm_operation_weights::NamedTuple
+)::LaSRMutationWeights
+    return set_llm_mutation_weights(
+        LaSRMutationWeights(; mutation_weights...),
+        LLMOperationWeights(; llm_operation_weights...),
+    )
 end
 
 """
@@ -31,7 +97,7 @@ Base.@kwdef mutable struct LLMOptions
     use_llm::Bool
     use_concepts::Bool
     use_concept_evolution::Bool
-    lasr_mutation_weights::Union{LaSRMutationWeights,Nothing}
+    mutation_weights::Union{LaSRMutationWeights,Nothing}
     llm_operation_weights::Union{LLMOperationWeights,Nothing}
     # LaSR Performance Modifiers
     num_pareto_context::Integer

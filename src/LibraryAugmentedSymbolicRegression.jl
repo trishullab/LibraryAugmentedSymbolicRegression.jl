@@ -14,7 +14,6 @@ export Population,
     LLMOperationWeights,
     LLMOptions,
     LaSROptions,
-    LLMMutationProbabilities,
     LaSRMutationWeights,
     # Functions:
     llm_randomize_tree,
@@ -63,18 +62,13 @@ using .SymbolicRegression:
     include("MutationWeights.jl")
     include("LLMOptionsStruct.jl")
     include("LLMOptions.jl")
+    include("Core.jl")
     include("LLMUtils.jl")
     include("LLMFunctions.jl")
     include("Mutate.jl")
-    include("Core.jl")
 end
 
-using .CoreModule:
-    LLMOperationWeights,
-    LLMOptions,
-    LaSROptions,
-    LLMMutationProbabilities,
-    LaSRMutationWeights
+using .CoreModule: LLMOperationWeights, LLMOptions, LaSROptions, LaSRMutationWeights
 
 using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
 using .LLMFunctionsModule:
@@ -87,7 +81,7 @@ using .LLMFunctionsModule:
     generate_concepts
 using .LLMUtilsModule: load_prompt, construct_prompt, llm_recorder
 using .ParseModule: render_expr, parse_expr
-using .MutateModule: mutate!, crossover_generation
+import .MutateModule: mutate!, crossover_generation
 
 """
 @TODO: Modularize _main_search_loop! function so that I don't have to change the

@@ -19,7 +19,7 @@ model = LaSRRegressor(;
     use_llm=true,
     use_concepts=true,
     use_concept_evolution=true,
-    lasr_mutation_weights=LaSRMutationWeights(; llm_mutate=0.1, llm_randomize=0.1),
+    mutation_weights=LaSRMutationWeights(; llm_mutate=0.1, llm_randomize=0.1),
     llm_operation_weights=LLMOperationWeights(; llm_crossover=0.1),
     llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
     llm_recorder_dir="lasr_runs/",

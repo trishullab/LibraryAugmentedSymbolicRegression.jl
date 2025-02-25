@@ -272,4 +272,26 @@ function safe_call(f::F, x::T, default::D) where {F,T<:Tuple,D}
     return output
 end
 
+function getsymbol(ex::Expr)::Symbol
+    while ex isa Expr && ex.head isa Symbol
+        ex = ex.args[1]
+    end
+    return ex
+end
+
+function unique_by_argname(exprs::Vector{Expr})::Vector{Expr}
+    seen = Set{Symbol}()
+    out = Expr[]
+    for ex in exprs
+        nm = getsymbol(ex)
+        if nm ∈ seen
+            # Skip duplicates
+            continue
+        end
+        push!(out, ex)
+        push!(seen, nm)
+    end
+    return out
+end
+
 end

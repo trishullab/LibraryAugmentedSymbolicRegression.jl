@@ -71,7 +71,7 @@ function llm_randomize_tree(
 end
 
 function _gen_llm_random_tree(
-    node_count::Int, options::LaSROptions, nfeatures::Int, ::Type{T}
+    node_count::Int, options::AbstractOptions, nfeatures::Int, ::Type{T}
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
     if isnothing(options.idea_database)
         assumptions = []
@@ -140,7 +140,7 @@ function _gen_llm_random_tree(
 
     gen_tree_options = parse_msg_content(String(msg.content))
 
-    N = min(size(gen_tree_options)[1], N)
+    N = min(size(gen_tree_options)[1], options.num_generated_equations)
 
     if N == 0
         llm_recorder(options.llm_options, "None", "failed|gen_random")
@@ -208,7 +208,7 @@ function crossover_trees(
     return tree1, tree2
 end
 
-function concept_evolution(idea_database, options::LaSROptions)
+function concept_evolution(idea_database, options::AbstractOptions)
     num_ideas = size(idea_database)[1]
     if num_ideas <= options.max_concepts
         return nothing
@@ -259,7 +259,7 @@ function concept_evolution(idea_database, options::LaSROptions)
 
     idea_options = parse_msg_content(String(msg.content))
 
-    N = min(size(idea_options)[1], N)
+    N = min(size(idea_options)[1], options.num_generated_concepts)
 
     if N == 0
         llm_recorder(options.llm_options, "None", "failed|concept_evolution")
@@ -324,7 +324,7 @@ function parse_msg_content(msg_content::String)::Vector{String}
     return String[]
 end
 
-function generate_concepts(dominating, worst_members, options::LaSROptions)
+function generate_concepts(dominating, worst_members, options::AbstractOptions)
     # turn dominating pareto curve into ideas as strings
     if isnothing(dominating)
         return nothing
@@ -387,7 +387,7 @@ function generate_concepts(dominating, worst_members, options::LaSROptions)
 
     idea_options = parse_msg_content(String(msg.content))
 
-    N = min(size(idea_options)[1], N)
+    N = min(size(idea_options)[1], options.num_generated_concepts)
 
     if N == 0
         llm_recorder(options.llm_options, "None", "failed|generate_concepts")
@@ -423,7 +423,7 @@ function generate_concepts(dominating, worst_members, options::LaSROptions)
 end
 
 function llm_mutate_tree(
-    ex::AbstractExpression{T}, options::LaSROptions
+    ex::AbstractExpression{T}, options::AbstractOptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
     tree = get_contents(ex)
     ex = with_contents(ex, llm_mutate_tree(tree, options))
@@ -432,7 +432,7 @@ end
 
 """LLM Mutation on a tree"""
 function llm_mutate_tree(
-    tree::AbstractExpressionNode{T}, options::LaSROptions
+    tree::AbstractExpressionNode{T}, options::AbstractOptions
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
     expr = render_expr(tree, options)
 
@@ -469,6 +469,7 @@ function llm_mutate_tree(
                 variables=get_vars(options),
                 operators=get_ops(options),
                 N=options.num_generated_equations,
+                expr=expr,
                 no_system_message=false,
             )
         ],
@@ -503,7 +504,7 @@ function llm_mutate_tree(
 
     mut_tree_options = parse_msg_content(String(msg.content))
 
-    N = min(size(mut_tree_options)[1], N)
+    N = min(size(mut_tree_options)[1], options.num_generated_equations)
 
     if N == 0
         llm_recorder(options.llm_options, "None", "failed|mutate")
@@ -536,7 +537,7 @@ function llm_mutate_tree(
 end
 
 function llm_crossover_trees(
-    ex1::E, ex2::E, options::LaSROptions
+    ex1::E, ex2::E, options::AbstractOptions
 )::Tuple{E,E} where {T,E<:AbstractExpression{T}}
     tree1 = get_contents(ex1)
     tree2 = get_contents(ex2)
@@ -548,7 +549,7 @@ end
 
 """LLM Crossover between two expressions"""
 function llm_crossover_trees(
-    tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}, options::LaSROptions
+    tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}, options::AbstractOptions
 )::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
     expr1 = render_expr(tree1, options)
     expr2 = render_expr(tree2, options)
@@ -589,6 +590,8 @@ function llm_crossover_trees(
                 variables=get_vars(options),
                 operators=get_ops(options),
                 N=options.num_generated_equations,
+                expr1=expr1,
+                expr2=expr2,
                 no_system_message=false,
             )
         ],
@@ -626,7 +629,7 @@ function llm_crossover_trees(
     cross_tree1 = nothing
     cross_tree2 = nothing
 
-    N = min(size(cross_tree_options)[1], N)
+    N = min(size(cross_tree_options)[1], options.num_generated_equations)
 
     if N == 0
         llm_recorder(options.llm_options, "None", "failed|crossover")

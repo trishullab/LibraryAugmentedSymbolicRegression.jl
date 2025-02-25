@@ -1,4 +1,4 @@
-using LibraryAugmentedSymbolicRegression: L2DistLoss, MutationWeights
+using LibraryAugmentedSymbolicRegression: L2DistLoss, LaSRMutationWeights
 using DynamicExpressions.OperatorEnumConstructionModule: empty_all_globals!
 using Optim: Optim
 using LineSearches: LineSearches
@@ -34,7 +34,7 @@ const default_params = (
     annealing=true,
     batching=false,
     batch_size=50,
-    mutation_weights=MutationWeights(;
+    mutation_weights=LaSRMutationWeights(;
         mutate_constant=10.000000,
         mutate_operator=1.000000,
         add_node=1.000000,

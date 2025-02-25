@@ -2,12 +2,18 @@ module LLMOptionsModule
 
 using DispatchDoctor: @unstable
 using SymbolicRegression
+import ..LLMOptionsStructModule
 using ..LLMOptionsStructModule:
-    LaSROptions, LLM_OPTIONS_KEYS, LaSRMutationWeights, LLMOperationWeights, LLMOptions
+    LaSROptions,
+    LLM_OPTIONS_KEYS,
+    LaSRMutationWeights,
+    LLMOperationWeights,
+    LLMOptions,
+    set_llm_mutation_weights
 using ..UtilsModule: @save_kwargs, @ignore
 
-create_lasr_mutation_weights(w::LaSRMutationWeights) = w
-create_lasr_mutation_weights(w::NamedTuple) = LaSRMutationWeights(; w...)
+create_mutation_weights(w::LaSRMutationWeights) = w
+create_mutation_weights(w::NamedTuple) = LaSRMutationWeights(; w...)
 
 create_llm_operation_weights(w::LLMOperationWeights) = w
 create_llm_operation_weights(w::NamedTuple) = LLMOperationWeights(; w...)
@@ -20,7 +26,7 @@ const LASR_OPTIONS_DESCRIPTION = """
     NOTE: If `use_llm` is false, then `use_concepts` is ignored.
 - `use_concept_evolution::Bool`: Whether to evolve the concepts after every iteration. (default: false)
     NOTE: If `use_concepts` is false, then `use_concept_evolution` is ignored.
-- `lasr_mutation_weights::LaSRMutationWeights`: Unnormalized mutation weights for the mutation operators (e.g., `llm_mutate`, `llm_randomize`).
+- `mutation_weights::LaSRMutationWeights`: Unnormalized mutation weights for the mutation operators (e.g., `llm_mutate`, `llm_randomize`).
 - `llm_operation_weights::LLMOperationWeights`: Normalized probabilities of using LLM-based crossover vs. symbolic crossover.
 - `num_pareto_context::Int64`: Number of equations to sample from the Pareto frontier for summarization.
 - `num_generated_equations::Int64`: Number of new equations to generate from the LLM per iteration.
@@ -58,9 +64,8 @@ $(LASR_OPTIONS_DESCRIPTION)
     use_concepts::Bool=false,
     use_concept_evolution::Bool=false,
     @nospecialize(
-        lasr_mutation_weights::Union{
-            LaSRMutationWeights,AbstractVector,NamedTuple,Nothing
-        } = nothing
+        mutation_weights::Union{LaSRMutationWeights,AbstractVector,NamedTuple,Nothing} =
+            nothing
     ),
     @nospecialize(
         llm_operation_weights::Union{
@@ -121,7 +126,7 @@ $(LASR_OPTIONS_DESCRIPTION)
     use_llm = something(use_llm, _default_options.use_llm)
     use_concepts = something(use_concepts, _default_options.use_concepts)
     use_concept_evolution = something(use_concept_evolution, _default_options.use_concept_evolution)
-    lasr_mutation_weights = something(lasr_mutation_weights, _default_options.lasr_mutation_weights)
+    mutation_weights = something(mutation_weights, _default_options.mutation_weights)
     llm_operation_weights = something(llm_operation_weights, _default_options.llm_operation_weights)
     num_pareto_context = something(num_pareto_context, _default_options.num_pareto_context)
     num_generated_equations = something(num_generated_equations, _default_options.num_generated_equations)
@@ -151,14 +156,19 @@ $(LASR_OPTIONS_DESCRIPTION)
         mkdir(llm_recorder_dir)
     end
 
-    set_lasr_mutation_weights = create_lasr_mutation_weights(lasr_mutation_weights)
+    # Set mutation weights based on LLM operation weights
+    if !isnothing(mutation_weights) && !isnothing(llm_operation_weights)
+        mutation_weights = set_llm_mutation_weights(mutation_weights, llm_operation_weights)
+    end
+
     set_llm_operation_weights = create_llm_operation_weights(llm_operation_weights)
+    set_mutation_weights = create_mutation_weights(mutation_weights)
 
     llm_options = LLMOptions(
         use_llm,
         use_concepts,
         use_concept_evolution,
-        set_lasr_mutation_weights,
+        set_mutation_weights,
         set_llm_operation_weights,
         num_pareto_context,
         num_generated_equations,
@@ -180,12 +190,22 @@ $(LASR_OPTIONS_DESCRIPTION)
     sr_options = SymbolicRegression.Options(;
         NamedTuple(sr_options_keys .=> Tuple(kws[k] for k in sr_options_keys))...
     )
-    return LaSROptions(llm_options, sr_options)
+    options = LaSROptions{
+        typeof(sr_options)
+    }(
+        llm_options,
+        sr_options  
+    )
+    return options
 end
 
 # Make all `Options` available while also making `llm_options` accessible
 function Base.getproperty(options::LaSROptions, k::Symbol)
-    if k in LLM_OPTIONS_KEYS
+    if k == :llm_options
+        return getfield(options, :llm_options)
+    elseif k == :sr_options
+        return getfield(options, :sr_options)
+    elseif k in LLM_OPTIONS_KEYS
         return getproperty(getfield(options, :llm_options), k)
     else
         return getproperty(getfield(options, :sr_options), k)
@@ -194,7 +214,11 @@ end
 
 # Add setproperty! for `Options` and `llm_options`
 function Base.setproperty!(options::LaSROptions, k::Symbol, v)
-    if k in LLM_OPTIONS_KEYS
+    if k == :llm_options
+        return setfield!(options, :llm_options, v)
+    elseif k == :sr_options
+        return setfield!(options, :sr_options, v)
+    elseif k in LLM_OPTIONS_KEYS
         return setproperty!(getfield(options, :llm_options), k, v)
     else
         return setproperty!(getfield(options, :sr_options), k, v)
@@ -211,8 +235,10 @@ function default_options()
         use_llm=false,
         use_concepts=false,
         use_concept_evolution=false,
-        lasr_mutation_weights=LaSRMutationWeights(; llm_mutate=0.0, llm_randomize=0.0),
-        llm_operation_weights=LLMOperationWeights(; llm_crossover=0.0),
+        mutation_weights=LaSRMutationWeights(; llm_mutate=0.0, llm_randomize=0.0),
+        llm_operation_weights=LLMOperationWeights(;
+            llm_crossover=0.0, llm_mutate=0.0, llm_randomize=0.0
+        ),
 
         # LaSR Performance Modifiers
         num_pareto_context=5,

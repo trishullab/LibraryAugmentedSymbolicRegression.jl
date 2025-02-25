@@ -3,19 +3,21 @@ module MutateModule
 using SymbolicRegression
 using .SymbolicRegression: @recorder
 
-using ..LLMOptionsModule: LaSROptions
+# It's important that we explicity import the mutate! function from SymbolicRegression
+# so Julia knows that we're extending it.
+import SymbolicRegression: mutate!, MutationResult
+
+using ..LLMOptionsStructModule: LaSROptions
 using ..LLMFunctionsModule:
     llm_mutate_tree, llm_recorder, llm_crossover_trees, llm_randomize_tree
 
 function mutate!(
     tree::N,
-    ::P,
+    member::P,
     ::Val{:llm_mutate},
     ::SymbolicRegression.AbstractMutationWeights,
-    options::LaSROptions;
+    options::SymbolicRegression.AbstractOptions;
     recorder::SymbolicRegression.RecordType,
-    curmaxsize,
-    nfeatures,
     kws...,
 ) where {T,N<:SymbolicRegression.AbstractExpression{T},P<:SymbolicRegression.PopMember}
     tree = llm_mutate_tree(tree, options)
@@ -25,10 +27,10 @@ end
 
 function mutate!(
     tree::N,
-    ::P,
+    member::P,
     ::Val{:llm_randomize},
     ::SymbolicRegression.AbstractMutationWeights,
-    options::LaSROptions;
+    options::SymbolicRegression.AbstractOptions;
     recorder::SymbolicRegression.RecordType,
     curmaxsize,
     nfeatures,
@@ -41,7 +43,11 @@ end
 
 """Generate a generation via crossover of two members."""
 function crossover_generation(
-    member1::P, member2::P, dataset::D, curmaxsize::Int, options::LaSROptions
+    member1::P,
+    member2::P,
+    dataset::D,
+    curmaxsize::Int,
+    options::SymbolicRegression.AbstractOptions,
 )::Tuple{P,P,Bool,Float64} where {T,L,D<:Dataset{T,L},N,P<:PopMember{T,L,N}}
     llm_skip = false
     if options.use_llm && (rand() < options.llm_operation_weights.llm_crossover)
