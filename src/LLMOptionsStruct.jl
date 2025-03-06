@@ -59,7 +59,9 @@ function set_llm_mutation_weights(
     ])
 
     llm_randomize_w = llm_operation_weights.llm_randomize * randomize_w
-    llm_mutate_w = llm_operation_weights.llm_mutate * sum(values(oth_mutations)) / length(oth_mutations)
+    llm_mutate_w =
+        llm_operation_weights.llm_mutate * sum(values(oth_mutations)) /
+        length(oth_mutations)
 
     # modify the original values of the mutation weights
     mutation_weights.randomize = (1 - llm_operation_weights.llm_randomize) * randomize_w

@@ -16,9 +16,6 @@ using LibraryAugmentedSymbolicRegression:
 import LibraryAugmentedSymbolicRegression: mutate!
 
 X = randn(Float32, 2, 100)
-# a = X[1, :]
-# b = X[2, :]
-# y = 2 * cos.(a) + b .^ 2 .- 2
 y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
 p = 0.001
