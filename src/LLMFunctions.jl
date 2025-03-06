@@ -549,7 +549,9 @@ end
 
 """LLM Crossover between two expressions"""
 function llm_crossover_trees(
-    tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}, options::AbstractOptions
+    tree1::AbstractExpressionNode{T},
+    tree2::AbstractExpressionNode{T},
+    options::AbstractOptions,
 )::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
     expr1 = render_expr(tree1, options)
     expr2 = render_expr(tree2, options)

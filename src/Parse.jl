@@ -31,7 +31,9 @@ function _make_constant_node(val::Number, ::Type{T}) where {T<:DATA_TYPE}
     return Node{T}(; val=convert(T, val))
 end
 
-function _make_variable_node(sym::Symbol, options::AbstractOptions, ::Type{T}) where {T<:DATA_TYPE}
+function _make_variable_node(
+    sym::Symbol, options::AbstractOptions, ::Type{T}
+) where {T<:DATA_TYPE}
     if sym === :C
         return Node{T}(; val=convert(T, 1))
     end

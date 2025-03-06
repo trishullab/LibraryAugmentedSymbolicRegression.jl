@@ -15,8 +15,11 @@ using LibraryAugmentedSymbolicRegression:
     eval_tree_array
 import LibraryAugmentedSymbolicRegression: mutate!
 
-X = randn(Float32, 5, 100)
-y = 2 * cos.(X[4, :]) + X[1, :] .^ 2 .- 2
+X = randn(Float32, 2, 100)
+# a = X[1, :]
+# b = X[2, :]
+# y = 2 * cos.(a) + b .^ 2 .- 2
+y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
 p = 0.001
 options = LaSROptions(;
@@ -29,9 +32,9 @@ options = LaSROptions(;
     llm_operation_weights=LLMOperationWeights(;
         llm_crossover=p, llm_mutate=p, llm_randomize=p
     ),
-    llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
+    llm_context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
     llm_recorder_dir="lasr_runs/",
-    variable_names=Dict("a" => "angle", "b" => "bias"),
+    variable_names=Dict("x1" => "theta", "x2" => "offset"),
     prompts_dir="prompts/",
     api_key="token-abc123",
     model="meta-llama/Meta-Llama-3.1-8B-Instruct",

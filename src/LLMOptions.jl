@@ -126,8 +126,13 @@ $(LASR_OPTIONS_DESCRIPTION)
     use_llm = something(use_llm, _default_options.use_llm)
     use_concepts = something(use_concepts, _default_options.use_concepts)
     use_concept_evolution = something(use_concept_evolution, _default_options.use_concept_evolution)
-    mutation_weights = something(mutation_weights, _default_options.mutation_weights)
-    llm_operation_weights = something(llm_operation_weights, _default_options.llm_operation_weights)
+    if use_llm
+        mutation_weights = something(mutation_weights, _default_options.mutation_weights)
+        llm_operation_weights = something(llm_operation_weights, _default_options.llm_operation_weights)
+    else
+        mutation_weights = _default_options.mutation_weights
+        llm_operation_weights = _default_options.llm_operation_weights
+    end
     num_pareto_context = something(num_pareto_context, _default_options.num_pareto_context)
     num_generated_equations = something(num_generated_equations, _default_options.num_generated_equations)
     num_generated_concepts = something(num_generated_concepts, _default_options.num_generated_concepts)
@@ -190,12 +195,7 @@ $(LASR_OPTIONS_DESCRIPTION)
     sr_options = SymbolicRegression.Options(;
         NamedTuple(sr_options_keys .=> Tuple(kws[k] for k in sr_options_keys))...
     )
-    options = LaSROptions{
-        typeof(sr_options)
-    }(
-        llm_options,
-        sr_options  
-    )
+    options = LaSROptions{typeof(sr_options)}(llm_options, sr_options)
     return options
 end
 

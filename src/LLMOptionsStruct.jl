@@ -45,6 +45,8 @@ This function adjusts the mutation weights of a LaSR model by incorporating the 
 5. Sets the new values for `llm_randomize` and `llm_mutate` in the `mutation_weights`.
 
 The function returns the updated `mutation_weights` with the new values.
+
+We give special consideration to the `randomize` weight because it is independently sampled from the other mutation weights.
 """
 function set_llm_mutation_weights(
     mutation_weights::LaSRMutationWeights, llm_operation_weights::LLMOperationWeights
@@ -57,7 +59,7 @@ function set_llm_mutation_weights(
     ])
 
     llm_randomize_w = llm_operation_weights.llm_randomize * randomize_w
-    llm_mutate_w = llm_operation_weights.llm_mutate * sum(values(oth_mutations))
+    llm_mutate_w = llm_operation_weights.llm_mutate * sum(values(oth_mutations)) / length(oth_mutations)
 
     # modify the original values of the mutation weights
     mutation_weights.randomize = (1 - llm_operation_weights.llm_randomize) * randomize_w
