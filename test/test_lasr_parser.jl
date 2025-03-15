@@ -24,7 +24,7 @@ for depth in [5, 9]
             end
             str_tree = string_tree(tree, options)
             @test str_tree == String(strip(str_tree, [' ', '\n', '"', ',', '.', '[', ']']))
-            expr_tree = parse_expr(str_tree, options, Float32)
+            expr_tree = parse_expr(Float32, str_tree, options)
             expr_output = expr_tree(data, options.operators)
             @test isapprox(expr_output, output)
         end

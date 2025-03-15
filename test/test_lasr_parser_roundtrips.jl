@@ -27,7 +27,7 @@ for depth in [5, 9]
             )
 
             rendered_tree = render_expr(tree, options)
-            expr_tree = parse_expr(rendered_tree, options, Float32)
+            expr_tree = parse_expr(Float32, rendered_tree, options)
             expr_tree_str = string_tree(expr_tree, options)
             @test str_tree_wo_constants == expr_tree_str
         end

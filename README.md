@@ -77,23 +77,28 @@ y = @. 2 * cos(X.a * 23.5) - X.b^2
 # with some noise:
 y = y .+ randn(500) .* 1e-3
 
+
+p = 0.001
 model = LaSRRegressor(;
-    niterations=50,
-    binary_operators=[+, -, *],
+    # SR.jl Options
+    niterations=40,
+    binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
+    populations=20,
+    # LaSR Options
     use_llm=true,
     use_concepts=true,
     use_concept_evolution=true,
-    mutation_weights=LaSRMutationWeights(; llm_mutate=0.1, llm_randomize=0.1),
-    llm_operation_weights=LLMOperationWeights(; llm_crossover=0.1),
-    llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
-    llm_recorder_dir="lasr_runs/",
-    variable_names=Dict("a" => "angle", "b" => "bias"),
+    llm_operation_weights=LLMOperationWeights(;
+        llm_crossover=p, llm_mutate=p, llm_randomize=p
+    ),
+    llm_context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
+    variable_names=Dict("a" => "theta", "b" => "offset"),
     prompts_dir="prompts/",
     api_key="token-abc123",
-    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),
-    verbose=true,
+    verbose=true, # Set to true to see LLM generation logs.
 )
 mach = machine(model, X, y)
 
@@ -120,7 +125,7 @@ llm_options = LaSRRegressor(
 
     use_concepts=true,
     # Whether to use natural language concepts in the search. (default: false)
-    # This makes the algorithm equivanlent to a specialization of FunSearch.
+    # Disabling this makes the algorithm equivalent to a specialized FunSearch.
 
     use_concept_evolution=true,
     # Whether to evolve the concepts after every iteration. (default: false)
@@ -128,7 +133,7 @@ llm_options = LaSRRegressor(
     mutation_weights=LaSRMutationWeights(; llm_mutate=0.1, llm_randomize=0.1),
     # Unnormalized mutation weights for the mutation operators.
 
-    llm_operation_weights=LLMOperationWeights(; llm_crossover=0.1),
+    llm_operation_weights=LLMOperationWeights(; llm_crossover=1e-2, llm_mutate=1e-2, llm_randomize=1e-2),
     # Normalized probability of using the LLM for crossover v/s using symbolic crossover.
 
     num_pareto_context=5
@@ -142,13 +147,11 @@ llm_options = LaSRRegressor(
     is_parametric::Bool=false,
     # @TODO: Need to change the interface to use node_type.
     # This boolean variable is a special flag to allow sampling parametric equations from LaSR.
-    llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
+    llm_context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
     # A natural language concept to start with.
 
 
-    llm_recorder_dir="lasr_runs/",
-    # Directory to log LLM interactions. Creates a file called llm_calls.txt in this directory.
-    variable_names=Dict("a" => "angle", "b" => "bias"),
+    variable_names=Dict("x1" => "theta", "x2" => "offset"),
     # The variable name that is passed to the LLM. This is useful to introduce domain knowledge to the LLM.
     prompts_dir="prompts/",
     # The location of the zero-shot prompts for the LLM. Specialize these prompts to your problem for better performance.
@@ -238,6 +241,8 @@ $ curl http://localhost:11434/v1/completions -H "Content-Type: application/json"
 Now, we can run the simple example in Julia with model_name as `llama3.1:latest` and the HTTP URL as `http://localhost:11434/v1`:
 
 ```julia
+using SymbolicRegression: SRLogger
+using TensorBoardLogger
 import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMWeights
 import MLJ: machine, fit!, predict, report
 
@@ -250,23 +255,31 @@ y = @. 2 * cos(X.a * 23.5) - X.b ^ 2
 # with some noise:
 y = y .+ randn(500) .* 1e-3
 
-model = LaSRRegressor(
-    niterations=50,
-    binary_operators=[+, -, *],
+# Adding a logger so we can see LaSR's progress.
+# Run $ pip install tensorboard
+# and then $ tensorboard --logdir .
+logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
+
+p = 0.001
+model = LaSRRegressor(;
+    niterations=40,
+    logger=logger,
+    binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
-    llm_options=LLMOptions(
-        use_llm=true,
-        lasr_weights=LLMWeights(llm_mutate=0.1, llm_crossover=0.1, llm_gen_random=0.1),
-        use_concept_evolution=true,
-        use_concepts=true,
-        api_key="token-abc123",
-        prompts_dir="prompts/",
-        llm_recorder_dir="lasr_runs/debug_0/",
-        model="llama3.1:latest",
-        api_kwargs=Dict("url" => "http://127.0.0.1:11434/v1"),
-        variable_names=Dict("a" => "angle", "b" => "bias"),
-        llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias."
-    )
+    populations=20,
+    use_llm=true,
+    use_concepts=true,
+    use_concept_evolution=true,
+    llm_operation_weights=LLMOperationWeights(;
+        llm_crossover=p, llm_mutate=p, llm_randomize=p
+    ),
+    llm_context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
+    variable_names=Dict("x1" => "theta", "x2" => "offset"),
+    prompts_dir="prompts/",
+    api_key="token-abc123",
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+    verbose=true, # Set to true to see LLM generation logs.
 )
 
 mach = machine(model, X, y)

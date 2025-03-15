@@ -13,9 +13,10 @@ using LibraryAugmentedSymbolicRegression:
     calculate_pareto_frontier,
     compute_complexity,
     string_tree,
-    SRLogger,
-    eval_tree_array
-import LibraryAugmentedSymbolicRegression: mutate!
+    LaSRLogger,
+    eval_tree_array,
+    LaSRRegressor
+import MLJ: machine, fit!, predict, report
 
 logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
 
@@ -23,7 +24,9 @@ X = randn(Float32, 2, 100)
 y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
 p = 0.001
-options = LaSROptions(;
+model = LaSRRegressor(;
+    niterations=40,
+    logger=logger,
     binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
     populations=20,
@@ -42,20 +45,7 @@ options = LaSROptions(;
     verbose=true, # Set to true to see LLM generation logs.
 )
 
-## The rest of the code is the same as the example.jl file.
-hall_of_fame = equation_search(X, y; niterations=40, options=options, logger=logger)
-
-dominating = calculate_pareto_frontier(hall_of_fame)
-
-trees = [member.tree for member in dominating]
-
-tree = trees[end]
-output, did_succeed = eval_tree_array(tree, X, options)
-
-for member in dominating
-    complexity = compute_complexity(member, options)
-    loss = member.loss
-    string = string_tree(member.tree, options)
-
-    println("$(complexity)\t$(loss)\t$(string)")
-end
+mach = machine(model, transpose(X), y)
+fit!(mach)
+rep = report(mach)
+pred = predict(mach, X)

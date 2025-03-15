@@ -3,37 +3,31 @@ import LibraryAugmentedSymbolicRegression:
     LaSROptions, LaSRRegressor, LaSRMutationWeights, LLMOperationWeights
 import MLJ: machine, fit!, predict, report
 
-# Dataset with two named features:
-X = (a=rand(500), b=rand(500))
+X = randn(Float32, 2, 100)
+y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
-# and one target:
-y = @. 2 * cos(X.a * 23.5) - X.b^2
-
-# with some noise:
-y = y .+ randn(500) .* 1e-3
-
+p = 0.001
 model = LaSRRegressor(;
-    niterations=50,
-    binary_operators=[+, -, *],
+    niterations=40,
+    binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
+    populations=20,
     use_llm=true,
     use_concepts=true,
     use_concept_evolution=true,
-    mutation_weights=LaSRMutationWeights(; llm_mutate=0.1, llm_randomize=0.1),
-    llm_operation_weights=LLMOperationWeights(; llm_crossover=0.1),
-    llm_context="We believe the function to be a trigonometric function of the angle and a quadratic function of the bias.",
-    llm_recorder_dir="lasr_runs/",
-    variable_names=Dict("a" => "angle", "b" => "bias"),
+    llm_operation_weights=LLMOperationWeights(;
+        llm_crossover=p, llm_mutate=p, llm_randomize=p
+    ),
+    llm_context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
+    variable_names=Dict("x1" => "theta", "x2" => "offset"),
     prompts_dir="prompts/",
     api_key="token-abc123",
-    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),
-    verbose=true,
+    verbose=true, # Set to true to see LLM generation logs.
 )
-mach = machine(model, X, y)
 
-# ensure ./prompts/ exists. If not, download and extract the prompts.zip file from the repository.
+mach = machine(model, transpose(X), y)
 fit!(mach)
-# open ./lasr_runs/debug_0/llm_calls.txt to see the LLM interactions.
 rep = report(mach)
-ypred = predict(mach, X)
+pred = predict(mach, transpose(X))

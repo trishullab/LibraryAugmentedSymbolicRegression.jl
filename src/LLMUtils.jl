@@ -24,18 +24,6 @@ using ..CoreModule: LLMOptions
 using ..ParseModule: render_expr, get_variable_names
 using JSON: parse
 
-"""LLM Recoder records the LLM calls for debugging purposes."""
-function llm_recorder(options::LLMOptions, expr::String, mode::String="debug")
-    if options.use_llm
-        if !isdir(options.llm_recorder_dir)
-            mkdir(options.llm_recorder_dir)
-        end
-        recorder = open(joinpath(options.llm_recorder_dir, "llm_calls.txt"), "a")
-        write(recorder, string("[", mode, "]\n", expr, "\n[/", mode, "]\n"))
-        close(recorder)
-    end
-end
-
 function load_prompt(path::String)::String
     # load prompt file 
     f = open(path, "r")

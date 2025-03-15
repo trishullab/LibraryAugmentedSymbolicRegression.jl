@@ -5,6 +5,7 @@ using StatsBase: StatsBase
 using Base: isvalid
 using SymbolicRegression
 using ..LaSRMutationWeightsModule: LaSRMutationWeights
+using ..LoggingModule: LaSRLogger
 
 """
     LLMOperationWeights(;kws...)
@@ -107,6 +108,7 @@ Base.@kwdef mutable struct LLMOptions
     num_pareto_context::Integer
     num_generated_equations::Integer
     num_generated_concepts::Integer
+    num_concept_crossover::Integer
     max_concepts::Integer
     # This is a cheeky hack to not have to deal with parametric types in LLMFunctions.jl. TODO: High priority rectify.
     is_parametric::Bool
@@ -114,7 +116,6 @@ Base.@kwdef mutable struct LLMOptions
 
     # LaSR Bookkeeping Utilities
     # llm_logger::Union{SymbolicRegression.AbstractSRLogger, Nothing}
-    llm_recorder_dir::Union{String,Nothing}
     variable_names::Union{Dict,Nothing}
     prompts_dir::Union{String,Nothing}
     idea_database::Union{Vector{AbstractString},Nothing}
@@ -124,6 +125,7 @@ Base.@kwdef mutable struct LLMOptions
     model::Union{String,Nothing}
     api_kwargs::Union{Dict,Nothing}
     http_kwargs::Union{Dict,Nothing}
+    lasr_logger::Union{LaSRLogger,Nothing}
     verbose::Bool
 end
 
