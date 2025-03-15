@@ -31,3 +31,5 @@ mach = machine(model, transpose(X), y)
 fit!(mach)
 rep = report(mach)
 pred = predict(mach, transpose(X))
+# The error should be less than 1e-5
+@test maximum(abs.(pred - y)) < 1e-5

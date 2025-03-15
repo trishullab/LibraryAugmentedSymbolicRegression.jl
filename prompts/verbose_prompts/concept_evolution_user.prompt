@@ -1,0 +1,42 @@
+You are given the following ideas about certain hidden phenomena:
+
+Idea 1: {{idea1}}
+Idea 2: {{idea2}}
+Idea 3: {{idea3}}
+Idea 4: {{idea4}}
+Idea 5: {{idea5}}
+
+I want you to:
+1. Provide a short summary (1–2 sentences) of how these ideas might intersect or relate.
+2. Propose {{N}} hypotheses that could lead to new or deeper insights into these hidden phenomena. 
+   - Avoid referencing their simplicity or complexity.
+   - Focus on unique, novel angles that might intrigue experts in any relevant field.
+3. For each hypothesis, add **one or two sentences** of commentary explaining why it could be valid or insightful (but do not mention simplicity/complexity).
+4. Finally, output a JSON array containing your {{N}} hypotheses, with no extra commentary or text after the JSON.
+
+Your final output format should look like this (example):
+
+-----
+Short summary tying the ideas together.
+
+Hypothesis 1
+Short commentary
+
+Hypothesis 2
+Short commentary
+
+...
+(Hypothesis N + commentary)
+
+```json
+["hyp1",
+ "hyp2",
+ ...
+ "hypN"]
+```
+-----
+
+Remember:
+- Do **not** talk about the “simplicity” or “complexity” of the phenomena.
+- Keep your hypotheses focused on interesting, domain-agnostic insights unless the ideas strongly suggest a specific field.
+- End with the JSON list and nothing else.

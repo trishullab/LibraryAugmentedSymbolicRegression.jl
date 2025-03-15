@@ -1,0 +1,26 @@
+Good Expression 1: {{gexpr1}}
+Good Expression 2: {{gexpr2}}
+Good Expression 3: {{gexpr3}}
+Good Expression 4: {{gexpr4}}
+Good Expression 5: {{gexpr5}}
+
+Bad Expression 1: {{bexpr1}}
+Bad Expression 2: {{bexpr2}}
+Bad Expression 3: {{bexpr3}}
+Bad Expression 4: {{bexpr4}}
+Bad Expression 5: {{bexpr5}}
+
+Please propose {{N}} unique hypotheses or assumptions that might explain why the good expressions arise under certain conditions or guiding principles—but exclude the bad expressions. Provide a short commentary explaining each hypothesis in a way that could intrigue top mathematicians, emphasizing potential structural or physical significance where relevant. 
+
+Constraints:
+- Do not discuss or compare expressions by their “simplicity” or “complexity.” 
+- Focus more on the good expressions’ mathematical structure and any possible physical analogs or interpretations.
+- Capital C is an arbitrary constant and needn’t be overemphasized.
+- End with a JSON list enumerating your {{N}} hypotheses using the format below (no extra text after the list):
+  ```json
+  ["hyp1",
+   "hyp2",
+   ...
+   "hyp{{N}}"
+  ]
+  ```

@@ -12,7 +12,7 @@ using LibraryAugmentedSymbolicRegression:
     calculate_pareto_frontier,
     compute_complexity,
     string_tree,
-    LaSRLogger,
+    SRLogger,
     eval_tree_array,
     LaSRRegressor
 import MLJ: machine, fit!, predict, report
@@ -47,4 +47,8 @@ model = LaSRRegressor(;
 mach = machine(model, transpose(X), y)
 fit!(mach)
 rep = report(mach)
-pred = predict(mach, X)
+pred = predict(mach, transpose(X))
+# The error should be less than 1e-5
+maxerr = maximum(abs.(pred - y))
+println("Maximum error: $maxerr for model: $(rep.equations[rep.best_idx])")
+@assert maxerr < 1e-5
