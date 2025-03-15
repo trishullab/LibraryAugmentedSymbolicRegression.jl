@@ -1,7 +1,6 @@
 # This isn't in the automated testing suite since it requires an LLM server running in the background.
 using Pkg
 Pkg.activate(".")
-Pkg.develop(; path="../")
 Pkg.instantiate()
 using Revise
 using TensorBoardLogger
