@@ -435,18 +435,16 @@ function generate_concepts(dominating, worst_members, options::AbstractOptions)
         return nothing
     end
 
-    for _ in 1:options.num_concept_crossover
+    for _ in 1:(options.num_concept_crossover)
         a = rand(1:N)
-        chosen_idea = String(
-            strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']'])
-        )
+        chosen_idea = String(strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']']))
         log_generation!(
             options.lasr_logger; id=gen_id, mode="generate_concepts", chosen=chosen_idea
         )
         push!(options.idea_database, chosen_idea)
     end
 
-    for _ in 1:options.num_concept_crossover
+    for _ in 1:(options.num_concept_crossover)
         out = concept_evolution(options.idea_database, options)
         if !isnothing(out)
             pushfirst!(options.idea_database, out)
