@@ -2,12 +2,18 @@ module LLMOptionsModule
 
 using DispatchDoctor: @unstable
 using SymbolicRegression
+import ..LLMOptionsStructModule
 using ..LLMOptionsStructModule:
-    LaSROptions, LLM_OPTIONS_KEYS, LaSRMutationWeights, LLMOperationWeights, LLMOptions
+    LaSROptions,
+    LLM_OPTIONS_KEYS,
+    LaSRMutationWeights,
+    LLMOperationWeights,
+    LLMOptions,
+    set_llm_mutation_weights
 using ..UtilsModule: @save_kwargs, @ignore
 
-create_lasr_mutation_weights(w::LaSRMutationWeights) = w
-create_lasr_mutation_weights(w::NamedTuple) = LaSRMutationWeights(; w...)
+create_mutation_weights(w::LaSRMutationWeights) = w
+create_mutation_weights(w::NamedTuple) = LaSRMutationWeights(; w...)
 
 create_llm_operation_weights(w::LLMOperationWeights) = w
 create_llm_operation_weights(w::NamedTuple) = LLMOperationWeights(; w...)
@@ -20,15 +26,15 @@ const LASR_OPTIONS_DESCRIPTION = """
     NOTE: If `use_llm` is false, then `use_concepts` is ignored.
 - `use_concept_evolution::Bool`: Whether to evolve the concepts after every iteration. (default: false)
     NOTE: If `use_concepts` is false, then `use_concept_evolution` is ignored.
-- `lasr_mutation_weights::LaSRMutationWeights`: Unnormalized mutation weights for the mutation operators (e.g., `llm_mutate`, `llm_randomize`).
+- `mutation_weights::LaSRMutationWeights`: Unnormalized mutation weights for the mutation operators (e.g., `llm_mutate`, `llm_randomize`).
 - `llm_operation_weights::LLMOperationWeights`: Normalized probabilities of using LLM-based crossover vs. symbolic crossover.
 - `num_pareto_context::Int64`: Number of equations to sample from the Pareto frontier for summarization.
 - `num_generated_equations::Int64`: Number of new equations to generate from the LLM per iteration.
 - `num_generated_concepts::Int64`: Number of new concepts to generate from the LLM per iteration.
+- `num_concept_crossover::Int64`: Number of concepts to add for concept crossover. (default: 2)
 - `max_concepts::UInt32`: Maximum number of concepts to retain in the concept library. (default: 30)
 - `is_parametric::Bool`: A special flag to allow sampling parametric equations from LaSR. (default: false)
 - `llm_context::AbstractString`: A natural-language hint or context string passed to the LLM.
-- `llm_recorder_dir::AbstractString`: Directory to log LLM interactions (creates `llm_calls.txt`). (default: "lasr_runs/")
 - `variable_names::Union{Dict,Nothing}`: A mapping of symbolic variable names to domain-meaningful names. (default: nothing)
 - `prompts_dir::AbstractString`: The location of zero-shot prompts for the LLM. Specialize these prompts to your domain for better performance. (default: "prompts/")
 - `idea_database::Vector{AbstractString}`: A list of natural-language concept “ideas” for seeding the LLM. (default: [])
@@ -58,9 +64,8 @@ $(LASR_OPTIONS_DESCRIPTION)
     use_concepts::Bool=false,
     use_concept_evolution::Bool=false,
     @nospecialize(
-        lasr_mutation_weights::Union{
-            LaSRMutationWeights,AbstractVector,NamedTuple,Nothing
-        } = nothing
+        mutation_weights::Union{LaSRMutationWeights,AbstractVector,NamedTuple,Nothing} =
+            nothing
     ),
     @nospecialize(
         llm_operation_weights::Union{
@@ -72,12 +77,12 @@ $(LASR_OPTIONS_DESCRIPTION)
     num_pareto_context::Integer=5,
     num_generated_equations::Integer=5,
     num_generated_concepts::Integer=5,
+    num_concept_crossover::Integer=2,
     max_concepts::Integer=30,
     is_parametric::Bool=false,
     llm_context::Union{String,Nothing}=nothing,
 
     ## 3. LaSR Bookkeeping Utilities
-    llm_recorder_dir::Union{String,Nothing}=nothing,
     variable_names::Union{Dict,Nothing}=nothing,
     prompts_dir::Union{String,Nothing}=nothing,
     idea_database::Union{Vector{AbstractString},Nothing}=nothing,
@@ -121,15 +126,20 @@ $(LASR_OPTIONS_DESCRIPTION)
     use_llm = something(use_llm, _default_options.use_llm)
     use_concepts = something(use_concepts, _default_options.use_concepts)
     use_concept_evolution = something(use_concept_evolution, _default_options.use_concept_evolution)
-    lasr_mutation_weights = something(lasr_mutation_weights, _default_options.lasr_mutation_weights)
-    llm_operation_weights = something(llm_operation_weights, _default_options.llm_operation_weights)
+    if use_llm
+        mutation_weights = something(mutation_weights, _default_options.mutation_weights)
+        llm_operation_weights = something(llm_operation_weights, _default_options.llm_operation_weights)
+    else
+        mutation_weights = _default_options.mutation_weights
+        llm_operation_weights = _default_options.llm_operation_weights
+    end
     num_pareto_context = something(num_pareto_context, _default_options.num_pareto_context)
     num_generated_equations = something(num_generated_equations, _default_options.num_generated_equations)
     num_generated_concepts = something(num_generated_concepts, _default_options.num_generated_concepts)
+    num_concept_crossover = something(num_concept_crossover, _default_options.num_concept_crossover)
     max_concepts = something(max_concepts, _default_options.max_concepts)
     is_parametric = something(is_parametric, _default_options.is_parametric)
     llm_context = something(llm_context, _default_options.llm_context)
-    llm_recorder_dir = something(llm_recorder_dir, _default_options.llm_recorder_dir)
     variable_names = something(variable_names, _default_options.variable_names)
     prompts_dir = something(prompts_dir, _default_options.prompts_dir)
     idea_database = something(idea_database, _default_options.idea_database)
@@ -137,6 +147,7 @@ $(LASR_OPTIONS_DESCRIPTION)
     model = something(model, _default_options.model)
     api_kwargs = something(api_kwargs, _default_options.api_kwargs)
     http_kwargs = something(http_kwargs, _default_options.http_kwargs)
+    lasr_logger = nothing
     verbose = something(verbose, _default_options.verbose)
     #! format: on
     #################################
@@ -146,27 +157,27 @@ $(LASR_OPTIONS_DESCRIPTION)
         mkdir(prompts_dir)
     end
 
-    if !isdir(llm_recorder_dir)
-        @warn "LLM Recorder directory does not exist. Creating one at $llm_recorder_dir."
-        mkdir(llm_recorder_dir)
+    # Set mutation weights based on LLM operation weights
+    if !isnothing(mutation_weights) && !isnothing(llm_operation_weights)
+        mutation_weights = set_llm_mutation_weights(mutation_weights, llm_operation_weights)
     end
 
-    set_lasr_mutation_weights = create_lasr_mutation_weights(lasr_mutation_weights)
     set_llm_operation_weights = create_llm_operation_weights(llm_operation_weights)
+    set_mutation_weights = create_mutation_weights(mutation_weights)
 
     llm_options = LLMOptions(
         use_llm,
         use_concepts,
         use_concept_evolution,
-        set_lasr_mutation_weights,
+        set_mutation_weights,
         set_llm_operation_weights,
         num_pareto_context,
         num_generated_equations,
         num_generated_concepts,
+        num_concept_crossover,
         max_concepts,
         is_parametric,
         llm_context,
-        llm_recorder_dir,
         variable_names,
         prompts_dir,
         idea_database,
@@ -174,18 +185,24 @@ $(LASR_OPTIONS_DESCRIPTION)
         model,
         api_kwargs,
         http_kwargs,
+        lasr_logger,
         verbose,
     )
     sr_options_keys = filter(k -> !(k in LLM_OPTIONS_KEYS), keys(kws))
     sr_options = SymbolicRegression.Options(;
         NamedTuple(sr_options_keys .=> Tuple(kws[k] for k in sr_options_keys))...
     )
-    return LaSROptions(llm_options, sr_options)
+    options = LaSROptions{typeof(sr_options)}(llm_options, sr_options)
+    return options
 end
 
 # Make all `Options` available while also making `llm_options` accessible
 function Base.getproperty(options::LaSROptions, k::Symbol)
-    if k in LLM_OPTIONS_KEYS
+    if k == :llm_options
+        return getfield(options, :llm_options)
+    elseif k == :sr_options
+        return getfield(options, :sr_options)
+    elseif k in LLM_OPTIONS_KEYS
         return getproperty(getfield(options, :llm_options), k)
     else
         return getproperty(getfield(options, :sr_options), k)
@@ -194,7 +211,11 @@ end
 
 # Add setproperty! for `Options` and `llm_options`
 function Base.setproperty!(options::LaSROptions, k::Symbol, v)
-    if k in LLM_OPTIONS_KEYS
+    if k == :llm_options
+        return setfield!(options, :llm_options, v)
+    elseif k == :sr_options
+        return setfield!(options, :sr_options, v)
+    elseif k in LLM_OPTIONS_KEYS
         return setproperty!(getfield(options, :llm_options), k, v)
     else
         return setproperty!(getfield(options, :sr_options), k, v)
@@ -211,19 +232,21 @@ function default_options()
         use_llm=false,
         use_concepts=false,
         use_concept_evolution=false,
-        lasr_mutation_weights=LaSRMutationWeights(; llm_mutate=0.0, llm_randomize=0.0),
-        llm_operation_weights=LLMOperationWeights(; llm_crossover=0.0),
+        mutation_weights=LaSRMutationWeights(; llm_mutate=0.0, llm_randomize=0.0),
+        llm_operation_weights=LLMOperationWeights(;
+            llm_crossover=0.0, llm_mutate=0.0, llm_randomize=0.0
+        ),
 
         # LaSR Performance Modifiers
         num_pareto_context=5,
         num_generated_equations=5,
         num_generated_concepts=5,
+        num_concept_crossover=2,
         max_concepts=30,
         is_parametric=false,
         llm_context="",
 
         # LaSR Bookkeeping Utilities
-        llm_recorder_dir="lasr_runs/",
         variable_names=Dict(),
         prompts_dir="prompts/",
         idea_database=Vector{AbstractString}(),
@@ -233,6 +256,7 @@ function default_options()
         model="",
         api_kwargs=Dict("max_tokens" => 1000),
         http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),
+        lasr_logger=nothing,
         verbose=true,
     )
 end

@@ -12,23 +12,43 @@ Given a string (e.g., from `string_tree`) and an options object (containing
 operators, variable naming conventions, etc.), reconstruct an
 AbstractExpressionNode.
 """
-@unstable function parse_expr(
-    expr_str::String, options::AbstractOptions, ::Type{T}
+function parse_expr(
+    ::Type{T}, expr_str::String, options::AbstractOptions
 ) where {T<:DATA_TYPE}
-    parsed = Meta.parse(expr_str)
-    return _parse_expr(parsed, options, T)
+    try
+        parsed = Meta.parse(expr_str)
+        expr = _parse_expr(parsed, options, T)
+        # ensure that the expression can be rendered
+        render_expr(expr, options)
+        return expr
+    catch e
+        # Return 1.
+        return _make_constant_node(1, T)
+    end
 end
 
 function _make_constant_node(val::Number, ::Type{T}) where {T<:DATA_TYPE}
     return Node{T}(; val=convert(T, val))
 end
 
-function _make_variable_node(sym::Symbol, ::Type{T}) where {T<:DATA_TYPE}
+function _make_variable_node(
+    sym::Symbol, options::AbstractOptions, ::Type{T}
+) where {T<:DATA_TYPE}
     if sym === :C
         return Node{T}(; val=convert(T, 1))
     end
-
-    local idx = parse(Int, String(sym)[2:end])  # e.g. x5 => 5
+    # Get the list of variable names from options.
+    var_names = get_variable_names(options.variable_names)
+    str_sym = string(sym)
+    idx = findfirst(x -> x == str_sym, var_names)
+    if idx === nothing
+        # Fallback: try to interpret as the previous "x5" format.
+        try
+            idx = parse(Int, str_sym[2:end])
+        catch e
+            error("Unrecognized variable symbol: $sym")
+        end
+    end
     return Node{T}(; feature=idx)
 end
 
@@ -41,6 +61,13 @@ function _make_call_node(ex::Expr, options::AbstractOptions, ::Type{T}) where {T
         return Node{T}(; op=op_idx, l=children[1])
     elseif length(children) == 2
         return Node{T}(; op=op_idx, l=children[1], r=children[2])
+    elseif length(children) > 2
+        # Reduce an n-ary operator to a binary tree (left-associative)
+        node = Node{T}(; op=op_idx, l=children[1], r=children[2])
+        for child in children[3:end]
+            node = Node{T}(; op=op_idx, l=node, r=child)
+        end
+        return node
     else
         error("Operator with $(length(children)) children not supported.")
     end
@@ -58,8 +85,19 @@ end
 
 @unstable function _find_operator_index(op_sym, options::AbstractOptions)
     function_str_map = Dict("pow" => "^")
-    binops = map((x) -> _render_function(x, function_str_map), options.operators.binops)
-    unaops = map((x) -> _render_function(x, function_str_map), options.operators.unaops)
+    binops = map(x -> _render_function(x, function_str_map), options.operators.binops)
+    unaops = map(x -> _render_function(x, function_str_map), options.operators.unaops)
+
+    # Special handling for the power operator '^'
+    if string(op_sym) == "^"
+        idx = findfirst(x -> x == "^", binops)
+        if idx === nothing
+            # Return a new index for exponentiation if not already in the list.
+            return UInt8(length(binops) + 1)
+        else
+            return UInt8(idx)
+        end
+    end
 
     for (i, opfunc) in pairs(binops)
         if opfunc == string(op_sym)
@@ -75,12 +113,11 @@ end
 
     return error("Unrecognized operator symbol: $op_sym")
 end
-
-@unstable function _parse_expr(ex, options::AbstractOptions, ::Type{T}) where {T<:DATA_TYPE}
+function _parse_expr(ex, options::AbstractOptions, ::Type{T}) where {T<:DATA_TYPE}
     if ex isa Number
         return _make_constant_node(ex, T)
     elseif ex isa Symbol
-        return _make_variable_node(ex, T)
+        return _make_variable_node(ex, options, T)
     elseif ex isa Expr
         if ex.head === :call
             return _make_call_node(ex, options, T)

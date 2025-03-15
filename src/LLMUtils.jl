@@ -19,22 +19,10 @@ using DynamicExpressions:
     has_operators,
     string_tree,
     AbstractOperatorEnum
-using SymbolicRegression: DATA_TYPE
-using ..LLMOptionsModule: LaSROptions
-using ..ParseModule: render_expr
+using SymbolicRegression: DATA_TYPE, AbstractOptions
+using ..CoreModule: LLMOptions
+using ..ParseModule: render_expr, get_variable_names
 using JSON: parse
-
-"""LLM Recoder records the LLM calls for debugging purposes."""
-function llm_recorder(options::LaSROptions, expr::String, mode::String="debug")
-    if options.use_llm
-        if !isdir(options.llm_recorder_dir)
-            mkdir(options.llm_recorder_dir)
-        end
-        recorder = open(joinpath(options.llm_recorder_dir, "llm_calls.txt"), "a")
-        write(recorder, string("[", mode, "]\n", expr, "\n[/", mode, "]\n"))
-        close(recorder)
-    end
-end
 
 function load_prompt(path::String)::String
     # load prompt file 
@@ -49,12 +37,12 @@ function convertDict(d)::NamedTuple
     return (; Dict(Symbol(k) => v for (k, v) in d)...)
 end
 
-function get_vars(options::LaSROptions)::String
+function get_vars(options::AbstractOptions)::String
     variable_names = get_variable_names(options.variable_names)
     return join(variable_names, ", ")
 end
 
-function get_ops(options::LaSROptions)::String
+function get_ops(options::AbstractOptions)::String
     binary_operators = map(v -> string(v), options.operators.binops)
     unary_operators = map(v -> string(v), options.operators.unaops)
     # Binary Ops: +, *, -, /, safe_pow (^)
@@ -79,6 +67,8 @@ If the element_list is shorter than the number of occurrences of the element_id_
 function construct_prompt(
     user_prompt::String, element_list::Vector, element_id_tag::String
 )::String
+    # Remove all None elements from the element_list
+    element_list = filter(x -> x != "None", element_list)
     # Split the user prompt into lines
     lines = split(user_prompt, r"\n|\r\n")
 

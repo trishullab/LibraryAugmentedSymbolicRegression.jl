@@ -1,15 +1,31 @@
+# This isn't in the automated testing suite since it requires an LLM server running in the background.
 using Pkg
 Pkg.activate(".")
 Pkg.instantiate()
+using Revise
 using TensorBoardLogger
-using LibraryAugmentedSymbolicRegression
-
-X = randn(Float32, 5, 100)
-y = 2 * cos.(X[4, :]) + X[1, :] .^ 2 .- 2
+using LibraryAugmentedSymbolicRegression:
+    LaSROptions,
+    LaSRMutationWeights,
+    LLMOperationWeights,
+    equation_search,
+    calculate_pareto_frontier,
+    compute_complexity,
+    string_tree,
+    SRLogger,
+    eval_tree_array,
+    LaSRRegressor
+import MLJ: machine, fit!, predict, report
 
 logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
-p = 0.0001
-options = LaSROptions(;
+
+X = randn(Float32, 2, 100)
+y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
+
+p = 0.001
+model = LaSRRegressor(;
+    niterations=40,
+    logger=logger,
     binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
     populations=20,
@@ -28,23 +44,11 @@ options = LaSROptions(;
     verbose=true, # Set to true to see LLM generation logs.
 )
 
-hall_of_fame = equation_search(
-    X, y; niterations=40, options=options, parallelism=:multithreading, logger=logger
-)
-
-dominating = calculate_pareto_frontier(hall_of_fame)
-
-trees = [member.tree for member in dominating]
-
-tree = trees[end]
-output, did_succeed = eval_tree_array(tree, X, options)
-
-println("Complexity\tMSE\tEquation")
-
-for member in dominating
-    complexity = compute_complexity(member, options)
-    loss = member.loss
-    string = string_tree(member.tree, options)
-
-    println("$(complexity)\t$(loss)\t$(string)")
-end
+mach = machine(model, transpose(X), y)
+fit!(mach)
+rep = report(mach)
+pred = predict(mach, transpose(X))
+# The error should be less than 1e-5
+maxerr = maximum(abs.(pred - y))
+println("Maximum error: $maxerr for model: $(rep.equations[rep.best_idx])")
+@assert maxerr < 1e-5

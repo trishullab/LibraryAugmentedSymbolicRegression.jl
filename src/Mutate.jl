@@ -3,19 +3,22 @@ module MutateModule
 using SymbolicRegression
 using .SymbolicRegression: @recorder
 
-using ..LLMOptionsModule: LaSROptions
-using ..LLMFunctionsModule:
-    llm_mutate_tree, llm_recorder, llm_crossover_trees, llm_randomize_tree
+# It's important that we explicitly import the mutate! function from SymbolicRegression
+# so Julia knows that we're extending it.
+import SymbolicRegression: mutate!, MutationResult
+
+using ..LLMOptionsStructModule: LaSROptions
+using ..LLMFunctionsModule: llm_mutate_tree, llm_crossover_trees, llm_randomize_tree
+using ..LoggingModule: log_generation!
+using UUIDs: uuid1
 
 function mutate!(
     tree::N,
-    ::P,
+    member::P,
     ::Val{:llm_mutate},
     ::SymbolicRegression.AbstractMutationWeights,
-    options::LaSROptions;
+    options::SymbolicRegression.AbstractOptions;
     recorder::SymbolicRegression.RecordType,
-    curmaxsize,
-    nfeatures,
     kws...,
 ) where {T,N<:SymbolicRegression.AbstractExpression{T},P<:SymbolicRegression.PopMember}
     tree = llm_mutate_tree(tree, options)
@@ -25,10 +28,10 @@ end
 
 function mutate!(
     tree::N,
-    ::P,
+    member::P,
     ::Val{:llm_randomize},
     ::SymbolicRegression.AbstractMutationWeights,
-    options::LaSROptions;
+    options::SymbolicRegression.AbstractOptions;
     recorder::SymbolicRegression.RecordType,
     curmaxsize,
     nfeatures,
@@ -39,11 +42,18 @@ function mutate!(
     return MutationResult{N,P}(; tree=tree)
 end
 
-"""Generate a generation via crossover of two members."""
+"""
+Generate a generation via crossover of two members.
+"""
 function crossover_generation(
-    member1::P, member2::P, dataset::D, curmaxsize::Int, options::LaSROptions
+    member1::P,
+    member2::P,
+    dataset::D,
+    curmaxsize::Int,
+    options::SymbolicRegression.AbstractOptions,
 )::Tuple{P,P,Bool,Float64} where {T,L,D<:Dataset{T,L},N,P<:PopMember{T,L,N}}
     llm_skip = false
+
     if options.use_llm && (rand() < options.llm_operation_weights.llm_crossover)
         tree1 = member1.tree
         tree2 = member2.tree
@@ -54,9 +64,9 @@ function crossover_generation(
         tree2 = simplify_tree!(tree2, options.operators)
         tree2 = combine_operators(tree2, options.operators)
 
-        crossover_accepted = false
         nfeatures = dataset.nfeatures
 
+        # if it is constant, replace with random
         if check_constant(tree1)
             tree1 = with_contents(
                 tree1, gen_random_tree_fixed_size(rand(1:curmaxsize), options, nfeatures, T)
@@ -84,23 +94,26 @@ function crossover_generation(
             check_constraints(child_tree1, options, curmaxsize, afterSize1) &&
             check_constraints(child_tree2, options, curmaxsize, afterSize2)
 
+        # Generate a new UUID for logging this crossover attempt
+        gen_id = uuid1()
+        recorder_str =
+            render_expr(child_tree1, options) * " && " * render_expr(child_tree2, options)
+
         if successful_crossover
-            recorder_str =
-                render_expr(child_tree1, options) *
-                " && " *
-                render_expr(child_tree2, options)
-            llm_recorder(options.llm_options, recorder_str, "crossover")
+            log_generation!(
+                options.lasr_logger; id=gen_id, mode="crossover", chosen=recorder_str
+            )
             llm_skip = true
         else
-            recorder_str =
-                render_expr(child_tree1, options) *
-                " && " *
-                render_expr(child_tree2, options)
-            llm_recorder(options.llm_options, recorder_str, "crossover|failed")
+            log_generation!(
+                options.lasr_logger; id=gen_id, mode="crossover", failed=recorder_str
+            )
             child_tree1, child_tree2 = crossover_trees(tree1, tree2)
         end
     end
+
     if !llm_skip
+        # Fall back to the default SR approach
         return crossover_generation(
             member1, member2, dataset, curmaxsize, options.sr_options
         )

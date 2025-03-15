@@ -1,7 +1,7 @@
 name = "LibraryAugmentedSymbolicRegression"
 uuid = "158930c3-947c-4174-974b-74b39e64a28f"
-authors = ["AryaGrayeli <arya.grayeli@gmail.com>", "AtharvaSehgal <atharva.sehgal@gmail.com>", "MilesCranmer <miles.cranmer@gmail.com>"]
-version = "0.2.0"
+authors = ["AtharvaSehgal <atharva.sehgal@gmail.com>", "AryaGrayeli <arya.grayeli@gmail.com>", "MilesCranmer <miles.cranmer@gmail.com>"]
+version = "0.3.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -28,6 +28,7 @@ Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 SymbolicRegression = "8254be44-1295-4e6a-a16d-46603ac705cb"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
 ADTypes = "^1.4.0"
@@ -52,6 +53,7 @@ PromptingTools = "0.65 - 0.72"
 Random = "<0.0.1, 1"
 Reexport = "1"
 StatsBase = "0.33, 0.34"
-SymbolicRegression = "1.7"
+SymbolicRegression = "^1.8"
 TOML = "<0.0.1, 1"
+UUIDs = "1"
 julia = "1.10"
