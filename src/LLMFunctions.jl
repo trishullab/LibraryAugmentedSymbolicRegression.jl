@@ -23,9 +23,9 @@ using DynamicExpressions:
 using Compat: Returns, @inline
 using SymbolicRegression:
     Options, DATA_TYPE, gen_random_tree_fixed_size, random_node_and_parent, AbstractOptions
+using SymbolicRegression.MutationFunctionsModule: with_contents_for_mutation
 using ..LLMOptionsModule: LaSROptions
 using ..LLMUtilsModule:
-    llm_recorder,
     load_prompt,
     convertDict,
     get_vars,
@@ -34,6 +34,7 @@ using ..LLMUtilsModule:
     format_pareto,
     sample_context
 using ..ParseModule: render_expr, parse_expr
+using ..LoggingModule: log_generation!
 using PromptingTools:
     SystemMessage,
     UserMessage,
@@ -44,8 +45,9 @@ using PromptingTools:
     OllamaSchema,
     OpenAISchema
 using JSON: parse
+using UUIDs: uuid1
 
-function llm_randomize_tree(
+@unstable function llm_randomize_tree(
     ex::AbstractExpression,
     curmaxsize::Int,
     options::AbstractOptions,
@@ -59,7 +61,8 @@ function llm_randomize_tree(
     )
     return ex
 end
-function llm_randomize_tree(
+
+@unstable function llm_randomize_tree(
     ::AbstractExpressionNode{T},
     curmaxsize::Int,
     options::AbstractOptions,
@@ -71,7 +74,7 @@ function llm_randomize_tree(
 end
 
 function _gen_llm_random_tree(
-    node_count::Int, options::LaSROptions, nfeatures::Int, ::Type{T}
+    node_count::Int, options::AbstractOptions, nfeatures::Int, ::Type{T}
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
     if isnothing(options.idea_database)
         assumptions = []
@@ -115,7 +118,11 @@ function _gen_llm_random_tree(
         "\n",
     )
 
-    llm_recorder(options.llm_options, rendered_msg, "llm_input|gen_random")
+    # Instantiate ID once for all subsequent log calls in this function
+    gen_id = uuid1()
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="gen_random", llm_input=rendered_msg
+    )
 
     msg = nothing
     try
@@ -133,17 +140,22 @@ function _gen_llm_random_tree(
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "failed|gen_random")
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="gen_random", failed="None." * string(e)
+        )
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
-    llm_recorder(options.llm_options, string(msg.content), "llm_output|gen_random")
+
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="gen_random", llm_output=string(msg.content)
+    )
 
     gen_tree_options = parse_msg_content(String(msg.content))
 
-    N = min(size(gen_tree_options)[1], N)
+    N = min(size(gen_tree_options)[1], options.num_generated_equations)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "failed|gen_random")
+        log_generation!(options.lasr_logger; id=gen_id, mode="gen_random", failed="None")
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
@@ -157,16 +169,21 @@ function _gen_llm_random_tree(
         if t.val == 1 && t.constant
             continue
         end
-        llm_recorder(options.llm_options, render_expr(t, options), "gen_random")
-
+        log_generation!(
+            options.lasr_logger;
+            id=gen_id,
+            mode="gen_random",
+            chosen=render_expr(t, options),
+        )
         return t
     end
 
     out = parse_expr(
         T, String(strip(gen_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
-
-    llm_recorder(options.llm_options, render_expr(out, options), "gen_random")
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="gen_random", chosen=render_expr(out, options)
+    )
 
     if out.val == 1 && out.constant
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
@@ -208,13 +225,13 @@ function crossover_trees(
     return tree1, tree2
 end
 
-function concept_evolution(idea_database, options::LaSROptions)
+function concept_evolution(idea_database, options::AbstractOptions)
     num_ideas = size(idea_database)[1]
     if num_ideas <= options.max_concepts
         return nothing
     end
 
-    ideas = [idea_database[rand((options.idea_threshold + 1):num_ideas)] for _ in 1:n_ideas]
+    ideas = [idea_database[rand((options.max_concepts + 1):num_ideas)] for _ in 1:num_ideas]
     conversation = [
         SystemMessage(load_prompt(options.prompts_dir * "concept_evolution_system.prompt")),
         UserMessage(
@@ -225,6 +242,7 @@ function concept_evolution(idea_database, options::LaSROptions)
             ),
         ),
     ]
+
     rendered_msg = join(
         [
             x["content"] for x in render(
@@ -238,7 +256,12 @@ function concept_evolution(idea_database, options::LaSROptions)
         ],
         "\n",
     )
-    llm_recorder(options.llm_options, rendered_msg, "llm_input|concept_evolution")
+
+    # Instantiate ID once for this function
+    gen_id = uuid1()
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="concept_evolution", llm_input=rendered_msg
+    )
 
     msg = nothing
     try
@@ -252,26 +275,40 @@ function concept_evolution(idea_database, options::LaSROptions)
             http_kwargs=convertDict(options.http_kwargs),
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "failed|concept_evolution")
+        log_generation!(
+            options.lasr_logger;
+            id=gen_id,
+            mode="concept_evolution",
+            failed="None." * string(e),
+        )
         return nothing
     end
-    llm_recorder(options.llm_options, string(msg.content), "llm_output|concept_evolution")
+
+    log_generation!(
+        options.lasr_logger;
+        id=gen_id,
+        mode="concept_evolution",
+        llm_output=string(msg.content),
+    )
 
     idea_options = parse_msg_content(String(msg.content))
 
-    N = min(size(idea_options)[1], N)
+    N = min(size(idea_options)[1], options.num_generated_concepts)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "failed|concept_evolution")
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="concept_evolution", failed="None"
+        )
         return nothing
     end
 
-    # only choose one, merging ideas not really crossover
     chosen_idea = String(
         strip(idea_options[rand(1:N)], [' ', '\n', '"', ',', '.', '[', ']'])
     )
 
-    llm_recorder(options.llm_options, chosen_idea, "chosen|concept_evolution")
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="concept_evolution", chosen=chosen_idea
+    )
 
     return chosen_idea
 end
@@ -282,18 +319,6 @@ end
 end
 
 function parse_msg_content(msg_content::String)::Vector{String}
-    # old method:
-    # find first JSON list
-    # first_idx = findfirst('[', content)
-    # last_idx = findfirst(']', content)
-    # content = chop(content, head=first_idx, tail=length(content) - last_idx + 1)
-
-    # out_list = split(content, ",")
-    # for i in 1:length(out_list)
-    #     out_list[i] = replace(out_list[i], "//.*" => "") # filter comments
-    # end
-
-    # new method (for Llama since it follows directions better):
     # Attempt extraction with several patterns in order
     patterns = [r"```json(.*?)```"s, r"```(.*?)```"s, r"(\[.*?\])"s]
 
@@ -324,7 +349,7 @@ function parse_msg_content(msg_content::String)::Vector{String}
     return String[]
 end
 
-function generate_concepts(dominating, worst_members, options::LaSROptions)
+function generate_concepts(dominating, worst_members, options::AbstractOptions)
     # turn dominating pareto curve into ideas as strings
     if isnothing(dominating)
         return nothing
@@ -361,7 +386,11 @@ function generate_concepts(dominating, worst_members, options::LaSROptions)
         "\n",
     )
 
-    llm_recorder(options.llm_options, rendered_msg, "llm_input|generate_concepts")
+    # Instantiate ID for this function
+    gen_id = uuid1()
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="generate_concepts", llm_input=rendered_msg
+    )
 
     msg = nothing
     try
@@ -379,42 +408,43 @@ function generate_concepts(dominating, worst_members, options::LaSROptions)
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "failed|generate_concepts")
+        log_generation!(
+            options.lasr_logger;
+            id=gen_id,
+            mode="generate_concepts",
+            failed="None." * string(e),
+        )
         return nothing
     end
 
-    llm_recorder(options.llm_options, string(msg.content), "llm_output|generate_concepts")
+    log_generation!(
+        options.lasr_logger;
+        id=gen_id,
+        mode="generate_concepts",
+        llm_output=string(msg.content),
+    )
 
     idea_options = parse_msg_content(String(msg.content))
 
-    N = min(size(idea_options)[1], N)
+    N = min(size(idea_options)[1], options.num_generated_concepts)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "failed|generate_concepts")
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="generate_concepts", failed="None"
+        )
         return nothing
     end
 
-    a = rand(1:N)
-
-    chosen_idea1 = String(strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']']))
-
-    llm_recorder(options.llm_options, chosen_idea1, "chosen|generate_concepts")
-    pushfirst!(options.idea_database, chosen_idea1)
-
-    if N > 1
-        b = rand(1:(N - 1))
-        if a == b
-            b += 1
-        end
-        chosen_idea2 = String(strip(idea_options[b], [' ', '\n', '"', ',', '.', '[', ']']))
-
-        llm_recorder(options.llm_options, chosen_idea2, "chosen|generate_concepts")
-
-        pushfirst!(options.idea_database, chosen_idea2)
+    for _ in 1:(options.num_concept_crossover)
+        a = rand(1:N)
+        chosen_idea = String(strip(idea_options[a], [' ', '\n', '"', ',', '.', '[', ']']))
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="generate_concepts", chosen=chosen_idea
+        )
+        push!(options.idea_database, chosen_idea)
     end
 
-    num_add = 2
-    for _ in 1:num_add
+    for _ in 1:(options.num_concept_crossover)
         out = concept_evolution(options.idea_database, options)
         if !isnothing(out)
             pushfirst!(options.idea_database, out)
@@ -423,7 +453,7 @@ function generate_concepts(dominating, worst_members, options::LaSROptions)
 end
 
 function llm_mutate_tree(
-    ex::AbstractExpression{T}, options::LaSROptions
+    ex::AbstractExpression{T}, options::AbstractOptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
     tree = get_contents(ex)
     ex = with_contents(ex, llm_mutate_tree(tree, options))
@@ -432,7 +462,7 @@ end
 
 """LLM Mutation on a tree"""
 function llm_mutate_tree(
-    tree::AbstractExpressionNode{T}, options::LaSROptions
+    tree::AbstractExpressionNode{T}, options::AbstractOptions
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
     expr = render_expr(tree, options)
 
@@ -469,13 +499,16 @@ function llm_mutate_tree(
                 variables=get_vars(options),
                 operators=get_ops(options),
                 N=options.num_generated_equations,
+                expr=expr,
                 no_system_message=false,
             )
         ],
         "\n",
     )
 
-    llm_recorder(options.llm_options, rendered_msg, "llm_input|mutate")
+    # Instantiate ID for this function
+    gen_id = uuid1()
+    log_generation!(options.lasr_logger; id=gen_id, mode="mutate", llm_input=rendered_msg)
 
     msg = nothing
     try
@@ -494,19 +527,22 @@ function llm_mutate_tree(
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "failed|mutate")
-        # log error in llm_recorder
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="mutate", failed="None." * string(e)
+        )
         return tree
     end
 
-    llm_recorder(options.llm_options, string(msg.content), "llm_output|mutate")
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="mutate", llm_output=string(msg.content)
+    )
 
     mut_tree_options = parse_msg_content(String(msg.content))
 
-    N = min(size(mut_tree_options)[1], N)
+    N = min(size(mut_tree_options)[1], options.num_generated_equations)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "failed|mutate")
+        log_generation!(options.lasr_logger; id=gen_id, mode="mutate", failed="None")
         return tree
     end
 
@@ -521,8 +557,9 @@ function llm_mutate_tree(
             continue
         end
 
-        llm_recorder(options.llm_options, render_expr(t, options), "chosen|mutate")
-
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(t, options)
+        )
         return t
     end
 
@@ -530,13 +567,14 @@ function llm_mutate_tree(
         T, String(strip(mut_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
 
-    llm_recorder(options.llm_options, render_expr(out, options), "chosen|mutate")
-
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(out, options)
+    )
     return out
 end
 
 function llm_crossover_trees(
-    ex1::E, ex2::E, options::LaSROptions
+    ex1::E, ex2::E, options::AbstractOptions
 )::Tuple{E,E} where {T,E<:AbstractExpression{T}}
     tree1 = get_contents(ex1)
     tree2 = get_contents(ex2)
@@ -548,7 +586,9 @@ end
 
 """LLM Crossover between two expressions"""
 function llm_crossover_trees(
-    tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}, options::LaSROptions
+    tree1::AbstractExpressionNode{T},
+    tree2::AbstractExpressionNode{T},
+    options::AbstractOptions,
 )::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
     expr1 = render_expr(tree1, options)
     expr2 = render_expr(tree2, options)
@@ -581,6 +621,7 @@ function llm_crossover_trees(
             ),
         ),
     ]
+
     rendered_msg = join(
         [
             x["content"] for x in render(
@@ -589,13 +630,19 @@ function llm_crossover_trees(
                 variables=get_vars(options),
                 operators=get_ops(options),
                 N=options.num_generated_equations,
+                expr1=expr1,
+                expr2=expr2,
                 no_system_message=false,
             )
         ],
         "\n",
     )
 
-    llm_recorder(options.llm_options, rendered_msg, "llm_input|crossover")
+    # Instantiate ID for crossover
+    gen_id = uuid1()
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="crossover", llm_input=rendered_msg
+    )
 
     msg = nothing
     try
@@ -615,21 +662,25 @@ function llm_crossover_trees(
             verbose=options.verbose,
         )
     catch e
-        llm_recorder(options.llm_options, "None " * string(e), "failed|crossover")
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="crossover", failed="None." * string(e)
+        )
         return tree1, tree2
     end
 
-    llm_recorder(options.llm_options, string(msg.content), "llm_output|crossover")
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="crossover", llm_output=string(msg.content)
+    )
 
     cross_tree_options = parse_msg_content(String(msg.content))
 
     cross_tree1 = nothing
     cross_tree2 = nothing
 
-    N = min(size(cross_tree_options)[1], N)
+    N = min(size(cross_tree_options)[1], options.num_generated_equations)
 
     if N == 0
-        llm_recorder(options.llm_options, "None", "failed|crossover")
+        log_generation!(options.lasr_logger; id=gen_id, mode="crossover", failed="None")
         return tree1, tree2
     end
 
@@ -640,8 +691,9 @@ function llm_crossover_trees(
             options,
         )
 
-        llm_recorder(options.llm_options, render_expr(t, options), "chosen|crossover")
-
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="crossover", chosen=render_expr(t, options)
+        )
         return t, tree2
     end
 
@@ -682,7 +734,7 @@ function llm_crossover_trees(
 
     recording_str =
         render_expr(cross_tree1, options) * " && " * render_expr(cross_tree2, options)
-    llm_recorder(options.llm_options, recording_str, "chosen|crossover")
+    log_generation!(options.lasr_logger; id=gen_id, mode="crossover", chosen=recording_str)
 
     return cross_tree1, cross_tree2
 end

@@ -2,9 +2,11 @@
 using HTTP
 
 try
-    resp = HTTP.get("http://127.0.0.1:11434")
+    # if a auth-token is needed, use `token-abc123` as the authorization-token
+    header = Dict("Authorization" => "Bearer token-abc123")
+    resp = HTTP.get("http://127.0.0.1:11440/health", header)
     @test resp.status == 200
 catch err
-    println("Error reaching LLaMA server at port 11434")
+    println("Error reaching LLaMA server at port 11440")
     @show err
 end

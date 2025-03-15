@@ -22,6 +22,7 @@ using DynamicQuantities:
     ustrip,
     dimension
 using LossFunctions: SupervisedLoss
+using SymbolicRegression
 using SymbolicRegression.InterfaceDynamicQuantitiesModule: get_dimensions_type
 using SymbolicRegression.CoreModule:
     Options, Dataset, AbstractMutationWeights, MutationWeights, LOSS_TYPE, ComplexityMapping
@@ -54,14 +55,9 @@ import SymbolicRegression.MLJInterfaceModule:
     SRFitResultTypes
 
 using ..CoreModule:
-    LLMMutationProbabilities,
-    LaSRMutationWeights,
-    LLMOperationWeights,
-    LLMOptions,
-    LaSROptions,
-    LASR_DEFAULT_OPTIONS
+    LaSRMutationWeights, LLMOperationWeights, LLMOptions, LaSROptions, LASR_DEFAULT_OPTIONS
 
-using ..UtilsModule: @ignore
+using ..UtilsModule: @ignore, unique_by_argname
 
 @ignore mutable struct LaSRRegressor <: AbstractSingletargetSRRegressor
     selection_method::Function
@@ -105,7 +101,7 @@ function modelexpr(
     fields = last(last(struct_def.args).args).args
 
     # @TODO: Make a default options for LaSR and use it here instead.
-    DEFAULT_OPTIONS_MERGED = [DEFAULT_OPTIONS; LASR_DEFAULT_OPTIONS]
+    DEFAULT_OPTIONS_MERGED = unique_by_argname([LASR_DEFAULT_OPTIONS; DEFAULT_OPTIONS])
 
     # Add everything from `Options` constructor directly to struct:
     for (i, option) in enumerate(DEFAULT_OPTIONS_MERGED)

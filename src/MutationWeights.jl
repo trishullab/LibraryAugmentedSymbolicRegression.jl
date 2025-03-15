@@ -1,81 +1,72 @@
 module LaSRMutationWeightsModule
 
 using DispatchDoctor: @unstable
-using Base
-using SymbolicRegression
+using Base: Base
+using StatsBase: StatsBase
+using SymbolicRegression: AbstractMutationWeights
+import SymbolicRegression: sample_mutation
 
 """
-    LLMMutationProbabilities(;kws...)
+    LaSRMutationWeights <: AbstractMutationWeights
 
-Defines the probability of different LLM-based mutation operations.
-NOTE:
-    - These must sum up to 1.0.
-    - The LLM operations can be significantly slower than their symbolic counterparts,
-   so higher probabilities will result in slower operations. By default, we set all probs to 0.0.
+Defines the composite weights for all the mutation operations in the LaSR module. In addition to the mutation weights
+    defined in [`MutationWeights`](@ref SymbolicRegression.CoreModule.MutationWeightsModule.MutationWeights), this struct
+    also includes the weights for the LLM mutation operations. These LLM weights can either be manually set or we will
+    set them programmatically based on llm_operation_weights. The weights are normalized to sum to 1.0.
 
-# Arguments
-- `llm_mutate::Float64`: Probability of calling LLM version of mutation.
-- `llm_gen_random::Float64`: Probability of calling LLM version of gen_random.
+# See Also
 
-TODO: Implement more prompts so we can make specialized mutation operators like
-llm_mutate_const, llm_mutate_operation. 
+- [`AbstractMutationWeights`](@ref SymbolicRegression.CoreModule.MutationWeightsModule.AbstractMutationWeights): Use to define custom mutation weight types.
+- [`MutationWeights`](@ref SymbolicRegression.CoreModule.MutationWeightsModule.MutationWeights): The default mutation weights for the SR module.
 """
-Base.@kwdef mutable struct LLMMutationProbabilities
+Base.@kwdef mutable struct LaSRMutationWeights <: AbstractMutationWeights
+    # Mutation weights imported from SR.jl
+    mutate_constant::Float64 = 0.0353
+    mutate_operator::Float64 = 3.63
+    swap_operands::Float64 = 0.00608
+    rotate_tree::Float64 = 1.42
+    add_node::Float64 = 0.0771
+    insert_node::Float64 = 2.44
+    delete_node::Float64 = 0.369
+    simplify::Float64 = 0.00148
+    randomize::Float64 = 0.00695
+    do_nothing::Float64 = 0.431
+    optimize::Float64 = 0.0
+    form_connection::Float64 = 0.5
+    break_connection::Float64 = 0.1
+
+    # Mutation weights specific to LaSR
+    # Set programmatically based on the SR.jl mutation weights
     llm_mutate::Float64 = 0.0
     llm_randomize::Float64 = 0.0
 end
 
-"""
-    LaSRMutationWeights{W<:SymbolicRegression.MutationWeights}(mutation_weights::W, llm_weights::LLMMutationProbabilities)
+const lasr_mutations = fieldnames(LaSRMutationWeights)
+const v_lasr_mutations = Symbol[lasr_mutations...]
 
-Defines the composite weights for all the mutation operations in the LaSR module.
-"""
-mutable struct LaSRMutationWeights{W<:SymbolicRegression.MutationWeights} <:
-               SymbolicRegression.AbstractMutationWeights
-    sr_weights::W
-    llm_weights::LLMMutationProbabilities
-end
-const LLM_MUTATION_WEIGHTS_KEYS = fieldnames(LLMMutationProbabilities)
-
-@unstable function LaSRMutationWeights(; kws...)
-    sr_weights_keys = filter(k -> !(k in LLM_MUTATION_WEIGHTS_KEYS), keys(kws))
-    sr_weights = SymbolicRegression.MutationWeights(;
-        NamedTuple(sr_weights_keys .=> Tuple(kws[k] for k in sr_weights_keys))...
-    )
-    sr_weights_vec = [getfield(sr_weights, f) for f in fieldnames(typeof(sr_weights))]
-
-    llm_weights_keys = filter(k -> k in LLM_MUTATION_WEIGHTS_KEYS, keys(kws))
-    llm_weights = LLMMutationProbabilities(;
-        NamedTuple(llm_weights_keys .=> Tuple(kws[k] for k in llm_weights_keys))...
-    )
-    llm_weights_vec = [getfield(llm_weights, f) for f in fieldnames(typeof(llm_weights))]
-
-    norm_sr_weights = SymbolicRegression.MutationWeights(
-        sr_weights_vec * (1 - sum(llm_weights_vec))...
-    )
-    norm_llm_weights = LLMMutationProbabilities(llm_weights_vec * sum(sr_weights_vec)...)
-
-    return LaSRMutationWeights(norm_sr_weights, norm_llm_weights)
-end
-
-function Base.getproperty(weights::LaSRMutationWeights, k::Symbol)
-    if k in LLM_MUTATION_WEIGHTS_KEYS
-        return getproperty(getfield(weights, :llm_weights), k)
-    else
-        return getproperty(getfield(weights, :sr_weights), k)
+# For some reason it's much faster to write out the fields explicitly:
+let contents = [Expr(:., :w, QuoteNode(field)) for field in lasr_mutations]
+    @eval begin
+        function Base.convert(::Type{Vector}, w::LaSRMutationWeights)::Vector{Float64}
+            return $(Expr(:vect, contents...))
+        end
+        function Base.copy(w::LaSRMutationWeights)
+            return $(Expr(:call, :LaSRMutationWeights, contents...))
+        end
     end
 end
 
-function Base.setproperty!(weights::LaSRMutationWeights, k::Symbol, v)
-    if k in LLM_MUTATION_WEIGHTS_KEYS
-        setproperty!(getfield(weights, :llm_weights), k, v)
-    else
-        setproperty!(getfield(weights, :sr_weights), k, v)
-    end
-end
+"""
+    sample_mutation(w::LaSRMutationWeights)
 
-function Base.propertynames(weights::LaSRMutationWeights)
-    return (LLM_MUTATION_WEIGHTS_KEYS..., SymbolicRegression.MUTATION_WEIGHTS_KEYS...)
+Sample a mutation operation from the LaSR mutation weights. The weights are normalized to sum to 1.0 before
+    sampling.
+
+"""
+function sample_mutation(w::P) where {P<:LaSRMutationWeights}
+    weights = [getproperty(w, sym) for sym in fieldnames(P)]
+    norm_weights = weights ./ sum(weights)
+    return StatsBase.sample(v_lasr_mutations, StatsBase.Weights(norm_weights))
 end
 
 end
