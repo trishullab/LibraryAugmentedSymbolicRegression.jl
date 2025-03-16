@@ -246,21 +246,21 @@ using TensorBoardLogger
 import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMWeights
 import MLJ: machine, fit!, predict, report
 
-# Dataset with two named features:
-X = (a = rand(500), b = rand(500))
+# Dataset with 5 features:
+X = randn(Float64, 5, 100)
 
 # and one target:
-y = @. 2 * cos(X.a * 23.5) - X.b ^ 2
+y = 2 * cos.(X[4, :]) + X[1, :] .^ 2 .- 2
 
 # with some noise:
-y = y .+ randn(500) .* 1e-3
+y = y .+ randn(100) .* 1e-3
 
 # Adding a logger so we can see LaSR's progress.
 # Run $ pip install tensorboard
 # and then $ tensorboard --logdir .
 logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
 
-p = 0.001
+p = 1e-4 # Reduce this even further if the model takes too long...
 model = LaSRRegressor(;
     niterations=40,
     logger=logger,
@@ -277,8 +277,8 @@ model = LaSRRegressor(;
     variable_names=Dict("x1" => "theta", "x2" => "offset"),
     prompts_dir="prompts/",
     api_key="token-abc123",
-    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
-    api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+    model="llama3.1:latest",
+    api_kwargs=Dict("url" => "http://localhost:11434/v1"),
     verbose=true, # Set to true to see LLM generation logs.
 )
 
