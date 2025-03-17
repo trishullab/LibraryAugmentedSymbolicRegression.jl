@@ -256,10 +256,7 @@ function default_options()
         api_key="default api key.",
         model=LLAMAFILE_MODEL,
         api_kwargs=Dict("max_tokens" => 1000),
-        http_kwargs=Dict(
-            "retries" => 3,
-            "readtimeout" => 3600
-        ),
+        http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),
         lasr_logger=nothing,
         verbose=true,
     )

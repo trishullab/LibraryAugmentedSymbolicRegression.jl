@@ -28,7 +28,7 @@ Returns the final local path to the downloaded (and possibly renamed) llamafile.
 
 Throws an exception if the download or permission changes fail.
 """
-function download_llm(llm_url::String, llm_path::String)
+function download_llm(llm_url::String, llm_path::String)::String
     if isfile(llm_path)
         @info "LLM already downloaded to $llm_path"
         return llm_path
@@ -73,7 +73,7 @@ The command line used is something like:
 If you need additional flags (e.g. `--v2`, `--temp`, etc.), either modify
 this function or create your own variant.
 """
-function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
+function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)::Process
     local_exe = abspath(llm_path)
 
     if !Sys.iswindows()
@@ -85,15 +85,13 @@ function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
 
     if waitfor
         # Blocking run
-        run(cmd; wait=true)
+        proc = run(cmd; wait=true)
         @info "LLM server has exited (blocking mode)."
-        return nothing
-    else
-        # Non-blocking run
-        proc = run(cmd; wait=false)
-        @info "LLM server spawned asynchronously" pid = getpid(proc)
         return proc
     end
+    # Non-blocking run
+    proc = run(cmd; wait=false)
+    @info "LLM server spawned asynchronously" pid = getpid(proc)
     return proc
 end
 
@@ -116,7 +114,7 @@ wait(proc)  # Wait for server to end
 """
 function async_run_llm_server(
     llm_url::String=LLAMAFILE_URL, llm_path::String=LLAMAFILE_PATH, port::Int=LLM_PORT
-)
+)::Process
     local_exe = download_llm(llm_url, llm_path)
     proc = serve_llm(local_exe, port; waitfor=false)
     atexit() do
