@@ -86,6 +86,11 @@ function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
     end
     @info "Starting LLM server at $llm_path on port $port" path = llm_path port = port
 
+    if Sys.isapple()
+        # We need to invoke the server with bash on macOS
+        cmd = `bash -c "$cmd"`
+    end
+
     if waitfor
         # Blocking run
         proc = run(cmd; wait=true)
