@@ -13,6 +13,7 @@ const LLAMAFILE_URL = get(
     "https://huggingface.co/Mozilla/gemma-2-2b-it-llamafile/resolve/main/gemma-2-2b-it.Q6_K.llamafile",
 )
 const LLM_PORT = parse(Int, get(ENV, "LLM_PORT", "11449"))
+const LLM_FLAGS = get(ENV, "LLM_FLAGS", "")
 
 # print the project dir
 @info "Project directory: $(@__DIR__)"
@@ -79,7 +80,7 @@ function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
         run(`chmod +x $local_exe`)
     end
 
-    cmd = `$local_exe --server --nobrowser --port $port`
+    cmd = `$local_exe --server --nobrowser --port $port $LLM_FLAGS`
     @info "Starting LLM server at $llm_path on port $port" path = llm_path port = port
 
     if waitfor
