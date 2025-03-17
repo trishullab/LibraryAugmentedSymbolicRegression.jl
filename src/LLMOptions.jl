@@ -258,8 +258,7 @@ function default_options()
         api_kwargs=Dict("max_tokens" => 1000),
         http_kwargs=Dict(
             "retries" => 3,
-            "readtimeout" => 3600,
-            "url" => "http://localhost:$(LLM_PORT)/v1",
+            "readtimeout" => 3600
         ),
         lasr_logger=nothing,
         verbose=true,
