@@ -243,7 +243,7 @@ Now, we can run the simple example in Julia with model_name as `llama3.1:latest`
 ```julia
 using SymbolicRegression: SRLogger
 using TensorBoardLogger
-import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMWeights
+import LibraryAugmentedSymbolicRegression: LaSRRegressor, LLMOptions, LLMOperationWeights
 import MLJ: machine, fit!, predict, report
 
 # Dataset with 5 features:
@@ -282,7 +282,7 @@ model = LaSRRegressor(;
     verbose=true, # Set to true to see LLM generation logs.
 )
 
-mach = machine(model, X, y)
+mach = machine(model, transpose(X), y)
 fit!(mach)
 # julia> fit!(mach)
 # [ Info: Training machine(LaSRRegressor(binary_operators = Function[+, -, *], …), …).
@@ -293,6 +293,7 @@ fit!(mach)
 # [ Info: Tokens: 542 in 49.2 seconds
 # [ Info: Tokens: 556 in 51.1 seconds
 # [ Info: Tokens: 573 in 53.2 seconds
+Evolving for 40 iterations...  28%|███████████████████                                                  |  ETA: 0:09:59
 report(mach)
-predict(mach, X)
+predict(mach, transpose(X))
 ```
