@@ -80,7 +80,10 @@ function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
         run(`chmod +x $local_exe`)
     end
 
-    cmd = `$local_exe --server --nobrowser --port $port $LLM_FLAGS`
+    cmd = `$local_exe --server --nobrowser --port $port`
+    if length(LLM_FLAGS) > 0
+        cmd = cmd * " " * LLM_FLAGS
+    end
     @info "Starting LLM server at $llm_path on port $port" path = llm_path port = port
 
     if waitfor
