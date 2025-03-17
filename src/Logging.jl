@@ -29,6 +29,9 @@ function log_generation!(
         primary_key = string(id, "/", mode)
         LG.with_logger(logger.logger) do
             for (key, value) in kws
+                if isnothing(value) || length(value) == 0
+                    continue
+                end
                 @info(primary_key, key = value)
             end
         end

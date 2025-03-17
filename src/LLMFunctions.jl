@@ -150,7 +150,7 @@ function _gen_llm_random_tree(
         options.lasr_logger; id=gen_id, mode="gen_random", llm_output=string(msg.content)
     )
 
-    gen_tree_options = parse_msg_content(String(msg.content))
+    gen_tree_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(gen_tree_options)[1], options.num_generated_equations)
 
@@ -291,7 +291,7 @@ function concept_evolution(idea_database, options::AbstractOptions)
         llm_output=string(msg.content),
     )
 
-    idea_options = parse_msg_content(String(msg.content))
+    idea_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(idea_options)[1], options.num_generated_concepts)
 
@@ -318,7 +318,7 @@ end
     return m === nothing ? nothing : get(m.captures, 1, nothing)
 end
 
-function parse_msg_content(msg_content::String)::Vector{String}
+function parse_msg_content(msg_content::String, options::AbstractOptions)::Vector{String}
     # Attempt extraction with several patterns in order
     patterns = [r"```json(.*?)```"s, r"```(.*?)```"s, r"(\[.*?\])"s]
 
@@ -334,11 +334,17 @@ function parse_msg_content(msg_content::String)::Vector{String}
     try
         out = parse(content)
     catch
+        if options.verbose
+            @info "Failed to parse content: $content"
+        end
     end
 
     try
         out = eval(Meta.parse(msg_content))
     catch
+        if options.verbose
+            @info "Failed to eval content: $content"
+        end
     end
 
     if out isa Dict && all(x -> isa(x, String), values(out))
@@ -424,7 +430,7 @@ function generate_concepts(dominating, worst_members, options::AbstractOptions)
         llm_output=string(msg.content),
     )
 
-    idea_options = parse_msg_content(String(msg.content))
+    idea_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(idea_options)[1], options.num_generated_concepts)
 
@@ -537,7 +543,7 @@ function llm_mutate_tree(
         options.lasr_logger; id=gen_id, mode="mutate", llm_output=string(msg.content)
     )
 
-    mut_tree_options = parse_msg_content(String(msg.content))
+    mut_tree_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(mut_tree_options)[1], options.num_generated_equations)
 
@@ -672,7 +678,7 @@ function llm_crossover_trees(
         options.lasr_logger; id=gen_id, mode="crossover", llm_output=string(msg.content)
     )
 
-    cross_tree_options = parse_msg_content(String(msg.content))
+    cross_tree_options = parse_msg_content(String(msg.content), options)
 
     cross_tree1 = nothing
     cross_tree2 = nothing
