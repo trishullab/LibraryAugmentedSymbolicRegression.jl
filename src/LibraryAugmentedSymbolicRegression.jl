@@ -30,7 +30,12 @@ export Population,
     parse_expr,
     parse_msg_content,
     construct_prompt,
-    load_prompt
+    load_prompt,
+    # LLM Server options
+    LLAMAFILE_MODEL,
+    LLAMAFILE_PATH,
+    LLAMAFILE_URL,
+    LLM_PORT
 
 using Distributed
 using PackageExtensionCompat: @require_extensions
@@ -61,6 +66,7 @@ import SymbolicRegression: _main_search_loop!
 @stable default_mode = "disable" begin
     include("Utils.jl")
     include("Parse.jl")
+    include("LLMServe.jl")
     include("MutationWeights.jl")
     include("Logging.jl")
     include("LLMOptionsStruct.jl")
@@ -74,10 +80,10 @@ end
 using .CoreModule:
     LLMOperationWeights, LLMOptions, LaSROptions, LaSRMutationWeights, LaSRLogger,
     async_run_llm_server,
-    DEFAULT_LLAMAFILE_MODEL,
-    DEFAULT_LLAMAFILE_PATH,
-    DEFAULT_LLAMAFILE_URL,
-    DEFAULT_PORT
+    LLAMAFILE_MODEL,
+    LLAMAFILE_PATH,
+    LLAMAFILE_URL,
+    LLM_PORT
 
 using .UtilsModule: is_anonymous_function, recursive_merge, json3_write, @ignore
 using .LLMFunctionsModule:
@@ -411,10 +417,11 @@ function __init__()
 
     should_start_llamafile =
         get(ENV, "START_LLAMASERVER", "false") == "true" ||
-        get(ENV, "SYMBOLIC_REGRESSION_TEST", "false") == "true"
+        # if testing_mode is online_llamafile
+        get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,online_llamafile,offline") == "online_llamafile"
     if should_start_llamafile
         @info "Starting LLM server..."
-        async_run_llm_server(DEFAULT_LLAMAFILE_URL, DEFAULT_LLAMAFILE_PATH, DEFAULT_PORT)
+        async_run_llm_server(LLAMAFILE_URL, LLAMAFILE_PATH, LLM_PORT)
     end
 end
 

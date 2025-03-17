@@ -1,14 +1,14 @@
 module LLMServeModule
 using Downloads
 using Logging
-using Base: dirname, isdir, mkdir
+using Base: dirname, isdir, mkdir, atexit
 
-const DEFAULT_LLAMAFILE_MODEL = "gemma-2-2b-it.Q6_K"
-const DEFAULT_LLAMAFILE_PATH = abspath(
-    "$(@__DIR__)/../llamafiles/gemma-2-2b-it.Q6_K.llamafile"
-)
-const DEFAULT_LLAMAFILE_URL = "https://huggingface.co/Mozilla/gemma-2-2b-it-llamafile/resolve/main/gemma-2-2b-it.Q6_K.llamafile"
-const DEFAULT_PORT = 11443
+const LLAMAFILE_MODEL = get(ENV, "LLAMAFILE_MODEL", "gemma-2-2b-it.Q6_K")
+const LLAMAFILE_PATH  = get(ENV, "LLAMAFILE_PATH",
+    abspath("$(@__DIR__)/../llamafiles/gemma-2-2b-it.Q6_K.llamafile"))
+const LLAMAFILE_URL   = get(ENV, "LLAMAFILE_URL",
+    "https://huggingface.co/Mozilla/gemma-2-2b-it-llamafile/resolve/main/gemma-2-2b-it.Q6_K.llamafile")
+const LLM_PORT        = parse(Int, get(ENV, "LLM_PORT", "11449"))
 
 # print the project dir
 @info "Project directory: $(@__DIR__)"
@@ -68,25 +68,26 @@ The command line used is something like:
 If you need additional flags (e.g. `--v2`, `--temp`, etc.), either modify
 this function or create your own variant.
 """
-function serve_llm(llm_path::String, port::Int=DEFAULT_PORT; waitfor::Bool=false)
-    @info "Starting LLM server at $llm_path on port $port" path = llm_path port = port
-
+function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
     local_exe = abspath(llm_path)
 
     if !Sys.iswindows()
         run(`chmod +x $local_exe`)
     end
 
-    cmd = `$local_exe --server --v2 -l 0.0.0.0:$port`
+    cmd = `$local_exe --server --nobrowser --port $port`
+    @info "Starting LLM server at $llm_path on port $port" path = llm_path port = port
 
     if waitfor
-        @info "Running server in blocking mode (will not return until process exits)."
-        proc = run(cmd; wait=true)
-        @info "LLM server has exited."
+        # Blocking run
+        run(cmd; wait=true)
+        @info "LLM server has exited (blocking mode)."
+        return nothing
     else
+        # Non-blocking run
         proc = run(cmd; wait=false)
-        pid = getpid(proc)
-        @info "LLM server spawned asynchronously (pid: $(pid))."
+        @info "LLM server spawned asynchronously" pid=getpid(proc)
+        return proc
     end
     return proc
 end
@@ -98,7 +99,8 @@ end
 
 Downloads the llamafile from `llm_url` (if needed) into `llm_path`, ensures it is
 executable (or renamed on Windows), and then **asynchronously** launches the
-server on the given `port`. Returns the process object.
+server on the given `port`. Returns the process object. The server process
+is also registered to shut down when the Julia process exits (using `atexit`).
 
 Example:
 ```
@@ -108,12 +110,25 @@ wait(proc)  # Wait for server to end
 ```
 """
 function async_run_llm_server(
-    llm_url::String=DEFAULT_LLAMAFILE_URL,
-    llm_path::String=DEFAULT_LLAMAFILE_PATH,
-    port::Int=DEFAULT_PORT,
+    llm_url::String=LLAMAFILE_URL,
+    llm_path::String=LLAMAFILE_PATH,
+    port::Int=LLM_PORT,
 )
     local_exe = download_llm(llm_url, llm_path)
-    return serve_llm(local_exe, port; waitfor=false)
+    proc = serve_llm(local_exe, port; waitfor=false)
+    atexit() do
+        try
+            if isopen(proc)
+                @info "Shutting down LLM server (pid: $(getpid(proc))) at exit."
+                kill(proc, Base.SIGTERM)
+                wait(proc)
+                @info "LLM server closed."
+            end
+        catch e
+            @warn "Error while closing LLM server at exit: $e"
+        end
+    end
+    return proc
 end
 
 end # module LLMServeModule

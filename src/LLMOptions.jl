@@ -10,6 +10,7 @@ using ..LLMOptionsStructModule:
     LLMOperationWeights,
     LLMOptions,
     set_llm_mutation_weights
+using ..LLMServeModule: LLM_PORT, LLAMAFILE_MODEL
 using ..UtilsModule: @save_kwargs, @ignore
 
 create_mutation_weights(w::LaSRMutationWeights) = w
@@ -252,10 +253,14 @@ function default_options()
         idea_database=Vector{AbstractString}(),
 
         # LaSR LLM API Options
-        api_key="",
-        model="",
+        api_key="default api key.",
+        model=LLAMAFILE_MODEL,
         api_kwargs=Dict("max_tokens" => 1000),
-        http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),
+        http_kwargs=Dict(
+            "retries" => 3,
+            "readtimeout" => 3600, 
+            "url" => "http://localhost:$(LLM_PORT)/v1",
+        ),
         lasr_logger=nothing,
         verbose=true,
     )
