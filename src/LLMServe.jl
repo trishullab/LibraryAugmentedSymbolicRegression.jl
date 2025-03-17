@@ -73,7 +73,7 @@ The command line used is something like:
 If you need additional flags (e.g. `--v2`, `--temp`, etc.), either modify
 this function or create your own variant.
 """
-function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)::Process
+function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
     local_exe = abspath(llm_path)
 
     if !Sys.iswindows()
@@ -114,7 +114,7 @@ wait(proc)  # Wait for server to end
 """
 function async_run_llm_server(
     llm_url::String=LLAMAFILE_URL, llm_path::String=LLAMAFILE_PATH, port::Int=LLM_PORT
-)::Process
+)
     local_exe = download_llm(llm_url, llm_path)
     proc = serve_llm(local_exe, port; waitfor=false)
     atexit() do
