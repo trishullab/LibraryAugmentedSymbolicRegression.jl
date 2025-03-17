@@ -4,11 +4,15 @@ using Logging
 using Base: dirname, isdir, mkdir, atexit
 
 const LLAMAFILE_MODEL = get(ENV, "LLAMAFILE_MODEL", "gemma-2-2b-it.Q6_K")
-const LLAMAFILE_PATH  = get(ENV, "LLAMAFILE_PATH",
-    abspath("$(@__DIR__)/../llamafiles/gemma-2-2b-it.Q6_K.llamafile"))
-const LLAMAFILE_URL   = get(ENV, "LLAMAFILE_URL",
-    "https://huggingface.co/Mozilla/gemma-2-2b-it-llamafile/resolve/main/gemma-2-2b-it.Q6_K.llamafile")
-const LLM_PORT        = parse(Int, get(ENV, "LLM_PORT", "11449"))
+const LLAMAFILE_PATH = get(
+    ENV, "LLAMAFILE_PATH", abspath("$(@__DIR__)/../llamafiles/gemma-2-2b-it.Q6_K.llamafile")
+)
+const LLAMAFILE_URL = get(
+    ENV,
+    "LLAMAFILE_URL",
+    "https://huggingface.co/Mozilla/gemma-2-2b-it-llamafile/resolve/main/gemma-2-2b-it.Q6_K.llamafile",
+)
+const LLM_PORT = parse(Int, get(ENV, "LLM_PORT", "11449"))
 
 # print the project dir
 @info "Project directory: $(@__DIR__)"
@@ -86,7 +90,7 @@ function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
     else
         # Non-blocking run
         proc = run(cmd; wait=false)
-        @info "LLM server spawned asynchronously" pid=getpid(proc)
+        @info "LLM server spawned asynchronously" pid = getpid(proc)
         return proc
     end
     return proc
@@ -110,9 +114,7 @@ wait(proc)  # Wait for server to end
 ```
 """
 function async_run_llm_server(
-    llm_url::String=LLAMAFILE_URL,
-    llm_path::String=LLAMAFILE_PATH,
-    port::Int=LLM_PORT,
+    llm_url::String=LLAMAFILE_URL, llm_path::String=LLAMAFILE_PATH, port::Int=LLM_PORT
 )
     local_exe = download_llm(llm_url, llm_path)
     proc = serve_llm(local_exe, port; waitfor=false)

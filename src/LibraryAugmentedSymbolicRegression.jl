@@ -78,7 +78,11 @@ import SymbolicRegression: _main_search_loop!
 end
 
 using .CoreModule:
-    LLMOperationWeights, LLMOptions, LaSROptions, LaSRMutationWeights, LaSRLogger,
+    LLMOperationWeights,
+    LLMOptions,
+    LaSROptions,
+    LaSRMutationWeights,
+    LaSRLogger,
     async_run_llm_server,
     LLAMAFILE_MODEL,
     LLAMAFILE_PATH,
@@ -418,7 +422,8 @@ function __init__()
     should_start_llamafile =
         get(ENV, "START_LLAMASERVER", "false") == "true" ||
         # if testing_mode is online_llamafile
-        get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,online_llamafile,offline") == "online_llamafile"
+        get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,online_llamafile,offline") ==
+        "online_llamafile"
     if should_start_llamafile
         @info "Starting LLM server..."
         async_run_llm_server(LLAMAFILE_URL, LLAMAFILE_PATH, LLM_PORT)

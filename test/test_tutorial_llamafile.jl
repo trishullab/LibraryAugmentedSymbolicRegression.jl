@@ -1,11 +1,17 @@
 # Test that LaSR runs with active=true and can solve simple problems.
 import LibraryAugmentedSymbolicRegression:
-    LaSROptions, LaSRRegressor, LaSRMutationWeights, LLMOperationWeights, LLAMAFILE_MODEL, LLM_PORT
+    LaSROptions,
+    LaSRRegressor,
+    LaSRMutationWeights,
+    LLMOperationWeights,
+    LLAMAFILE_MODEL,
+    LLM_PORT
 import MLJ: machine, fit!, predict, report
 
 # Ensure that TEST_LLM env variable is set to true.
 is_llm_started = (get(ENV, "START_LLAMASERVER", "false") == "true")
-is_llm_started || @warn "Please set the START_LLAMASERVER env variable to true to run this test."
+is_llm_started ||
+    @warn "Please set the START_LLAMASERVER env variable to true to run this test."
 @test is_llm_started
 X = randn(Float32, 2, 100)
 y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
