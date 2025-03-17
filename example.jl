@@ -4,8 +4,14 @@ Pkg.instantiate()
 using TensorBoardLogger
 using LibraryAugmentedSymbolicRegression
 
-X = randn(Float32, 5, 100)
+# Dataset with 5 features:
+X = randn(Float64, 5, 100)
+
+# and one target:
 y = 2 * cos.(X[4, :]) + X[1, :] .^ 2 .- 2
+
+# with some noise:
+y = y .+ randn(100) .* 1e-3
 
 logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
 p = 0.0001
