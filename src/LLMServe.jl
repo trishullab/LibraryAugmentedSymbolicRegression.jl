@@ -15,9 +15,6 @@ const LLAMAFILE_URL = get(
 const LLM_PORT = parse(Int, get(ENV, "LLM_PORT", "11449"))
 const LLM_FLAGS = get(ENV, "LLM_FLAGS", "")
 
-# print the project dir
-@info "Project directory: $(@__DIR__)"
-
 """
     download_llm(llm_url::String, llm_path::String)
 
