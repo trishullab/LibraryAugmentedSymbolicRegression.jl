@@ -127,6 +127,7 @@ Base.@kwdef mutable struct LLMOptions
     http_kwargs::Union{Dict,Nothing}
     lasr_logger::Union{LaSRLogger,Nothing}
     verbose::Bool
+    tracking::Bool
 end
 
 const llm_mutations = fieldnames(LLMOperationWeights)

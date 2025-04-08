@@ -47,6 +47,7 @@ const LASR_OPTIONS_DESCRIPTION = """
     - `retries::Int`: Number of retries. (default: 3)
     - `readtimeout::Int`: Read timeout in seconds. (default: 3600)
 - `verbose::Bool`: Whether to print tokens and additional debugging info for each LLM call. (default: true)
+- `tracking::Bool`: Whether to use `TrackedPopMember` instead of `PopMember` for evolution. This enables the provenance framework. (default: false)
 """
 
 # Constructor with both sets of parameters:
@@ -94,6 +95,7 @@ $(LASR_OPTIONS_DESCRIPTION)
     api_kwargs::Union{Dict,Nothing}=nothing,
     http_kwargs::Union{Dict,Nothing}=nothing,
     verbose::Bool=true,
+    tracking::Bool=false,
     kws...,
 )
     if use_llm
@@ -150,6 +152,7 @@ $(LASR_OPTIONS_DESCRIPTION)
     http_kwargs = something(http_kwargs, _default_options.http_kwargs)
     lasr_logger = nothing
     verbose = something(verbose, _default_options.verbose)
+    tracking = something(tracking, _default_options.tracking)
     #! format: on
     #################################
 
@@ -188,6 +191,7 @@ $(LASR_OPTIONS_DESCRIPTION)
         http_kwargs,
         lasr_logger,
         verbose,
+        tracking,
     )
     sr_options_keys = filter(k -> !(k in LLM_OPTIONS_KEYS), keys(kws))
     sr_options = SymbolicRegression.Options(;
@@ -259,6 +263,7 @@ function default_options()
         http_kwargs=Dict("retries" => 3, "readtimeout" => 3600),
         lasr_logger=nothing,
         verbose=true,
+        tracking=false,
     )
 end
 

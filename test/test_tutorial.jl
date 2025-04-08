@@ -8,7 +8,7 @@ y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
 p = 0.001
 model = LaSRRegressor(;
-    niterations=40,
+    niterations=100,
     binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
     populations=20,

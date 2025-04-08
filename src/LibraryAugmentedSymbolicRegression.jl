@@ -3,6 +3,7 @@ module LibraryAugmentedSymbolicRegression
 # Types
 export Population,
     PopMember,
+    TrackedPopMember,
     HallOfFame,
     Options,
     Dataset,
@@ -67,6 +68,7 @@ import SymbolicRegression: _main_search_loop!
     include("Utils.jl")
     include("Parse.jl")
     include("LLMServe.jl")
+    include("TrackedPopMember.jl")
     include("MutationWeights.jl")
     include("Logging.jl")
     include("LLMOptionsStruct.jl")
@@ -75,6 +77,8 @@ import SymbolicRegression: _main_search_loop!
     include("LLMUtils.jl")
     include("LLMFunctions.jl")
     include("Mutate.jl")
+    include("Population.jl")
+    include("HallOfFame.jl")
 end
 
 using .CoreModule:
@@ -99,8 +103,11 @@ using .LLMFunctionsModule:
     parse_msg_content,
     generate_concepts
 using .LLMUtilsModule: load_prompt, construct_prompt
+using .TrackedPopMemberModule: TrackedPopMember
 using .ParseModule: render_expr, parse_expr
 import .MutateModule: mutate!, crossover_generation
+using .PopulationModule: Population
+using .HallOfFameModule: HallOfFame
 
 using .LoggingModule: log_generation!
 using UUIDs: uuid1
@@ -166,7 +173,7 @@ function _main_search_loop!(
         )
     end
 
-    worst_members = Vector{PopMember}()
+    worst_members = Vector{AbstractPopMember}()
     while sum(state.cycles_remaining) > 0
         kappa += 1
         if kappa > options.populations * nout
@@ -196,7 +203,7 @@ function _main_search_loop!(
         population_ready &= (state.cycles_remaining[j] > 0)
         if population_ready
             if n_iterations % options.populations == 0
-                worst_members = Vector{PopMember}()
+                worst_members = Vector{AbstractPopMember}()
             end
             n_iterations += 1
 

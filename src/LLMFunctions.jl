@@ -24,7 +24,6 @@ using Compat: Returns, @inline
 using SymbolicRegression:
     Options, DATA_TYPE, gen_random_tree_fixed_size, random_node_and_parent, AbstractOptions
 using SymbolicRegression.MutationFunctionsModule: with_contents_for_mutation
-using ..LLMOptionsModule: LaSROptions
 using ..LLMUtilsModule:
     load_prompt,
     convertDict,
