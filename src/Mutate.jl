@@ -5,14 +5,18 @@ using DynamicExpressions: copy_into!, with_contents, allocate_container, get_tre
 using UUIDs: uuid1
 
 using SymbolicRegression
-using SymbolicRegression: 
+using SymbolicRegression:
     max_features,
     check_constraints,
     compute_complexity,
     condition_mutation_weights!,
     sample_mutation,
     eval_cost,
-    gen_random_tree_fixed_size
+    crossover_trees,
+    combine_operators,
+    simplify_tree!,
+    gen_random_tree_fixed_size,
+    PopMember
 
 using SymbolicRegression.CoreModule: dataset_fraction
 using SymbolicRegression.MutateModule: AbstractMutationResult
@@ -21,7 +25,8 @@ using .SymbolicRegression: @recorder
 # It's important that we explicitly import the mutate! function from SymbolicRegression
 # so Julia knows that we're extending it.
 import SymbolicRegression: mutate!, MutationResult
-import SymbolicRegression.MutateModule: next_generation, _dispatch_mutations!, crossover_generation
+import SymbolicRegression.MutateModule:
+    next_generation, _dispatch_mutations!, crossover_generation
 
 using ..CoreModule: LaSROptions
 using ..LLMFunctionsModule: llm_mutate_tree, llm_crossover_trees, llm_randomize_tree
@@ -29,7 +34,8 @@ using ..LoggingModule: log_generation!
 using ..TrackedPopMemberModule: TrackedPopMember
 using ..ParseModule: render_expr, parse_expr
 
-struct LLMMutationResult{N<:AbstractExpression,P<:AbstractPopMember} <: AbstractMutationResult{N,P}
+struct LLMMutationResult{N<:AbstractExpression,P<:AbstractPopMember} <:
+       AbstractMutationResult{N,P}
     tree::Union{N,Nothing}
     member::Union{P,Nothing}
     num_evals::Float64
@@ -53,13 +59,12 @@ struct LLMMutationResult{N<:AbstractExpression,P<:AbstractPopMember} <: Abstract
 end
 
 function check_constant(tree::AbstractExpressionNode)::Bool
-    (tree.degree == 0) && tree.constant
+    return (tree.degree == 0) && tree.constant
 end
 
 function check_constant(tree::AbstractExpression)::Bool
-    check_constant(get_tree(tree))
+    return check_constant(get_tree(tree))
 end
-
 
 @unstable function next_generation(
     dataset::D,
@@ -96,9 +101,7 @@ end
     #############################################
     # local tree
     old_contribution = [
-        member.llm_contribution,
-        member.sr_contribution,
-        member.total_contribution,
+        member.llm_contribution, member.sr_contribution, member.total_contribution
     ]
     new_contribution = deepcopy(old_contribution)
     rtree = Ref{N}()
@@ -123,15 +126,12 @@ end
         if options.tracking && !isnothing(mutation_result.member)
             # If the mutation result is a PopMember, we need to convert it to a TrackedPopMember
             # MR = MutationResult{N,TrackedPopMember{T,L,N}} 
-            wrapped_member = TrackedPopMember(
-                mutation_result.member,
-                old_contribution...
-            )
+            wrapped_member = TrackedPopMember(mutation_result.member, old_contribution...)
         else
             wrapped_member = mutation_result.member
         end
         mutation_result = if mutation_result isa LLMMutationResult{N,P}
-            LLMMutationResult{N,TrackedPopMember{T,L,N}}(
+            LLMMutationResult{N,TrackedPopMember{T,L,N}}(;
                 tree=mutation_result.tree,
                 member=wrapped_member,
                 num_evals=mutation_result.num_evals,
@@ -139,7 +139,7 @@ end
                 using_llm=true,
             )
         else
-            MutationResult{N,TrackedPopMember{T,L,N}}(
+            MutationResult{N,TrackedPopMember{T,L,N}}(;
                 tree=mutation_result.tree,
                 member=wrapped_member,
                 num_evals=mutation_result.num_evals,
@@ -206,7 +206,7 @@ end
                     parent=parent_ref,
                     deterministic=options.deterministic,
                 ),
-                old_contribution...
+                old_contribution...,
             )
         else
             PopMember(
@@ -219,11 +219,7 @@ end
                 deterministic=options.deterministic,
             )
         end
-        return (
-            ret,
-            mutation_accepted,
-            num_evals,
-        )
+        return (ret, mutation_accepted, num_evals)
     end
 
     after_cost, after_loss = eval_cost(dataset, tree, options)
@@ -259,11 +255,7 @@ end
                 deterministic=options.deterministic,
             )
         end
-        return (
-            ret,
-            mutation_accepted,
-            num_evals,
-        )
+        return (ret, mutation_accepted, num_evals)
     end
 
     probChange = 1.0
@@ -318,11 +310,7 @@ end
                 deterministic=options.deterministic,
             )
         end
-        return (
-            ret,
-            mutation_accepted,
-            num_evals,
-        )
+        return (ret, mutation_accepted, num_evals)
     else
         @recorder begin
             tmp_recorder["result"] = "accept"
@@ -354,11 +342,7 @@ end
             )
         end
 
-        return (
-            ret,
-            mutation_accepted,
-            num_evals,
-        )
+        return (ret, mutation_accepted, num_evals)
     end
 end
 
@@ -406,7 +390,11 @@ function crossover_generation(
     curmaxsize::Int,
     options::LaSROptions;
     recorder::SymbolicRegression.RecordType=SymbolicRegression.RecordType(),
-)::Tuple{P,P,Bool,Float64} where {T,L,D<:SymbolicRegression.Dataset{T,L},N,P<:SymbolicRegression.AbstractPopMember{T,L,N}}
+)::Tuple{
+    P,P,Bool,Float64
+} where {
+    T,L,D<:SymbolicRegression.Dataset{T,L},N,P<:SymbolicRegression.AbstractPopMember{T,L,N}
+}
     llm_skip = false
 
     if options.use_llm && (rand() < options.llm_operation_weights.llm_crossover)
@@ -467,22 +455,25 @@ function crossover_generation(
         end
     end
 
-    contribution = [[
-        member1.llm_contribution,
-        member1.sr_contribution,
-        member1.total_contribution,
-    ], [
-        member2.llm_contribution,
-        member2.sr_contribution,
-        member2.total_contribution,
-    ]]
+    contribution = [
+        [member1.llm_contribution, member1.sr_contribution, member1.total_contribution],
+        [member2.llm_contribution, member2.sr_contribution, member2.total_contribution],
+    ]
 
     if !llm_skip
         # Fall back to the default SR approach
-        m1 = if member1 isa TrackedPopMember member1.pm else member1 end
-        m2 = if member2 isa TrackedPopMember member2.pm else member2 end
+        m1 = if member1 isa TrackedPopMember
+            member1.pm
+        else
+            member1
+        end
+        m2 = if member2 isa TrackedPopMember
+            member2.pm
+        else
+            member2
+        end
         new_member1, new_member2, crossover_accepted, num_evals = crossover_generation(
-            m1, m2, dataset, curmaxsize, options.sr_options, recorder=recorder
+            m1, m2, dataset, curmaxsize, options.sr_options; recorder=recorder
         )
     else
         # If we used the LLM for crossover, we need to evaluate the cost of the new trees
@@ -511,20 +502,22 @@ function crossover_generation(
         )
         crossover_accepted = true
         contribution = [
-            [member1.llm_contribution + 1, member1.sr_contribution, member1.total_contribution + 1],
-            [member2.llm_contribution + 1, member2.sr_contribution, member2.total_contribution + 1],
+            [
+                member1.llm_contribution + 1,
+                member1.sr_contribution,
+                member1.total_contribution + 1,
+            ],
+            [
+                member2.llm_contribution + 1,
+                member2.sr_contribution,
+                member2.total_contribution + 1,
+            ],
         ]
     end
 
     if options.tracking
-        new_member1 = TrackedPopMember(
-            new_member1,
-            contribution[1]...,
-        )
-        new_member2 = TrackedPopMember(
-            new_member2,
-            contribution[2]...,
-        )
+        new_member1 = TrackedPopMember(new_member1, contribution[1]...)
+        new_member2 = TrackedPopMember(new_member2, contribution[2]...)
     end
 
     return new_member1, new_member2, crossover_accepted, num_evals

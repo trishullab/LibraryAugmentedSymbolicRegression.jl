@@ -41,7 +41,7 @@ function Base.show(
     io::IO, p::TrackedPopMember{T,L,N}
 ) where {T<:DATA_TYPE,L<:LOSS_TYPE,N<:AbstractExpression{T}}
     shower(x) = sprint(show, x)
-    print(io, "PopMember(")
+    print(io, "TrackedPopMember(")
     print(io, "tree = (", string_tree(p.tree), "), ")
     print(io, "loss = ", shower(p.loss), ", ")
     print(io, "cost = ", shower(p.cost))
@@ -92,20 +92,20 @@ end
     function embed_metadata(
         tracked_member::TrackedPopMember, options::AbstractOptions, dataset::Dataset{T,L}
     ) where {T,L}
-    return TrackedPopMember(
-        PopMember(
-            embed_metadata(tracked_member.pm.tree, options, dataset),
-            tracked_member.pm.cost,
-            tracked_member.pm.loss,
-            nothing;
-            tracked_member.pm.ref,
-            tracked_member.pm.parent,
-            deterministic=options.deterministic,
-        ),
-        tracked_member.llm_contribution,
-        tracked_member.sr_contribution,
-        tracked_member.total_contribution,
-    )
+        return TrackedPopMember(
+            PopMember(
+                embed_metadata(tracked_member.pm.tree, options, dataset),
+                tracked_member.pm.cost,
+                tracked_member.pm.loss,
+                nothing;
+                tracked_member.pm.ref,
+                tracked_member.pm.parent,
+                deterministic=options.deterministic,
+            ),
+            tracked_member.llm_contribution,
+            tracked_member.sr_contribution,
+            tracked_member.total_contribution,
+        )
     end
 end
 
