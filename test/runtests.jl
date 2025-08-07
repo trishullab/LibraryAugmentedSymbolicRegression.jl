@@ -6,25 +6,29 @@ ENV["SYMBOLIC_REGRESSION_TEST"] = "true"
 # online_llamafile - test is run on github actions and downloads the llamafile
 # offline - test is run locally
 tags_to_run =
-    let t = get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,online_llamafile,offline")
+    let t = get(
+            ENV,
+            "SYMBOLIC_REGRESSION_TEST_SUITE",
+            "online,online_llamafile,offline,offline_llamafile",
+        )
         t = split(t, ",")
         t = map(Symbol, t)
         t
     end
 @eval @run_package_tests filter = ti -> !isdisjoint(ti.tags, $tags_to_run) verbose = true
 
-# @testitem "Test handshake" tags = [:online_llamafile] begin
-#     include("test_handshake.jl")
-# end
+@testitem "Test handshake (llamafile)" tags = [:online_llamafile] begin
+    include("test_handshake.jl")
+end
 
-# # This test takes too long. Best to perform it offline.
-# @testitem "Test tutorial" tags = [:offline] begin
-#     include("test_tutorial_llamafile.jl")
-# end
+# This test takes too long. Best to perform it offline.
+@testitem "Test tutorial (llamafile)" tags = [:offline_llamafile] begin
+    include("test_tutorial_llamafile.jl")
+end
 
-# @testitem "Test tutorial" tags = [:offline] begin
-#     include("test_tutorial.jl")
-# end
+@testitem "Test tutorial" tags = [:offline] begin
+    include("test_tutorial.jl")
+end
 
 @testitem "Test expression parser" tags = [:online] begin
     include("test_lasr_parser.jl")
@@ -53,9 +57,9 @@ include("test_backwards_compat.jl")
     include("test_precompilation.jl")
 end
 
-# @testitem "Aqua tests" tags = [:online, :aqua] begin
-#     include("test_aqua.jl")
-# end
+@testitem "Aqua tests" tags = [:online, :aqua] begin
+    include("test_aqua.jl")
+end
 
 # @testitem "JET tests" tags = [:online, :jet] begin
 #     test_jet_file = joinpath((@__DIR__), "test_jet.jl")

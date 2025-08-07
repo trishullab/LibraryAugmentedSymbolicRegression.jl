@@ -2,7 +2,6 @@
 # These are round trip tests to ensure that the parser is working correctly.
 println("Testing LaSR expression parser [hard]")
 
-using Revise
 using Random: MersenneTwister, shuffle
 using LibraryAugmentedSymbolicRegression:
     LaSROptions, string_tree, parse_expr, render_expr, gen_random_tree
