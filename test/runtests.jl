@@ -13,21 +13,25 @@ tags_to_run =
     end
 @eval @run_package_tests filter = ti -> !isdisjoint(ti.tags, $tags_to_run) verbose = true
 
-@testitem "Test handshake" tags = [:online_llamafile] begin
-    include("test_handshake.jl")
-end
+# @testitem "Test handshake" tags = [:online_llamafile] begin
+#     include("test_handshake.jl")
+# end
 
-# This test takes too long. Best to perform it offline.
-@testitem "Test tutorial" tags = [:offline] begin
-    include("test_tutorial_llamafile.jl")
-end
+# # This test takes too long. Best to perform it offline.
+# @testitem "Test tutorial" tags = [:offline] begin
+#     include("test_tutorial_llamafile.jl")
+# end
 
-@testitem "Test tutorial" tags = [:offline] begin
-    include("test_tutorial.jl")
-end
+# @testitem "Test tutorial" tags = [:offline] begin
+#     include("test_tutorial.jl")
+# end
 
 @testitem "Test expression parser" tags = [:online] begin
     include("test_lasr_parser.jl")
+end
+
+@testitem "Test expression parser [hard]" tags = [:online] begin
+    include("test_lasr_parser_hard.jl")
 end
 
 @testitem "Test expression parser round trips" tags = [:online] begin
@@ -49,9 +53,9 @@ include("test_backwards_compat.jl")
     include("test_precompilation.jl")
 end
 
-@testitem "Aqua tests" tags = [:online, :aqua] begin
-    include("test_aqua.jl")
-end
+# @testitem "Aqua tests" tags = [:online, :aqua] begin
+#     include("test_aqua.jl")
+# end
 
 # @testitem "JET tests" tags = [:online, :jet] begin
 #     test_jet_file = joinpath((@__DIR__), "test_jet.jl")

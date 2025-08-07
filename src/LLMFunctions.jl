@@ -335,7 +335,7 @@ function parse_msg_content(msg_content::String, options::AbstractOptions)::Vecto
         out = parse(content)
     catch
         if options.verbose
-            @info "Failed to parse content: $content"
+            @debug "Failed to parse content: $content"
         end
     end
 
@@ -343,7 +343,7 @@ function parse_msg_content(msg_content::String, options::AbstractOptions)::Vecto
         out = eval(Meta.parse(msg_content))
     catch
         if options.verbose
-            @info "Failed to eval content: $content"
+            @debug "Failed to eval content: $content"
         end
     end
 

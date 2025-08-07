@@ -8,7 +8,7 @@ using SymbolicRegression: AbstractOptions, DATA_TYPE
 """
     parse_expr(expr_str::String, options) -> AbstractExpressionNode
 
-Given a string (e.g., from `string_tree`) and an options object (containing
+Given a string (e.g., from string_tree) and an options object (containing
 operators, variable naming conventions, etc.), reconstruct an
 AbstractExpressionNode.
 """
@@ -16,13 +16,22 @@ function parse_expr(
     ::Type{T}, expr_str::String, options::AbstractOptions
 ) where {T<:DATA_TYPE}
     try
+        expr_str = replace(expr_str, r"\*\*" => "^")
         parsed = Meta.parse(expr_str)
+
+        # If it's an assignment like `a = expr`, just take the RHS
+        if parsed.head == :(=)
+            parsed = parsed.args[2]
+        end
+
         expr = _parse_expr(parsed, options, T)
         # ensure that the expression can be rendered
         render_expr(expr, options)
         return expr
     catch e
-        # Return 1.
+        @info "Failed to parse expression: $expr_str"
+        @info "Error: $e"
+        @info "Returning a constant node with value 1."
         return _make_constant_node(1, T)
     end
 end
@@ -34,12 +43,14 @@ end
 function _make_variable_node(
     sym::Symbol, options::AbstractOptions, ::Type{T}
 ) where {T<:DATA_TYPE}
-    if sym === :C
+    str_sym = string(sym)
+    # if C or C1 or c1, basically capital or lower c followed by number
+    # use regex
+    if occursin(r"^c\d*$", lowercase(str_sym))
         return Node{T}(; val=convert(T, 1))
     end
     # Get the list of variable names from options.
     var_names = get_variable_names(options.variable_names)
-    str_sym = string(sym)
     idx = findfirst(x -> x == str_sym, var_names)
     if idx === nothing
         # Fallback: try to interpret as the previous "x5" format.
@@ -85,33 +96,34 @@ end
 
 @unstable function _find_operator_index(op_sym, options::AbstractOptions)
     function_str_map = Dict("pow" => "^")
-    binops = map(x -> _render_function(x, function_str_map), options.operators.binops)
-    unaops = map(x -> _render_function(x, function_str_map), options.operators.unaops)
+    binops = map(
+        x -> lowercase(_render_function(x, function_str_map)), options.operators.binops
+    )
+    unaops = map(
+        x -> lowercase(_render_function(x, function_str_map)), options.operators.unaops
+    )
 
-    # Special handling for the power operator '^'
-    if string(op_sym) == "^"
-        idx = findfirst(x -> x == "^", binops)
-        if idx === nothing
-            # Return a new index for exponentiation if not already in the list.
-            return UInt8(length(binops) + 1)
-        else
-            return UInt8(idx)
-        end
+    op = lowercase(string(op_sym))
+
+    if op == "^"
+        idx = findfirst(==("^"), binops)
+        return idx === nothing ? UInt8(length(binops) + 1) : UInt8(idx)
     end
 
-    for (i, opfunc) in pairs(binops)
-        if opfunc == string(op_sym)
-            return UInt8(i)
-        end
+    if (i = findfirst(==(op), binops)) !== nothing
+        return UInt8(i)
+    end
+    if (i = findfirst(==(op), unaops)) !== nothing
+        return UInt8(i)
     end
 
-    for (i, opfunc) in pairs(unaops)
-        if opfunc == string(op_sym)
-            return UInt8(i)
-        end
+    # Special-case unary +/- even if not listed
+    if (op == "-" || op == "+")
+        # try to treat as unary by allocating a new unaop index
+        return UInt8(length(binops) + length(unaops) + 1)
     end
 
-    return error("Unrecognized operator symbol: $op_sym")
+    return error("Unrecognized operator symbol: $(op_sym)")
 end
 function _parse_expr(ex, options::AbstractOptions, ::Type{T}) where {T<:DATA_TYPE}
     if ex isa Number
@@ -120,11 +132,16 @@ function _parse_expr(ex, options::AbstractOptions, ::Type{T}) where {T<:DATA_TYP
         return _make_variable_node(ex, options, T)
     elseif ex isa Expr
         if ex.head === :call
+            op = ex.args[1]
+            # unary minus: (-(x))  =>  (0 - x)
+            if op === :- && length(ex.args) == 2
+                return _parse_expr(Expr(:call, :-, 0, ex.args[2]), options, T)
+            end
+            # unary plus: (+(x))   =>  x
+            if op === :+ && length(ex.args) == 2
+                return _parse_expr(ex.args[2], options, T)
+            end
             return _make_call_node(ex, options, T)
-        elseif ex.head === :negative
-            # If we see something like -(3.14),
-            # parse it as (0 - 3.14).
-            return _parse_expr(Expr(:call, :-, 0, ex.args[1]), options, T)
         else
             error("Unsupported expression head: $(ex.head)")
         end
