@@ -14,8 +14,9 @@ rng = MersenneTwister(314159)
 
 for depth in [5, 9]
     for nvar in [5, 9]
-        random_trees = [gen_random_tree(depth, options, nvar, Float32, rng) for _ in 1:1e3]
-        data = rand(Float32, nvar, 1000)
+        # Use Float16 to ensure out of bou
+        random_trees = [gen_random_tree(depth, options, nvar, Float16, rng) for _ in 1:1e3]
+        data = rand(Float16, nvar, 1000)
 
         for tree in random_trees
             output = tree(data, options.operators)
@@ -24,7 +25,7 @@ for depth in [5, 9]
             end
             str_tree = string_tree(tree, options)
             @test str_tree == String(strip(str_tree, [' ', '\n', '"', ',', '.', '[', ']']))
-            expr_tree = parse_expr(Float32, str_tree, options)
+            expr_tree = parse_expr(Float16, str_tree, options)
             expr_output = expr_tree(data, options.operators)
             @test isapprox(expr_output, output)
         end

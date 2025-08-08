@@ -40,8 +40,8 @@ end
 
 for depth in [5, 9]
     for nvar in [5, 9]
-        random_trees = [gen_random_tree(depth, options, nvar, Float32, rng) for _ in 1:1e4]
-        data = rand(Float32, nvar, 1000)
+        random_trees = [gen_random_tree(depth, options, nvar, Float16, rng) for _ in 1:1e4]
+        data = rand(Float16, nvar, 1000)
 
         for tree in random_trees
             output = tree(data, options.operators)
@@ -51,7 +51,7 @@ for depth in [5, 9]
             str_tree = string_tree(tree, options)
             # The string might not always be perfectly formatted. Introducing noise.
             str_tree = fuzz_string(str_tree)
-            expr_tree = parse_expr(Float32, str_tree, options)
+            expr_tree = parse_expr(Float16, str_tree, options)
             expr_output = expr_tree(data, options.operators)
             @test isapprox(expr_output, output)
         end
