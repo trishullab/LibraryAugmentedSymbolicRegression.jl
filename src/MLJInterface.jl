@@ -11,7 +11,9 @@ using DynamicExpressions:
     Node,
     Expression,
     default_node_type,
-    get_tree
+    get_tree,
+    AbstractOperatorEnum
+
 using DynamicQuantities:
     QuantityArray,
     UnionAbstractQuantity,
