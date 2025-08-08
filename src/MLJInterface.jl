@@ -153,8 +153,8 @@ for model in [:LaSRRegressor, :LaSRTestRegressor]
             target_scitype=AbstractVector{<:Any},
             supports_weights=true,
             reports_feature_importances=false,
-            load_path=$(
-                "LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)
+            load_path=(
+                $("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model))
             ),
             human_name="Symbolic Regression accelerated with LLM guidance",
         )
@@ -171,8 +171,8 @@ for model in [:MultitargetLaSRRegressor, :MultitargetLaSRTestRegressor]
             },
             supports_weights=true,
             reports_feature_importances=false,
-            load_path=$(
-                "LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)
+            load_path=(
+                $("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model))
             ),
             human_name="Multi-Target Symbolic Regression accelerated with LLM guidance",
         )
