@@ -3,26 +3,21 @@ using TestItemRunner: @run_package_tests
 
 ENV["SYMBOLIC_REGRESSION_TEST"] = "true"
 # online - test is run on github actions
-# online_llamafile - test is run on github actions and downloads the llamafile
+# llamafile - test downloads the llamafile
 # offline - test is run locally
-tags_to_run =
-    let t = get(
-            ENV,
-            "SYMBOLIC_REGRESSION_TEST_SUITE",
-            "online,online_llamafile,offline,offline_llamafile",
-        )
-        t = split(t, ",")
-        t = map(Symbol, t)
-        t
-    end
+tags_to_run = let t = get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,llamafile,offline")
+    t = split(t, ",")
+    t = map(Symbol, t)
+    t
+end
 @eval @run_package_tests filter = ti -> !isdisjoint(ti.tags, $tags_to_run) verbose = true
 
-@testitem "Test handshake (llamafile)" tags = [:online_llamafile] begin
+@testitem "Test handshake (llamafile)" tags = [:llamafile] begin
     include("test_handshake.jl")
 end
 
 # This test takes too long. Best to perform it offline.
-@testitem "Test tutorial (llamafile)" tags = [:offline_llamafile] begin
+@testitem "Test tutorial (llamafile)" tags = [:offline] begin
     include("test_tutorial_llamafile.jl")
 end
 
