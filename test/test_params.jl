@@ -9,6 +9,7 @@ ENV["SYMBOLIC_REGRESSION_IS_TESTING"] = "true"
 empty_all_globals!()
 
 const maximum_residual = 2e-2
+const T = Float32
 
 if !@isdefined(custom_cos) || !hasmethod(custom_cos, (String,))
     @eval custom_cos(x) = cos(x)

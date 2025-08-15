@@ -1,7 +1,7 @@
 # using LibraryAugmentedSymbolicRegression: LLMOptions, Options
 # """
 # Test if the wrappers around the llm generation commands process the data properly.
-    
+
 # Instead of importing aigenerate from the PromptingTools package, we will use a custom aigenerate
 # function that will return a predetermined string and a predetermined success value.
 

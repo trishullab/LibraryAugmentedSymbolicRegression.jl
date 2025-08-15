@@ -5,7 +5,9 @@ using Base: dirname, isdir, mkdir, atexit
 
 const LLAMAFILE_MODEL = get(ENV, "LLAMAFILE_MODEL", "gemma-2-2b-it.Q6_K")
 const LLAMAFILE_PATH = get(
-    ENV, "LLAMAFILE_PATH", abspath("$(@__DIR__)/../llamafiles/gemma-2-2b-it.Q6_K.llamafile")
+    ENV,
+    "LLAMAFILE_PATH",
+    abspath(joinpath(@__DIR__, "..", "llamafiles", "gemma-2-2b-it.Q6_K.llamafile")),
 )
 const LLAMAFILE_URL = get(
     ENV,
@@ -16,7 +18,7 @@ const LLM_PORT = parse(Int, get(ENV, "LLM_PORT", "11449"))
 const LLM_FLAGS = get(ENV, "LLM_FLAGS", "")
 
 # print the project dir
-@info "Project directory: $(@__DIR__)"
+@debug "Project directory: $(@__DIR__)"
 
 """
     download_llm(llm_url::String, llm_path::String)
@@ -30,19 +32,19 @@ Throws an exception if the download or permission changes fail.
 """
 function download_llm(llm_url::String, llm_path::String)::String
     if isfile(llm_path)
-        @info "LLM already downloaded to $llm_path"
+        @debug "LLM already downloaded to $llm_path"
         return llm_path
     end
 
-    @info "Preparing to download llamafile..." url = llm_url path = llm_path
+    @debug "Preparing to download llamafile..." url = llm_url path = llm_path
 
     dir = dirname(llm_path)
     if !isdir(dir)
-        @info "Creating directory for LLM: $dir"
+        @debug "Creating directory for LLM: $dir"
         mkdir(dir)
     end
 
-    @info "Downloading llamafile from $llm_url to $llm_path"
+    @debug "Downloading llamafile from $llm_url to $llm_path"
     Downloads.download(llm_url, llm_path)
 
     final_path = llm_path
@@ -52,7 +54,7 @@ function download_llm(llm_url::String, llm_path::String)::String
             mv(llm_path, final_path; force=true)
         end
     else
-        run(`chmod +x $llm_path`)
+        run(Cmd(["chmod", "+x", llm_path]))
     end
 
     @info "LLM downloaded successfully to $final_path"
@@ -77,34 +79,35 @@ function serve_llm(llm_path::String, port::Int=LLM_PORT; waitfor::Bool=false)
     local_exe = abspath(llm_path)
 
     if !Sys.iswindows()
-        run(`chmod +x $local_exe`)
+        run(Cmd(["chmod", "+x", local_exe]))
     end
 
-    cmd = `$local_exe --server --nobrowser --port $port`
-    if length(LLM_FLAGS) > 0
-        cmd = cmd * " " * LLM_FLAGS
+    args = ["--server", "--nobrowser", "--port", string(port)]
+    if !isempty(LLM_FLAGS)
+        append!(args, split(LLM_FLAGS))
     end
-    @info "Starting LLM server at $llm_path on port $port" path = llm_path port = port
+    cmd_args = [local_exe, args...]
+    @debug "Starting LLM server at $llm_path on port $port" path = llm_path port = port
 
     if Sys.isapple()
         # We need to invoke the server with bash on macOS
-        cmd = `bash -c "$cmd"`
+        cmd_args = ["bash", "-c", join(cmd_args, " ")]
     end
 
     if waitfor
         # Blocking run
-        proc = run(cmd; wait=true)
-        @info "LLM server has exited (blocking mode)."
+        proc = run(Cmd(cmd_args); wait=true)
+        @debug "LLM server has exited (blocking mode)."
         return proc
     end
     # Non-blocking run
-    proc = run(cmd; wait=false)
+    proc = run(Cmd(cmd_args); wait=false)
     @info "LLM server spawned asynchronously" pid = getpid(proc)
     return proc
 end
 
 """
-    async_run_llm_server(llm_url::String=DEFAULT_LLAMAFILE_URL, 
+    async_run_llm_server(llm_url::String=DEFAULT_LLAMAFILE_URL,
                          llm_path::String=DEFAULT_LLAMAFILE_PATH,
                          port::Int=DEFAULT_PORT)
 
@@ -128,7 +131,7 @@ function async_run_llm_server(
     atexit() do
         try
             if isopen(proc)
-                @info "Shutting down LLM server (pid: $(getpid(proc))) at exit."
+                @debug "Shutting down LLM server (pid: $(getpid(proc))) at exit."
                 kill(proc, Base.SIGTERM)
                 wait(proc)
                 @info "LLM server closed."
