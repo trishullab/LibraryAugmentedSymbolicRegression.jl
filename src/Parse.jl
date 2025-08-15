@@ -134,13 +134,13 @@ function _parse_expr(ex, options::AbstractOptions, ::Type{T}) where {T<:DATA_TYP
         if ex.head === :call
             op = ex.args[1]
             # unary minus: (-(x))  =>  (0 - x)
-            if op === :- && length(ex.args) == 2
-                return _parse_expr(Expr(:call, :-, 0, ex.args[2]), options, T)
-            end
-            # unary plus: (+(x))   =>  x
-            if op === :+ && length(ex.args) == 2
-                return _parse_expr(ex.args[2], options, T)
-            end
+            # if op === :- && length(ex.args) == 2
+            #     return _parse_expr(Expr(:call, :*, -1, ex.args[2]), options, T)
+            # end
+            # # unary plus: (+(x))   =>  x
+            # if op === :+ && length(ex.args) == 2
+            #     return _parse_expr(ex.args[2], options, T)
+            # end
             return _make_call_node(ex, options, T)
         else
             error("Unsupported expression head: $(ex.head)")

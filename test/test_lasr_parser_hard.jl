@@ -2,14 +2,31 @@
 # These are round trip tests to ensure that the parser is working correctly.
 println("Testing LaSR expression parser [hard]")
 
+using Revise
 using Random: MersenneTwister, shuffle
+using SymbolicRegression: safe_pow, SROptions
 using LibraryAugmentedSymbolicRegression:
     LaSROptions, string_tree, parse_expr, render_expr, gen_random_tree
-include("test_params.jl")
-options = LaSROptions(;
-    default_params..., binary_operators=[-, +, *, ^], unary_operators=[sin, cos, exp]
-)
+using LibraryAugmentedSymbolicRegression.ParseModule: get_variable_names
+using DynamicExpressions: parse_expression
 
+include("test/test_params.jl")
+
+@inline sinf(x) = sin(T(x))::T
+@inline cosf(x) = cos(T(x))::T
+@inline expf(x) = exp(T(clamp(x, -40.0, 40.0)))::T
+@inline safelog(x) = log(abs(T(x)) + eps(T))::T  # no 1e-12!
+@inline sqr(x) = (t=T(x); (t*t)::T)
+@inline cube(x) = (t=T(x); (t*t*t)::T)
+@inline addf(a, b) = (T(a) + T(b))::T
+@inline mulf(a, b) = (T(a) * T(b))::T
+@inline divf(a, b) = (ta=T(a); tb=T(b); (ta / (abs(tb) + eps(T)))::T)
+
+options = LaSROptions(;
+    default_params...,
+    binary_operators=[addf, mulf, divf],
+    unary_operators=[sinf, cosf, expf, safelog, sqr, cube],
+)
 rng = MersenneTwister(314159)
 
 """
@@ -40,10 +57,10 @@ end
 
 for depth in [5, 9]
     for nvar in [5, 9]
-        random_trees = [gen_random_tree(depth, options, nvar, Float32, rng) for _ in 1:1e4]
-        data = rand(Float32, nvar, 1000)
+        random_trees = [gen_random_tree(depth, options, nvar, T, rng) for _ in 1:1e4]
+        data = rand(T, nvar, 1000)
 
-        for tree in random_trees
+        for (i, tree) in enumerate(random_trees)
             output = tree(data, options.operators)
             if any(isnan.(output))
                 continue
@@ -51,9 +68,9 @@ for depth in [5, 9]
             str_tree = string_tree(tree, options)
             # The string might not always be perfectly formatted. Introducing noise.
             str_tree = fuzz_string(str_tree)
-            expr_tree = parse_expr(Float32, str_tree, options)
+            expr_tree = parse_expr(T, str_tree, options)
             expr_output = expr_tree(data, options.operators)
-            @test isapprox(expr_output, output)
+            @assert isapprox(expr_output, output) "[$i] Failed for tree: $str_tree"
         end
     end
 end

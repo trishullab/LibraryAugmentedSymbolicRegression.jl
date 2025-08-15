@@ -17,7 +17,7 @@ rng = MersenneTwister(314159)
 for depth in [5, 9]
     for nvar in [5, 9]
         options.variable_names = Dict('x' * string(i) => ('x' * string(i)) for i in 1:nvar)
-        random_trees = [gen_random_tree(depth, options, nvar, Float32, rng) for _ in 1:1e3]
+        random_trees = [gen_random_tree(depth, options, nvar, T, rng) for _ in 1:1e3]
 
         for (i, tree) in enumerate(random_trees)
             str_tree = string_tree(tree, options)
@@ -27,7 +27,7 @@ for depth in [5, 9]
             )
 
             rendered_tree = render_expr(tree, options)
-            expr_tree = parse_expr(Float32, rendered_tree, options)
+            expr_tree = parse_expr(T, rendered_tree, options)
             expr_tree_str = string_tree(expr_tree, options)
             @test str_tree_wo_constants == expr_tree_str
         end
