@@ -106,8 +106,16 @@ end
     op = lowercase(string(op_sym))
 
     if op == "^"
-        idx = findfirst(==("^"), binops)
-        return idx === nothing ? UInt8(length(binops) + 1) : UInt8(idx)
+        # direct hit
+        if (i = findfirst(==("^"), binops)) !== nothing
+            return UInt8(i)
+        end
+        # fallback: anything that *looks like* pow
+        if (i = findfirst(n -> occursin("pow", n) || occursin("power", n), binops)) !==
+            nothing
+            return UInt8(i)
+        end
+        error("Could not find a power operator in options.operators.binops")
     end
 
     if (i = findfirst(==(op), binops)) !== nothing
@@ -115,12 +123,6 @@ end
     end
     if (i = findfirst(==(op), unaops)) !== nothing
         return UInt8(i)
-    end
-
-    # Special-case unary +/- even if not listed
-    if (op == "-" || op == "+")
-        # try to treat as unary by allocating a new unaop index
-        return UInt8(length(binops) + length(unaops) + 1)
     end
 
     return error("Unrecognized operator symbol: $(op_sym)")
@@ -133,14 +135,22 @@ function _parse_expr(ex, options::AbstractOptions, ::Type{T}) where {T<:DATA_TYP
     elseif ex isa Expr
         if ex.head === :call
             op = ex.args[1]
-            # unary minus: (-(x))  =>  (0 - x)
-            # if op === :- && length(ex.args) == 2
-            #     return _parse_expr(Expr(:call, :*, -1, ex.args[2]), options, T)
-            # end
-            # # unary plus: (+(x))   =>  x
-            # if op === :+ && length(ex.args) == 2
-            #     return _parse_expr(ex.args[2], options, T)
-            # end
+            if op === :- && length(ex.args) == 2
+                child = ex.args[2]
+                if child isa Number
+                    return _make_constant_node(-child, T)
+                end
+                # general case: 0 - child (use existing binary "-")
+                minus_idx = _find_operator_index(:-, options)  # must return BINOP index
+                return Node{T}(;
+                    op=minus_idx,
+                    l=_make_constant_node(zero(T), T),
+                    r=_parse_expr(child, options, T),
+                )
+            end
+            if op === :+ && length(ex.args) == 2
+                return _parse_expr(ex.args[2], options, T)  # unary plus is a no-op
+            end
             return _make_call_node(ex, options, T)
         else
             error("Unsupported expression head: $(ex.head)")

@@ -65,7 +65,7 @@ for depth in [5, 9]
             str_tree = fuzz_string(str_tree)
             expr_tree = parse_expr(T, str_tree, options)
             expr_output = expr_tree(data, options.operators)
-            @assert isapprox(expr_output, output) "[$i] Failed for tree: $str_tree"
+            @test isapprox(expr_output, output)
         end
     end
 end
