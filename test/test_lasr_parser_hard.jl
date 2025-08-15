@@ -2,15 +2,10 @@
 # These are round trip tests to ensure that the parser is working correctly.
 println("Testing LaSR expression parser [hard]")
 
-using Revise
 using Random: MersenneTwister, shuffle
-using SymbolicRegression: safe_pow, SROptions
 using LibraryAugmentedSymbolicRegression:
-    LaSROptions, string_tree, parse_expr, render_expr, gen_random_tree
-using LibraryAugmentedSymbolicRegression.ParseModule: get_variable_names
-using DynamicExpressions: parse_expression
-
-include("test/test_params.jl")
+    LaSROptions, string_tree, parse_expr, gen_random_tree
+include("test_params.jl")
 
 @inline sinf(x) = sin(T(x))::T
 @inline cosf(x) = cos(T(x))::T
