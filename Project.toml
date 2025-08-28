@@ -1,7 +1,7 @@
 name = "LibraryAugmentedSymbolicRegression"
 uuid = "158930c3-947c-4174-974b-74b39e64a28f"
 authors = ["AtharvaSehgal <atharva.sehgal@gmail.com>", "AryaGrayeli <arya.grayeli@gmail.com>", "MilesCranmer <miles.cranmer@gmail.com>"]
-version = "0.3.2"
+version = "0.3.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -53,7 +53,10 @@ PromptingTools = "0.65 - 0.81"
 Random = "<0.0.1, 1"
 Reexport = "1"
 StatsBase = "0.33, 0.34"
-SymbolicRegression = "^1"
+SymbolicRegression = "2.0"
 TOML = "<0.0.1, 1"
 UUIDs = "1"
 julia = "1.9 - 1.11"
+
+[sources]
+SymbolicRegression = { url = "git@github.com:MilesCranmer/SymbolicRegression.jl.git", rev="v2.0.0-alpha.6" }

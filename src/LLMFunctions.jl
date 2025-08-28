@@ -13,7 +13,6 @@ using DynamicExpressions:
     get_contents,
     with_contents,
     constructorof,
-    copy_node,
     set_node!,
     count_nodes,
     has_constants,
@@ -22,7 +21,7 @@ using DynamicExpressions:
     AbstractOperatorEnum
 using Compat: Returns, @inline
 using SymbolicRegression:
-    Options, DATA_TYPE, gen_random_tree_fixed_size, random_node_and_parent, AbstractOptions
+    Options, DATA_TYPE, gen_random_tree_fixed_size, crossover_trees, AbstractOptions
 using SymbolicRegression.MutationFunctionsModule: with_contents_for_mutation
 using ..LLMOptionsModule: LaSROptions
 using ..LLMUtilsModule:
@@ -190,39 +189,6 @@ function _gen_llm_random_tree(
     end
 
     return out
-end
-
-"""Crossover between two expressions"""
-function crossover_trees(
-    tree1::AbstractExpressionNode{T}, tree2::AbstractExpressionNode{T}
-)::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
-    tree1 = copy_node(tree1)
-    tree2 = copy_node(tree2)
-
-    node1, parent1, side1 = random_node_and_parent(tree1)
-    node2, parent2, side2 = random_node_and_parent(tree2)
-
-    node1 = copy_node(node1)
-
-    if side1 == 'l'
-        parent1.l = copy_node(node2)
-        # tree1 now contains this.
-    elseif side1 == 'r'
-        parent1.r = copy_node(node2)
-        # tree1 now contains this.
-    else # 'n'
-        # This means that there is no parent2.
-        tree1 = copy_node(node2)
-    end
-
-    if side2 == 'l'
-        parent2.l = node1
-    elseif side2 == 'r'
-        parent2.r = node1
-    else # 'n'
-        tree2 = node1
-    end
-    return tree1, tree2
 end
 
 function concept_evolution(idea_database, options::AbstractOptions)

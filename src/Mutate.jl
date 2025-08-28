@@ -5,7 +5,7 @@ using .SymbolicRegression: @recorder
 
 # It's important that we explicitly import the mutate! function from SymbolicRegression
 # so Julia knows that we're extending it.
-import SymbolicRegression: mutate!, MutationResult
+import SymbolicRegression: mutate!, MutationResult, crossover_trees
 
 using ..LLMOptionsStructModule: LaSROptions
 using ..LLMFunctionsModule: llm_mutate_tree, llm_crossover_trees, llm_randomize_tree

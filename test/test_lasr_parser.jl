@@ -2,13 +2,15 @@
 # These are round trip tests to ensure that the parser is working correctly.
 println("Testing LaSR expression parser")
 
+using Revise
 using Random: MersenneTwister
+using DynamicExpressions: parse_expression
 using LibraryAugmentedSymbolicRegression:
     LaSROptions, string_tree, parse_expr, render_expr, gen_random_tree
-include("test_params.jl")
+include("test/test_params.jl")
 
 @inline safepow(x, y) = sign(x) * abs(x)^y
-options = LaSROptions(;
+options = Options(;
     default_params..., binary_operators=[-, +, *, safepow], unary_operators=[sin, cos, exp]
 )
 
@@ -25,10 +27,18 @@ for depth in [5, 9]
                 continue
             end
             str_tree = string_tree(tree, options)
-            @test str_tree == String(strip(str_tree, [' ', '\n', '"', ',', '.', '[', ']']))
-            expr_tree = parse_expr(T, str_tree, options)
+            @assert str_tree ==
+                String(strip(str_tree, [' ', '\n', '"', ',', '.', '[', ']']))
+            expr_tree = parse_expression(
+                Meta.parse(str_tree);
+                operators=options.operators,
+                node_type=options.node_type,
+                expression_type=options.expression_type,
+                variable_names=["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9"][1:nvar],
+            )
             expr_output = expr_tree(data, options.operators)
-            @test isapprox(expr_output, output)
+            @assert string_tree(expr_tree) == str_tree "[$i] String representation mismatch: $(string_tree(expr_tree)) vs $str_tree for tree: $str_tree"
+            @assert isapprox(expr_output, output) "[$i] Output mismatch: $(expr_output) vs $(output) for tree: $str_tree"
         end
     end
 end
