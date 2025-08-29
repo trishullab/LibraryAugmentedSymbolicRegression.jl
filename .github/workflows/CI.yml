@@ -29,25 +29,25 @@ jobs:
           - "online"
           - "llamafile"
         julia-version:
-          - "1.10"
+          - "1.11"
           - "1"
         os:
           - ubuntu-latest
         include:
           - os: windows-latest
-            julia-version: "1"
+            julia-version: "~1.11.0-0"
             test: "online"
           - os: macOS-latest
-            julia-version: "1"
+            julia-version: "~1.11.0-0"
             test: "online"
           - os: ubuntu-latest
             julia-version: "~1.11.0-0"
             test: "online"
           - os: windows-latest
-            julia-version: "1"
+            julia-version: "~1.11.0-0"
             test: "llamafile"
           - os: macOS-latest
-            julia-version: "1"
+            julia-version: "~1.11.0-0"
             test: "llamafile"
           - os: ubuntu-latest
             julia-version: "~1.11.0-0"
