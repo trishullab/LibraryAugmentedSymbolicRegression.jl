@@ -59,4 +59,4 @@ UUIDs = "1"
 julia = "1.9 - 1.11"
 
 [sources]
-SymbolicRegression = { url = "git@github.com:MilesCranmer/SymbolicRegression.jl.git", rev="v2.0.0-alpha.6" }
+SymbolicRegression = { url = "https://github.com/MilesCranmer/SymbolicRegression.jl.git", rev="v2.0.0-alpha.6" }

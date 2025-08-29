@@ -21,7 +21,10 @@ TestItems = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
 
 [compat]
 Aqua = "0.8"
-SymbolicRegression = ">=1.7.1"
+SymbolicRegression = "2.0"
 
 [preferences.LibraryAugmentedSymbolicRegression]
 dispatch_doctor_mode = "error"
+
+[sources]
+SymbolicRegression = { url = "https://github.com/MilesCranmer/SymbolicRegression.jl.git", rev="v2.0.0-alpha.6" }
