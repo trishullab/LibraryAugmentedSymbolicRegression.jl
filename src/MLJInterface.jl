@@ -91,11 +91,14 @@ function modelexpr(
             procs::Union{Vector{Int},Nothing} = nothing
             addprocs_function::Union{Function,Nothing} = nothing
             heap_size_hint_in_bytes::Union{Integer,Nothing} = nothing
+            worker_timeout::Union{Real,Nothing} = nothing
             worker_imports::Union{Vector{Symbol},Nothing} = nothing
             logger::Union{AbstractSRLogger,Nothing} = nothing
             runtests::Bool = true
             run_id::Union{String,Nothing} = nothing
             loss_type::Type{L} = Nothing
+            guesses::Union{AbstractVector,AbstractVector{<:AbstractVector},Nothing} =
+                nothing
             selection_method::Function = choose_best
             dimensions_type::Type{D} = SymbolicDimensions{DEFAULT_DIM_BASE_TYPE}
         end)

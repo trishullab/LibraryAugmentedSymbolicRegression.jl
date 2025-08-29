@@ -19,8 +19,9 @@ include("test_params.jl")
 
 options = LaSROptions(;
     default_params...,
-    binary_operators=[addf, mulf, divf],
+    binary_operators=[+, addf, mulf, divf],
     unary_operators=[sinf, cosf, expf, safelog, sqr, cube],
+    variable_names=Dict('x' * string(i) => ('x' * string(i)) for i in 1:9),
 )
 rng = MersenneTwister(314159)
 
@@ -37,7 +38,7 @@ This function takes as argument a well formatted string such as
 function fuzz_string(str::String)
     fuzzers = [
         s -> "y = " * s,  # Introduce a left hand side
-        s -> replace(s, r"\s" => " "),  # Add random spaces
+        s -> replace(s, r"\s" => " "),  # Add spaces
         s -> replace(s, r"sin" => "Sin"),  # capitalization
         s -> replace(s, r"cos" => "Cos"),  # capitalization
         s -> replace(s, r"exp" => "Exp"),  # capitalization

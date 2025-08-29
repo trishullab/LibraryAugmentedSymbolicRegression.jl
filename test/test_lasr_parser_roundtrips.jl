@@ -6,8 +6,21 @@ using Random: MersenneTwister
 using LibraryAugmentedSymbolicRegression:
     LaSROptions, string_tree, parse_expr, render_expr, gen_random_tree
 include("test_params.jl")
+@inline sinf(x) = sin(T(x))::T
+@inline cosf(x) = cos(T(x))::T
+@inline expf(x) = exp(T(clamp(x, -40.0, 40.0)))::T
+@inline safelog(x) = log(abs(T(x)) + eps(T))::T  # no 1e-12!
+@inline sqr(x) = (t=T(x); (t*t)::T)
+@inline cube(x) = (t=T(x); (t*t*t)::T)
+@inline addf(a, b) = (T(a) + T(b))::T
+@inline mulf(a, b) = (T(a) * T(b))::T
+@inline divf(a, b) = (ta=T(a); tb=T(b); (ta / (abs(tb) + eps(T)))::T)
+
 options = LaSROptions(;
-    default_params..., binary_operators=[+, *, ^, -], unary_operators=[sin, cos, exp]
+    default_params...,
+    binary_operators=[+, addf, mulf, divf],
+    unary_operators=[sin, cos, exp],
+    variable_names=Dict('x' * string(i) => ('x' * string(i)) for i in 1:9),
 )
 
 rng = MersenneTwister(314159)
@@ -16,7 +29,6 @@ rng = MersenneTwister(314159)
 # x10 gets lexicographically sorted after x1 but before x2, messing up the variable names.
 for depth in [5, 9]
     for nvar in [5, 9]
-        options.variable_names = Dict('x' * string(i) => ('x' * string(i)) for i in 1:nvar)
         random_trees = [gen_random_tree(depth, options, nvar, T, rng) for _ in 1:1e3]
 
         for (i, tree) in enumerate(random_trees)
