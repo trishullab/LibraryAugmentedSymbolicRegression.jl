@@ -30,6 +30,10 @@ SymbolicRegression = "8254be44-1295-4e6a-a16d-46603ac705cb"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
+[sources.SymbolicRegression]
+rev = "v2.0.0-alpha.6"
+url = "https://github.com/MilesCranmer/SymbolicRegression.jl.git"
+
 [compat]
 ADTypes = "^1.4.0"
 Compat = "^4.16"
@@ -53,10 +57,7 @@ PromptingTools = "0.65 - 0.81"
 Random = "<0.0.1, 1"
 Reexport = "1"
 StatsBase = "0.33, 0.34"
-SymbolicRegression = "2.0"
+SymbolicRegression = "2.0, 1"
 TOML = "<0.0.1, 1"
 UUIDs = "1"
 julia = "1.11 - 1.12"
-
-[sources]
-SymbolicRegression = { url = "https://github.com/MilesCranmer/SymbolicRegression.jl.git", rev="v2.0.0-alpha.6" }
