@@ -1,7 +1,15 @@
 module HallOfFameModule
 
 using DispatchDoctor: @unstable
-using SymbolicRegression: DATA_TYPE, LOSS_TYPE, PopMember, Dataset, create_expression, AbstractVector, calculate_pareto_frontier, Population
+using SymbolicRegression:
+    DATA_TYPE,
+    LOSS_TYPE,
+    PopMember,
+    Dataset,
+    create_expression,
+    AbstractVector,
+    calculate_pareto_frontier,
+    Population
 using SymbolicRegression
 using SymbolicRegression.LoggingModule: pareto_volume, string_tree, compute_complexity
 import SymbolicRegression.HallOfFameModule: HallOfFame, format_hall_of_fame
@@ -112,7 +120,11 @@ function _log_scalars(;
     out["summaries"] = Dict([
         "min_loss" => length(dominating) > 0 ? dominating[end].loss : L(Inf),
         "pareto_volume" => pareto_volume(losses, complexities, options.maxsize),
-        "llm_usage" => length(dominating) > 0 ? dominating[end].llm_contribution / dominating[end].total_contribution : L(0),
+        "llm_usage" => if length(dominating) > 0
+            dominating[end].llm_contribution / dominating[end].total_contribution
+        else
+            L(0)
+        end,
     ])
 
     #### Full Pareto front

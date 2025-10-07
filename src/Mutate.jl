@@ -24,7 +24,7 @@ using .SymbolicRegression: @recorder
 
 # It's important that we explicitly import the mutate! function from SymbolicRegression
 # so Julia knows that we're extending it.
-import SymbolicRegression: mutate!, MutationResult
+import SymbolicRegression: mutate!, MutationResult, crossover_trees
 import SymbolicRegression.MutateModule:
     next_generation, _dispatch_mutations!, crossover_generation
 
@@ -125,7 +125,7 @@ end
         )
         if options.tracking && !isnothing(mutation_result.member)
             # If the mutation result is a PopMember, we need to convert it to a TrackedPopMember
-            # MR = MutationResult{N,TrackedPopMember{T,L,N}} 
+            # MR = MutationResult{N,TrackedPopMember{T,L,N}}
             wrapped_member = TrackedPopMember(mutation_result.member, old_contribution...)
         else
             wrapped_member = mutation_result.member

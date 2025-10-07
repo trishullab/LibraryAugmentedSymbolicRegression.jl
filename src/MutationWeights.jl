@@ -23,6 +23,7 @@ Base.@kwdef mutable struct LaSRMutationWeights <: AbstractMutationWeights
     # Mutation weights imported from SR.jl
     mutate_constant::Float64 = 0.0353
     mutate_operator::Float64 = 3.63
+    mutate_feature::Float64 = 0.1
     swap_operands::Float64 = 0.00608
     rotate_tree::Float64 = 1.42
     add_node::Float64 = 0.0771

@@ -11,7 +11,9 @@ using DynamicExpressions:
     Node,
     Expression,
     default_node_type,
-    get_tree
+    get_tree,
+    AbstractOperatorEnum
+
 using DynamicQuantities:
     QuantityArray,
     UnionAbstractQuantity,
@@ -89,11 +91,14 @@ function modelexpr(
             procs::Union{Vector{Int},Nothing} = nothing
             addprocs_function::Union{Function,Nothing} = nothing
             heap_size_hint_in_bytes::Union{Integer,Nothing} = nothing
+            worker_timeout::Union{Real,Nothing} = nothing
             worker_imports::Union{Vector{Symbol},Nothing} = nothing
             logger::Union{AbstractSRLogger,Nothing} = nothing
             runtests::Bool = true
             run_id::Union{String,Nothing} = nothing
             loss_type::Type{L} = Nothing
+            guesses::Union{AbstractVector,AbstractVector{<:AbstractVector},Nothing} =
+                nothing
             selection_method::Function = choose_best
             dimensions_type::Type{D} = SymbolicDimensions{DEFAULT_DIM_BASE_TYPE}
         end)
@@ -151,8 +156,8 @@ for model in [:LaSRRegressor, :LaSRTestRegressor]
             target_scitype=AbstractVector{<:Any},
             supports_weights=true,
             reports_feature_importances=false,
-            load_path=$(
-                "LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)
+            load_path=(
+                $("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model))
             ),
             human_name="Symbolic Regression accelerated with LLM guidance",
         )
@@ -169,8 +174,8 @@ for model in [:MultitargetLaSRRegressor, :MultitargetLaSRTestRegressor]
             },
             supports_weights=true,
             reports_feature_importances=false,
-            load_path=$(
-                "LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model)
+            load_path=(
+                $("LibraryAugmentedSymbolicRegression.MLJInterfaceModule." * string(model))
             ),
             human_name="Multi-Target Symbolic Regression accelerated with LLM guidance",
         )
