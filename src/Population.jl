@@ -1,5 +1,7 @@
 module PopulationModule
 
+__precompile__(false)
+
 using SymbolicRegression:
     DATA_TYPE,
     LOSS_TYPE,

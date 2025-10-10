@@ -39,7 +39,6 @@ Distributed = "<0.0.1, 1"
 Downloads = "1.6.0"
 DynamicExpressions = "^1, 2"
 DynamicQuantities = "1"
-JSON = "0.21"
 LineSearches = "7"
 Logging = "1"
 LossFunctions = "0.10, 0.11, 1"
@@ -48,8 +47,6 @@ MacroTools = "0.4, 0.5"
 Optim = "~1.8, ~1.9, ~1.10, 1"
 PackageExtensionCompat = "1.0.2"
 Pkg = "<0.0.1, 1"
-PrecompileTools = "1"
-PromptingTools = "0.65 - 0.81"
 Random = "<0.0.1, 1"
 Reexport = "1"
 StatsBase = "0.33, 0.34"
@@ -59,4 +56,4 @@ UUIDs = "1"
 julia = "1.11 - 1.12"
 
 [sources]
-SymbolicRegression = { url = "https://github.com/MilesCranmer/SymbolicRegression.jl.git", rev="v2.0.0-alpha.6" }
+SymbolicRegression = {path = "/home/asehgal/lasr-experiments/SymbolicRegression.jl"}

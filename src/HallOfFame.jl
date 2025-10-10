@@ -1,5 +1,7 @@
 module HallOfFameModule
 
+__precompile__(false)
+
 using DispatchDoctor: @unstable
 using SymbolicRegression:
     DATA_TYPE,
@@ -13,7 +15,6 @@ using SymbolicRegression:
 using SymbolicRegression
 using SymbolicRegression.LoggingModule: pareto_volume, string_tree, compute_complexity
 import SymbolicRegression.HallOfFameModule: HallOfFame, format_hall_of_fame
-import SymbolicRegression.LoggingModule: _log_scalars
 
 using ..CoreModule: LaSROptions
 using ..TrackedPopMemberModule: TrackedPopMember
@@ -119,7 +120,9 @@ function _log_scalars(;
 
     out["summaries"] = Dict([
         "min_loss" => length(dominating) > 0 ? dominating[end].loss : L(Inf),
-        "pareto_volume" => pareto_volume(losses, complexities, options.maxsize),
+        "pareto_volume" => pareto_volume(
+            losses, complexities, options.maxsize, options.loss_scale == :linear
+        ),
         "llm_usage" => if length(dominating) > 0
             dominating[end].llm_contribution / dominating[end].total_contribution
         else

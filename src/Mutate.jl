@@ -87,7 +87,7 @@ end
 
     weights = copy(options.mutation_weights)
 
-    condition_mutation_weights!(weights, member, options, curmaxsize)
+    condition_mutation_weights!(weights, member, options, curmaxsize, nfeatures)
 
     mutation_choice = sample_mutation(weights)
 
@@ -100,17 +100,24 @@ end
     # Mutations
     #############################################
     # local tree
-    old_contribution = [
-        member.llm_contribution, member.sr_contribution, member.total_contribution
-    ]
+    old_contribution = if member isa TrackedPopMember
+        [member.llm_contribution, member.sr_contribution, member.total_contribution]
+    else
+        [0.0, 0.0, 0.0]
+    end
     new_contribution = deepcopy(old_contribution)
     rtree = Ref{N}()
     while (!successful_mutation) && attempts < max_attempts
         rtree[] = copy_into!(node_storage, member.tree)
 
+        base_member = if member isa TrackedPopMember
+            member.pm
+        else
+            member
+        end
         mutation_result = _dispatch_mutations!(
             rtree[],
-            member.pm,
+            base_member,
             mutation_choice,
             options.mutation_weights,
             options;
@@ -127,26 +134,23 @@ end
             # If the mutation result is a PopMember, we need to convert it to a TrackedPopMember
             # MR = MutationResult{N,TrackedPopMember{T,L,N}}
             wrapped_member = TrackedPopMember(mutation_result.member, old_contribution...)
-        else
-            wrapped_member = mutation_result.member
+            mutation_result = if mutation_result isa LLMMutationResult
+                LLMMutationResult{N,P}(;
+                    tree=mutation_result.tree,
+                    member=wrapped_member,
+                    num_evals=mutation_result.num_evals,
+                    return_immediately=mutation_result.return_immediately,
+                    using_llm=true,
+                )
+            else
+                MutationResult{N,P}(;
+                    tree=mutation_result.tree,
+                    member=wrapped_member,
+                    num_evals=mutation_result.num_evals,
+                    return_immediately=mutation_result.return_immediately,
+                )
+            end
         end
-        mutation_result = if mutation_result isa LLMMutationResult{N,P}
-            LLMMutationResult{N,TrackedPopMember{T,L,N}}(;
-                tree=mutation_result.tree,
-                member=wrapped_member,
-                num_evals=mutation_result.num_evals,
-                return_immediately=mutation_result.return_immediately,
-                using_llm=true,
-            )
-        else
-            MutationResult{N,TrackedPopMember{T,L,N}}(;
-                tree=mutation_result.tree,
-                member=wrapped_member,
-                num_evals=mutation_result.num_evals,
-                return_immediately=mutation_result.return_immediately,
-            )
-        end
-        mutation_result::AbstractMutationResult{N,P}
         num_evals += mutation_result.num_evals::Float64
 
         if mutation_result.return_immediately
@@ -456,8 +460,16 @@ function crossover_generation(
     end
 
     contribution = [
-        [member1.llm_contribution, member1.sr_contribution, member1.total_contribution],
-        [member2.llm_contribution, member2.sr_contribution, member2.total_contribution],
+        if member1 isa TrackedPopMember
+            [member1.llm_contribution, member1.sr_contribution, member1.total_contribution]
+        else
+            [0.0, 0.0, 0.0]
+        end,
+        if member2 isa TrackedPopMember
+            [member2.llm_contribution, member2.sr_contribution, member2.total_contribution]
+        else
+            [0.0, 0.0, 0.0]
+        end,
     ]
 
     if !llm_skip
@@ -502,16 +514,24 @@ function crossover_generation(
         )
         crossover_accepted = true
         contribution = [
-            [
-                member1.llm_contribution + 1,
-                member1.sr_contribution,
-                member1.total_contribution + 1,
-            ],
-            [
-                member2.llm_contribution + 1,
-                member2.sr_contribution,
-                member2.total_contribution + 1,
-            ],
+            if member1 isa TrackedPopMember
+                [
+                    member1.llm_contribution + 1,
+                    member1.sr_contribution,
+                    member1.total_contribution + 1,
+                ]
+            else
+                [1.0, 0.0, 1.0]
+            end,
+            if member2 isa TrackedPopMember
+                [
+                    member2.llm_contribution + 1,
+                    member2.sr_contribution,
+                    member2.total_contribution + 1,
+                ]
+            else
+                [1.0, 0.0, 1.0]
+            end,
         ]
     end
 
