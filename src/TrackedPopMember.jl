@@ -1,4 +1,7 @@
 module TrackedPopMemberModule
+
+__precompile__(false)
+
 using Base
 using DispatchDoctor: @unstable
 using DynamicExpressions: DynamicExpressions
@@ -6,10 +9,10 @@ using DynamicExpressions: AbstractExpression, string_tree
 using SymbolicRegression
 import SymbolicRegression: AbstractPopMember
 import SymbolicRegression.PopMemberModule: create_child
-using ..LaSRMutationWeightsModule: v_lasr_mutations
+import SymbolicRegression.HallOfFameModule: member_to_row, default_columns, HOFColumn
+using Printf: @sprintf
 
-const LLM_OPS = filter(x -> startswith(String(x), "llm_"), v_lasr_mutations)
-@inline is_llm_op(x) = (x !== nothing) && (x in LLM_OPS)
+@inline is_llm_op(x) = (x !== nothing) && startswith(String(x), "llm_")
 
 mutable struct TrackedPopMember{T,L,N} <: AbstractPopMember{T,L,N}
     tree::N
@@ -186,6 +189,116 @@ function create_child(
         sr_contribution,
         total_contribution,
     )
+end
+
+# Extend member_to_row to include LLM and SR contribution ratios in HOF output
+function member_to_row(
+    member::TrackedPopMember,
+    dataset::SymbolicRegression.Dataset,
+    options::SymbolicRegression.AbstractOptions;
+    kwargs...,
+)
+    base = invoke(
+        member_to_row,
+        Tuple{
+            SymbolicRegression.AbstractPopMember,
+            SymbolicRegression.Dataset,
+            SymbolicRegression.AbstractOptions,
+        },
+        member,
+        dataset,
+        options;
+        kwargs...,
+    )
+
+    # Compute contribution ratios (avoid division by zero)
+    llm_ratio = if member.total_contribution > 0
+        member.llm_contribution / member.total_contribution
+    else
+        0.0
+    end
+
+    sr_ratio = if member.total_contribution > 0
+        member.sr_contribution / member.total_contribution
+    else
+        0.0
+    end
+
+    return merge(
+        base,
+        (
+            llm_contribution=llm_ratio,
+            sr_contribution=sr_ratio,
+            total_contribution=member.total_contribution,
+        ),
+    )
+end
+
+# Extend default_columns to add custom columns for TrackedPopMember
+# We replicate the default logic to avoid recursion issues
+function default_columns(options::SymbolicRegression.AbstractOptions)
+    # Extract the actual SR options (handle both LaSROptions wrapper and plain Options)
+    sr_opts = hasproperty(options, :sr_options) ? options.sr_options : options
+
+    # Replicate the default column logic
+    cols = HOFColumn[]
+
+    # Complexity column
+    push!(
+        cols,
+        HOFColumn(:complexity, "Complexity", row -> row.complexity, string, 11, :right),
+    )
+
+    # Loss column
+    push!(
+        cols,
+        HOFColumn(:loss, "Loss", row -> row.loss, x -> @sprintf("%.3e", x), 10, :right),
+    )
+
+    # Score column (only if log scale)
+    if sr_opts.loss_scale == :log
+        push!(
+            cols,
+            HOFColumn(
+                :score, "Score", row -> row.score, x -> @sprintf("%.3e", x), 10, :right
+            ),
+        )
+    end
+
+    # Add LLM and SR contribution columns if using TrackedPopMember
+    if sr_opts.popmember_type <: TrackedPopMember
+        push!(
+            cols,
+            HOFColumn(
+                :llm_contribution,
+                "LLM%",
+                row -> row.llm_contribution,
+                x -> @sprintf("%.1f%%", x * 100),
+                6,
+                :right,
+            ),
+        )
+
+        push!(
+            cols,
+            HOFColumn(
+                :sr_contribution,
+                "SR%",
+                row -> row.sr_contribution,
+                x -> @sprintf("%.1f%%", x * 100),
+                6,
+                :right,
+            ),
+        )
+    end
+
+    # Equation column (always last)
+    push!(
+        cols,
+        HOFColumn(:equation, "Equation", row -> row.equation, identity, nothing, :left),
+    )
+
+    return cols
 end
 
 end

@@ -23,7 +23,7 @@ logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
 X = randn(Float32, 2, 100)
 y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
-p = 0.001
+p = 1e-5
 model = LaSRRegressor(;
     niterations=40,
     logger=logger,
