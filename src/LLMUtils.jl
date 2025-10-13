@@ -24,8 +24,11 @@ using ..CoreModule: LLMOptions
 using ..ParseModule: render_expr, get_variable_names
 using JSON: parse
 
+to_node(x) = x isa AbstractExpression ? get_contents(x) : x
+is_one_constant(n) = (n.constant === true) && (n.val == one(typeof(n.val)))
+
 function load_prompt(path::String)::String
-    # load prompt file 
+    # load prompt file
     f = open(path, "r")
     s = read(f, String)
     s = strip(s)

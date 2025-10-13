@@ -7,6 +7,7 @@ version = "0.3.1"
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
 ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DispatchDoctor = "8d63f2c5-f18a-4cf2-ba9d-b3f60fc568c8"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
@@ -30,10 +31,14 @@ SymbolicRegression = "8254be44-1295-4e6a-a16d-46603ac705cb"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
+[sources]
+SymbolicRegression = {path = "/home/asehgal/lasr-experiments/SymbolicRegression.jl"}
+
 [compat]
 ADTypes = "^1.4.0"
 Compat = "^4.16"
 ConstructionBase = "1.0.0 - 1.5.6, 1.5.8 - 1"
+DataFrames = "1.8.0"
 DispatchDoctor = "^0.4.17"
 Distributed = "<0.0.1, 1"
 Downloads = "1.6.0"
@@ -54,6 +59,3 @@ SymbolicRegression = "2.0"
 TOML = "<0.0.1, 1"
 UUIDs = "1"
 julia = "1.11 - 1.12"
-
-[sources]
-SymbolicRegression = {path = "/home/asehgal/lasr-experiments/SymbolicRegression.jl"}

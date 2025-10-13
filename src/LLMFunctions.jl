@@ -30,7 +30,9 @@ using ..LLMUtilsModule:
     get_ops,
     construct_prompt,
     format_pareto,
-    sample_context
+    sample_context,
+    to_node,
+    is_one_constant
 using ..ParseModule: render_expr, parse_expr
 using ..LoggingModule: log_generation!
 using PromptingTools:
@@ -164,26 +166,28 @@ function _gen_llm_random_tree(
             String(strip(gen_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        if t.val == 1 && t.constant
+        n = to_node(t)
+        if is_one_constant(n)
             continue
         end
         log_generation!(
             options.lasr_logger;
             id=gen_id,
             mode="gen_random",
-            chosen=render_expr(t, options),
+            chosen=render_expr(n, options),
         )
-        return t
+        return n
     end
 
     out = parse_expr(
         T, String(strip(gen_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
+    n = to_node(out)
     log_generation!(
-        options.lasr_logger; id=gen_id, mode="gen_random", chosen=render_expr(out, options)
+        options.lasr_logger; id=gen_id, mode="gen_random", chosen=render_expr(n, options)
     )
 
-    if out.val == 1 && out.constant
+    if is_one_constant(n)
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
@@ -524,24 +528,24 @@ function llm_mutate_tree(
             String(strip(mut_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        if t.val == 1 && t.constant
+        n = to_node(t)
+        if is_one_constant(n)
             continue
         end
-
         log_generation!(
-            options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(t, options)
+            options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(n, options)
         )
-        return t
+        return n
     end
 
     out = parse_expr(
         T, String(strip(mut_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])), options
     )
-
+    n = to_node(out)
     log_generation!(
-        options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(out, options)
+        options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(n, options)
     )
-    return out
+    return n
 end
 
 function llm_crossover_trees(
@@ -661,11 +665,12 @@ function llm_crossover_trees(
             String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
+        n = to_node(t)
 
         log_generation!(
-            options.lasr_logger; id=gen_id, mode="crossover", chosen=render_expr(t, options)
+            options.lasr_logger; id=gen_id, mode="crossover", chosen=render_expr(n, options)
         )
-        return t, tree2
+        return n, tree2
     end
 
     for i in 1:(2 * N)
@@ -675,31 +680,36 @@ function llm_crossover_trees(
             String(strip(cross_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        if t.val == 1 && t.constant
+        n = to_node(t)
+        if is_one_constant(n)
             continue
         end
 
         if isnothing(cross_tree1)
-            cross_tree1 = t
+            cross_tree1 = n
         elseif isnothing(cross_tree2)
-            cross_tree2 = t
+            cross_tree2 = n
             break
         end
     end
 
     if isnothing(cross_tree1)
-        cross_tree1 = parse_expr(
-            T,
-            String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
-            options,
+        cross_tree1 = to_node(
+            parse_expr(
+                T,
+                String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
+                options,
+            ),
         )
     end
 
     if isnothing(cross_tree2)
-        cross_tree2 = parse_expr(
-            T,
-            String(strip(cross_tree_options[2], [' ', '\n', '"', ',', '.', '[', ']'])),
-            options,
+        cross_tree2 = to_node(
+            parse_expr(
+                T,
+                String(strip(cross_tree_options[2], [' ', '\n', '"', ',', '.', '[', ']'])),
+                options,
+            ),
         )
     end
 

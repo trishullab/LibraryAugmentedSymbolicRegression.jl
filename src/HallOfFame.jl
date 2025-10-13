@@ -11,80 +11,14 @@ using SymbolicRegression:
     create_expression,
     AbstractVector,
     calculate_pareto_frontier,
-    Population
+    Population,
+    init_value
 using SymbolicRegression
 using SymbolicRegression.LoggingModule: pareto_volume, string_tree, compute_complexity
 import SymbolicRegression.HallOfFameModule: HallOfFame, format_hall_of_fame
 
 using ..CoreModule: LaSROptions
 using ..TrackedPopMemberModule: TrackedPopMember
-
-function HallOfFame(
-    options::LaSROptions, dataset::Dataset{T,L}
-) where {T<:DATA_TYPE,L<:LOSS_TYPE}
-    base_tree = create_expression(zero(T), options, dataset)
-    PM = if options.tracking
-        TrackedPopMember
-    else
-        PopMember
-    end
-    return HallOfFame{T,L,typeof(base_tree),PM{T,L,typeof(base_tree)}}(
-        [
-            if options.tracking
-                TrackedPopMember(
-                    PopMember(
-                        dataset,
-                        base_tree,
-                        options;
-                        parent=-1,
-                        deterministic=options.deterministic,
-                    ),
-                    0.0,
-                    0.0,
-                    0.0,
-                )
-            else
-                PopMember(
-                    dataset,
-                    base_tree,
-                    options;
-                    parent=-1,
-                    deterministic=options.deterministic,
-                )
-            end for _ in 1:(options.maxsize)
-        ],
-        [false for i in 1:(options.maxsize)],
-    )
-end
-
-@unstable function format_hall_of_fame(
-    hof::HallOfFame{T,L,TreeType,PM}, options::LaSROptions
-) where {T<:DATA_TYPE,L<:LOSS_TYPE,TreeType,PM}
-    default_columns = [:losses, :complexities, :scores, :trees]
-    if options.tracking
-        columns = [
-            default_columns...
-            [:llm_contribution, :sr_contribution, :total_contribution]...
-        ]
-    end
-    all_hall_of_fame = format_hall_of_fame(hof, options; columns=columns)
-
-    if options.tracking && !isempty(all_hall_of_fame)
-        # remove the llm_contribution, sr_contribution, and total_contribution columns
-        # add a new column called llm_usage = llm_contribution / total_contribution
-        default_dict = Dict(k => all_hall_of_fame[k] for k in default_columns)
-        new_dict = Dict(
-            :llm_usage =>
-                all_hall_of_fame.llm_contribution ./ all_hall_of_fame.total_contribution,
-            :sr_usage =>
-                all_hall_of_fame.sr_contribution ./ all_hall_of_fame.total_contribution,
-        )
-
-        merged_dict = merge(default_dict, new_dict)
-        all_hall_of_fame = NamedTuple(merged_dict)
-    end
-    return all_hall_of_fame
-end
 
 function _log_scalars(;
     @nospecialize(pops::AbstractVector{<:Population}),
@@ -106,7 +40,9 @@ function _log_scalars(;
         "llm_usages" => let
             llm_usages = Float64[]
             for pop in pops, member in pop.members
-                push!(llm_usages, member.llm_contribution / member.total_contribution)
+                llm_contribution = get(member, :llm_contribution, 0.0)
+                total_contribution = get(member, :total_contribution, 1.0)
+                push!(llm_usages, llm_contribution / total_contribution)
             end
             llm_usages
         end,
@@ -124,7 +60,8 @@ function _log_scalars(;
             losses, complexities, options.maxsize, options.loss_scale == :linear
         ),
         "llm_usage" => if length(dominating) > 0
-            dominating[end].llm_contribution / dominating[end].total_contribution
+            get(dominating[end], :llm_contribution, 0.0) /
+            get(dominating[end], :total_contribution, 1.0) # TODO: check if this makes sense.
         else
             L(0)
         end,

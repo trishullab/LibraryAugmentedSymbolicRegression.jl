@@ -1,6 +1,8 @@
 module MLJInterfaceModule
+
 using Optim: Optim
 using LineSearches: LineSearches
+using Logging: AbstractLogger
 using MLJModelInterface: MLJModelInterface as MMI
 using ADTypes: AbstractADType
 using DynamicExpressions:
@@ -8,12 +10,11 @@ using DynamicExpressions:
     string_tree,
     AbstractExpressionNode,
     AbstractExpression,
+    AbstractOperatorEnum,
     Node,
     Expression,
     default_node_type,
-    get_tree,
-    AbstractOperatorEnum
-
+    get_tree
 using DynamicQuantities:
     QuantityArray,
     UnionAbstractQuantity,
@@ -26,9 +27,22 @@ using DynamicQuantities:
 using LossFunctions: SupervisedLoss
 using SymbolicRegression
 using SymbolicRegression.InterfaceDynamicQuantitiesModule: get_dimensions_type
+using SymbolicRegression.InterfaceDynamicExpressionsModule:
+    InterfaceDynamicExpressionsModule as IDE
 using SymbolicRegression.CoreModule:
-    Options, Dataset, AbstractMutationWeights, MutationWeights, LOSS_TYPE, ComplexityMapping
+    AbstractOptions,
+    Options,
+    Dataset,
+    AbstractMutationWeights,
+    MutationWeights,
+    LOSS_TYPE,
+    ComplexityMapping,
+    AbstractExpressionSpec,
+    ExpressionSpec,
+    get_expression_type,
+    check_warm_start_compatibility
 using SymbolicRegression.CoreModule.OptionsModule: DEFAULT_OPTIONS, OPTION_DESCRIPTIONS
+using SymbolicRegression.PopMemberModule: default_popmember_type
 using SymbolicRegression.ComplexityModule: compute_complexity
 using SymbolicRegression.HallOfFameModule: HallOfFame, format_hall_of_fame
 using SymbolicRegression.UtilsModule: subscriptify
@@ -83,6 +97,7 @@ function modelexpr(
     parent_type::Symbol=:AbstractSymbolicRegressor;
     default_niterations=100,
 )
+    #! format: off
     struct_def =
         :(Base.@kwdef mutable struct $(model_name){D<:AbstractDimensions,L} <: $parent_type
             niterations::Int = $(default_niterations)
@@ -97,11 +112,11 @@ function modelexpr(
             runtests::Bool = true
             run_id::Union{String,Nothing} = nothing
             loss_type::Type{L} = Nothing
-            guesses::Union{AbstractVector,AbstractVector{<:AbstractVector},Nothing} =
-                nothing
+            guesses::Union{AbstractVector,AbstractVector{<:AbstractVector},Nothing} = nothing
             selection_method::Function = choose_best
             dimensions_type::Type{D} = SymbolicDimensions{DEFAULT_DIM_BASE_TYPE}
         end)
+    #! format: on
     # TODO: store `procs` from initial run if parallelism is `:multiprocessing`
     fields = last(last(struct_def.args).args).args
 

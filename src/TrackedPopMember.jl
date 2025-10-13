@@ -1,124 +1,191 @@
 module TrackedPopMemberModule
-
 using Base
 using DispatchDoctor: @unstable
+using DynamicExpressions: DynamicExpressions
 using DynamicExpressions: AbstractExpression, string_tree
-using SymbolicRegression: AbstractOptions, DATA_TYPE, LOSS_TYPE, Dataset
-import SymbolicRegression.PopMemberModule: AbstractPopMember, PopMember, compute_complexity
-import SymbolicRegression.ExpressionBuilderModule: strip_metadata, embed_metadata
+using SymbolicRegression
+import SymbolicRegression: AbstractPopMember
+import SymbolicRegression.PopMemberModule: create_child
+using ..LaSRMutationWeightsModule: v_lasr_mutations
 
-# TrackedPopMember is a PopMember with additional tracking for LLM_contribution, SR_contribution, total_contribution
-mutable struct TrackedPopMember{T<:DATA_TYPE,L<:LOSS_TYPE,N<:AbstractExpression{T}} <:
-               AbstractPopMember{T,L,N}
-    pm::PopMember{T,L,N}
-    llm_contribution::Float64
-    sr_contribution::Float64
-    total_contribution::Float64
-end
-const TRACKED_KEYS = [:llm_contribution, :sr_contribution, :total_contribution]
+const LLM_OPS = filter(x -> startswith(String(x), "llm_"), v_lasr_mutations)
+@inline is_llm_op(x) = (x !== nothing) && (x in LLM_OPS)
 
-@unstable @inline function Base.getproperty(member::TrackedPopMember, field::Symbol)
-    if field == :pm
-        return getfield(member, :pm)
-    elseif field in TRACKED_KEYS
-        return getfield(member, field)
-    else
-        return getproperty(getfield(member, :pm), field)
-    end
+mutable struct TrackedPopMember{T,L,N} <: AbstractPopMember{T,L,N}
+    tree::N
+    cost::L
+    loss::L
+    birth::Int
+    complexity::Int
+    ref::Int
+    parent::Int
+    llm_contribution::Int  # Custom fields to track LLM calls
+    sr_contribution::Int
+    total_contribution::Int
 end
 
-@inline function Base.setproperty!(member::TrackedPopMember, field::Symbol, value)
-    if field == :pm
-        return setfield!(member, :pm, value)
-    elseif field in TRACKED_KEYS
-        return setfield!(member, field, value)
-    else
-        return setproperty!(getfield(member, :pm), field, value)
-    end
-end
-
-function Base.show(
-    io::IO, p::TrackedPopMember{T,L,N}
-) where {T<:DATA_TYPE,L<:LOSS_TYPE,N<:AbstractExpression{T}}
-    shower(x) = sprint(show, x)
-    print(io, "TrackedPopMember(")
-    print(io, "tree = (", string_tree(p.tree), "), ")
-    print(io, "loss = ", shower(p.loss), ", ")
-    print(io, "cost = ", shower(p.cost))
-    for k in TRACKED_KEYS
-        print(io, ", ", k, " = ", shower(getproperty(p, k)))
-    end
-    print(io, ")")
-    return nothing
-end
-
-function TrackedPopMember(;
-    llm_contribution::Float64=0.0,
-    sr_contribution::Float64=0.0,
-    total_contribution::Float64=0.0,
-    kws...,
-)
-    # Create a new TrackedPopMember with the given contributions
-    pm = PopMember(kws...)
-    return TrackedPopMember(pm, llm_contribution, sr_contribution, total_contribution)
-end
-
-function Base.copy(p::TrackedPopMember)
-    pm = copy(p.pm)
-    llm_contribution = copy(p.llm_contribution)
-    sr_contribution = copy(p.sr_contribution)
-    total_contribution = copy(p.total_contribution)
-    return TrackedPopMember(pm, llm_contribution, sr_contribution, total_contribution)
-end
-
-function strip_metadata(
-    tracked_member::TrackedPopMember, options::AbstractOptions, dataset::Dataset{T,L}
-) where {T,L}
-    member = tracked_member.pm
-    new_tm = copy(tracked_member)
-    new_tm.pm = PopMember(
-        strip_metadata(member.tree, options, dataset),
-        member.cost,
-        member.loss,
-        nothing;
-        member.ref,
-        member.parent,
-        deterministic=options.deterministic,
+# Direct constructor that matches field order
+function TrackedPopMember(
+    tree::N,
+    cost::L,
+    loss::L,
+    birth::Int,
+    complexity::Int,
+    ref::Int,
+    parent::Int,
+    llm_contribution::Int,
+    sr_contribution::Int,
+    total_contribution::Int,
+) where {T,L,N<:DynamicExpressions.AbstractExpression{T}}
+    return TrackedPopMember{T,L,N}(
+        tree,
+        cost,
+        loss,
+        birth,
+        complexity,
+        ref,
+        parent,
+        llm_contribution,
+        sr_contribution,
+        total_contribution,
     )
-    return new_tm
 end
 
-@unstable begin
-    function embed_metadata(
-        tracked_member::TrackedPopMember, options::AbstractOptions, dataset::Dataset{T,L}
-    ) where {T,L}
-        return TrackedPopMember(
-            PopMember(
-                embed_metadata(tracked_member.pm.tree, options, dataset),
-                tracked_member.pm.cost,
-                tracked_member.pm.loss,
-                nothing;
-                tracked_member.pm.ref,
-                tracked_member.pm.parent,
-                deterministic=options.deterministic,
-            ),
-            tracked_member.llm_contribution,
-            tracked_member.sr_contribution,
-            tracked_member.total_contribution,
-        )
+function TrackedPopMember(
+    tree::N, cost::L, loss::L, options, complexity::Int; parent=-1, deterministic=nothing
+) where {T,L,N<:DynamicExpressions.AbstractExpression{T}}
+    return TrackedPopMember(
+        tree,
+        cost,
+        loss,
+        SymbolicRegression.get_birth_order(; deterministic=deterministic),
+        complexity,
+        abs(rand(Int)),
+        parent,
+        0,
+        0,
+        0,
+    )
+end
+
+# Constructor for Population initialization (dataset, tree, options)
+function TrackedPopMember(
+    dataset::SymbolicRegression.Dataset, tree, options; parent=-1, deterministic=nothing
+)
+    ex = SymbolicRegression.create_expression(tree, options, dataset)
+    complexity = SymbolicRegression.compute_complexity(ex, options)
+    cost, loss = SymbolicRegression.eval_cost(dataset, ex, options; complexity=complexity)
+
+    return TrackedPopMember(
+        ex,
+        cost,
+        loss,
+        SymbolicRegression.get_birth_order(; deterministic=deterministic),
+        complexity,
+        abs(rand(Int)),
+        parent,
+        0,
+        0,
+        0,
+    )
+end
+
+@unstable DynamicExpressions.constructorof(::Type{<:TrackedPopMember}) = TrackedPopMember
+
+# Define with_type_parameters for TrackedPopMember
+@unstable function DynamicExpressions.with_type_parameters(
+    ::Type{<:TrackedPopMember}, ::Type{T}, ::Type{L}, ::Type{N}
+) where {T,L,N}
+    return TrackedPopMember{T,L,N}
+end
+
+# Define copy for TrackedPopMember
+function Base.copy(p::TrackedPopMember)
+    return TrackedPopMember(
+        copy(p.tree),
+        copy(p.cost),
+        copy(p.loss),
+        copy(p.birth),
+        copy(getfield(p, :complexity)),
+        copy(p.ref),
+        copy(p.parent),
+        copy(p.llm_contribution),
+        copy(p.sr_contribution),
+        copy(p.total_contribution),
+    )
+end
+
+function create_child(
+    parent::TrackedPopMember{T,L},
+    tree::DynamicExpressions.AbstractExpression{T},
+    cost::L,
+    loss::L,
+    options;
+    complexity::Union{Int,Nothing}=nothing,
+    mutation_choice::Union{Symbol,Nothing}=nothing,
+    parent_ref,
+) where {T,L}
+    actual_complexity = @something complexity SymbolicRegression.compute_complexity(
+        tree, options
+    )
+    llm_contribution = parent.llm_contribution
+    sr_contribution = parent.sr_contribution
+    total_contribution = parent.total_contribution + 1
+    if is_llm_op(mutation_choice)
+        llm_contribution += 1
+    else
+        sr_contribution += 1
     end
+    return TrackedPopMember(
+        tree,
+        cost,
+        loss,
+        SymbolicRegression.get_birth_order(; deterministic=options.deterministic),
+        actual_complexity,
+        abs(rand(Int)),
+        parent_ref,
+        llm_contribution,
+        sr_contribution,
+        total_contribution,
+    )
 end
 
-function compute_complexity(
-    member::TrackedPopMember, options::AbstractOptions; break_sharing=Val(false)
-)::Int
-    return compute_complexity(member.pm, options; break_sharing)
-end
+function create_child(
+    parents::Tuple{<:TrackedPopMember,<:TrackedPopMember},
+    tree::N,
+    cost::L,
+    loss::L,
+    options;
+    complexity::Union{Int,Nothing}=nothing,
+    mutation_choice::Union{Symbol,Nothing}=nothing,
+    parent_ref,
+) where {T,L,N<:DynamicExpressions.AbstractExpression{T}}
+    actual_complexity = @something complexity SymbolicRegression.compute_complexity(
+        tree, options
+    )
+    llm_contribution = parents[1].llm_contribution + parents[2].llm_contribution
+    sr_contribution = parents[1].sr_contribution + parents[2].sr_contribution
+    if is_llm_op(mutation_choice)
+        llm_contribution += 1
+    else
+        sr_contribution += 1
+    end
+    total_contribution = llm_contribution + sr_contribution
 
-function recompute_complexity!(
-    member::TrackedPopMember, options::AbstractOptions; break_sharing=Val(false)
-)::Int
-    return recompute_complexity!(member.pm, options; break_sharing)
+    return TrackedPopMember(
+        tree,
+        cost,
+        loss,
+        SymbolicRegression.CoreModule.UtilsModule.get_birth_order(;
+            deterministic=options.deterministic
+        ),
+        actual_complexity,
+        abs(rand(Int)),
+        parent_ref,
+        llm_contribution,
+        sr_contribution,
+        total_contribution,
+    )
 end
 
 end

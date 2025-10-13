@@ -38,6 +38,7 @@ Base.@kwdef mutable struct LaSRMutationWeights <: AbstractMutationWeights
 
     # Mutation weights specific to LaSR
     # Set programmatically based on the SR.jl mutation weights
+    # By convention, all llm_mutations should prefix with "llm_"
     llm_mutate::Float64 = 0.0
     llm_randomize::Float64 = 0.0
 end

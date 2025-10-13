@@ -1,8 +1,7 @@
 module LibraryAugmentedSymbolicRegression
 
 # Types
-export Population,
-    PopMember,
+export PopMember,
     TrackedPopMember,
     HallOfFame,
     Options,
@@ -68,12 +67,12 @@ import SymbolicRegression: _main_search_loop!, _equation_search
     include("Utils.jl")
     include("Parse.jl")
     include("LLMServe.jl")
-    include("TrackedPopMember.jl")
     include("MutationWeights.jl")
     include("Logging.jl")
     include("LLMOptionsStruct.jl")
     include("LLMOptions.jl")
     include("Core.jl")
+    include("TrackedPopMember.jl")
     include("LLMUtils.jl")
     include("LLMFunctions.jl")
     include("Mutate.jl")
@@ -112,38 +111,16 @@ using .HallOfFameModule: HallOfFame
 using .LoggingModule: log_generation!
 using UUIDs: uuid1
 
-@noinline function _equation_search(
-    datasets::Vector{D},
-    ropt::SymbolicRegression.AbstractRuntimeOptions,
-    options::LaSROptions,
-    saved_state,
-) where {D<:SymbolicRegression.Dataset}
-    PM = if options.tracking
-        TrackedPopMember
-    else
-        PopMember
-    end
-    SymbolicRegression._validate_options(datasets, ropt, options)
-    state = SymbolicRegression._create_workers(PM, datasets, ropt, options)
-    SymbolicRegression._initialize_search!(state, datasets, ropt, options, saved_state)
-    SymbolicRegression._warmup_search!(PM, state, datasets, ropt, options)
-    _main_search_loop!(PM, state, datasets, ropt, options)
-    SymbolicRegression._tear_down!(state, ropt, options)
-    SymbolicRegression._info_dump(state, datasets, ropt, options)
-    return SymbolicRegression._format_output(state, datasets, ropt, options)
-end
-
 """
 @TODO: Modularize _main_search_loop! function so that I don't have to change the
 entire function to accomodate prompt evolution.
 """
 function _main_search_loop!(
-    ::Type{PM},
     state::SymbolicRegression.AbstractSearchState{T,L,N},
     datasets,
     ropt::SymbolicRegression.AbstractRuntimeOptions,
     options::LaSROptions,
-) where {T,L,N,PM<:SymbolicRegression.AbstractPopMember}
+) where {T,L,N}
     ropt.verbosity > 0 && @info "Started!"
     if !isnothing(ropt.logger)
         options.lasr_logger = LaSRLogger(ropt.logger)
@@ -170,8 +147,8 @@ function _main_search_loop!(
     if ropt.parallelism in (:multiprocessing, :multithreading)
         for j in 1:nout, i in 1:(options.populations)
             # Start listening for each population to finish:
-            t = Base.errormonitor(
-                @async put!(state.channels[j][i], fetch(state.worker_output[j][i]))
+            t = SymbolicRegression.@filtered_async put!(
+                state.channels[j][i], fetch(state.worker_output[j][i])
             )
             push!(state.tasks[j], t)
         end
@@ -197,7 +174,7 @@ function _main_search_loop!(
         )
     end
 
-    worst_members = Vector{AbstractPopMember}()
+    worst_members = Vector{SymbolicRegression.AbstractPopMember}()
     while sum(state.cycles_remaining) > 0
         kappa += 1
         if kappa > options.populations * nout
@@ -227,11 +204,11 @@ function _main_search_loop!(
         population_ready &= (state.cycles_remaining[j] > 0)
         if population_ready
             if n_iterations % options.populations == 0
-                worst_members = Vector{AbstractPopMember}()
+                worst_members = Vector{SymbolicRegression.AbstractPopMember}()
             end
             n_iterations += 1
 
-            # Take the fetch operation from the channel since it's ready
+            # Take the fetch operation from the channel since its ready
             (cur_pop, best_seen, cur_record, cur_num_evals) = if ropt.parallelism in
                 (
                 :multiprocessing, :multithreading
@@ -242,7 +219,7 @@ function _main_search_loop!(
             else
                 state.worker_output[j][i]
             end::SymbolicRegression.DefaultWorkerOutputType{
-                Population{T,L,N},HallOfFame{T,L,N,PM{T,L,N}}
+                Population{T,L,N},HallOfFame{T,L,N}
             }
             state.last_pops[j][i] = copy(cur_pop)
             state.best_sub_pops[j][i] = SymbolicRegression.best_sub_pop(
@@ -308,6 +285,13 @@ function _main_search_loop!(
                     dominating => cur_pop, options; frac=options.fraction_replaced_hof
                 )
             end
+            if !isempty(state.seed_members[j])
+                SymbolicRegression.migrate!(
+                    state.seed_members[j] => cur_pop,
+                    options;
+                    frac=options.fraction_replaced_guesses,
+                )
+            end
             ##################################################
 
             state.cycles_remaining[j] -= 1
@@ -348,7 +332,7 @@ function _main_search_loop!(
                 worker_idx = worker_idx
             )
             if ropt.parallelism in (:multiprocessing, :multithreading)
-                state.tasks[j][i] = @async put!(
+                state.tasks[j][i] = SymbolicRegression.@filtered_async put!(
                     state.channels[j][i], fetch(state.worker_output[j][i])
                 )
             end
@@ -475,4 +459,4 @@ include("precompile.jl")
 #     end
 # end
 
-end # module SR
+end # module LaSR

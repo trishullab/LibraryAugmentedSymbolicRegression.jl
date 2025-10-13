@@ -15,8 +15,10 @@ using SymbolicRegression:
     crossover_trees,
     combine_operators,
     simplify_tree!,
-    gen_random_tree_fixed_size,
-    PopMember
+    gen_random_tree_fixed_size
+
+import SymbolicRegression: AbstractPopMember
+import SymbolicRegression.PopMemberModule: create_child
 
 using SymbolicRegression.CoreModule: dataset_fraction
 using SymbolicRegression.MutateModule: AbstractMutationResult
@@ -31,32 +33,7 @@ import SymbolicRegression.MutateModule:
 using ..CoreModule: LaSROptions
 using ..LLMFunctionsModule: llm_mutate_tree, llm_crossover_trees, llm_randomize_tree
 using ..LoggingModule: log_generation!
-using ..TrackedPopMemberModule: TrackedPopMember
 using ..ParseModule: render_expr, parse_expr
-
-struct LLMMutationResult{N<:AbstractExpression,P<:AbstractPopMember} <:
-       AbstractMutationResult{N,P}
-    tree::Union{N,Nothing}
-    member::Union{P,Nothing}
-    num_evals::Float64
-    return_immediately::Bool
-    using_llm::Bool
-
-    # Explicit constructor with keyword arguments
-    function LLMMutationResult{_N,_P}(;
-        tree::Union{_N,Nothing}=nothing,
-        member::Union{_P,Nothing}=nothing,
-        num_evals::Float64=0.0,
-        return_immediately::Bool=false,
-        using_llm::Bool=false,
-    ) where {_N<:AbstractExpression,_P<:AbstractPopMember}
-        @assert(
-            (tree === nothing) ⊻ (member === nothing),
-            "Mutation result must return either a tree or a pop member, not both"
-        )
-        return new{_N,_P}(tree, member, num_evals, return_immediately, using_llm)
-    end
-end
 
 function check_constant(tree::AbstractExpressionNode)::Bool
     return (tree.degree == 0) && tree.constant
@@ -64,290 +41,6 @@ end
 
 function check_constant(tree::AbstractExpression)::Bool
     return check_constant(get_tree(tree))
-end
-
-@unstable function next_generation(
-    dataset::D,
-    member::P,
-    temperature,
-    curmaxsize::Int,
-    running_search_statistics::SymbolicRegression.RunningSearchStatistics,
-    options::LaSROptions;
-    tmp_recorder::SymbolicRegression.RecordType,
-)::Tuple{
-    P,Bool,Float64
-} where {T,L,D<:Dataset{T,L},N<:AbstractExpression{T},P<:AbstractPopMember{T,L,N}}
-    parent_ref = member.ref
-    num_evals = 0.0
-
-    #TODO - reconsider this
-    before_cost, before_loss = member.cost, member.loss
-
-    nfeatures = max_features(dataset, options)
-
-    weights = copy(options.mutation_weights)
-
-    condition_mutation_weights!(weights, member, options, curmaxsize, nfeatures)
-
-    mutation_choice = sample_mutation(weights)
-
-    successful_mutation = false
-    attempts = 0
-    max_attempts = 10
-    node_storage = allocate_container(member.tree)
-
-    #############################################
-    # Mutations
-    #############################################
-    # local tree
-    old_contribution = if member isa TrackedPopMember
-        [member.llm_contribution, member.sr_contribution, member.total_contribution]
-    else
-        [0.0, 0.0, 0.0]
-    end
-    new_contribution = deepcopy(old_contribution)
-    rtree = Ref{N}()
-    while (!successful_mutation) && attempts < max_attempts
-        rtree[] = copy_into!(node_storage, member.tree)
-
-        base_member = if member isa TrackedPopMember
-            member.pm
-        else
-            member
-        end
-        mutation_result = _dispatch_mutations!(
-            rtree[],
-            base_member,
-            mutation_choice,
-            options.mutation_weights,
-            options;
-            recorder=tmp_recorder,
-            temperature,
-            dataset,
-            cost=before_cost,
-            loss=before_loss,
-            parent_ref,
-            curmaxsize,
-            nfeatures,
-        )
-        if options.tracking && !isnothing(mutation_result.member)
-            # If the mutation result is a PopMember, we need to convert it to a TrackedPopMember
-            # MR = MutationResult{N,TrackedPopMember{T,L,N}}
-            wrapped_member = TrackedPopMember(mutation_result.member, old_contribution...)
-            mutation_result = if mutation_result isa LLMMutationResult
-                LLMMutationResult{N,P}(;
-                    tree=mutation_result.tree,
-                    member=wrapped_member,
-                    num_evals=mutation_result.num_evals,
-                    return_immediately=mutation_result.return_immediately,
-                    using_llm=true,
-                )
-            else
-                MutationResult{N,P}(;
-                    tree=mutation_result.tree,
-                    member=wrapped_member,
-                    num_evals=mutation_result.num_evals,
-                    return_immediately=mutation_result.return_immediately,
-                )
-            end
-        end
-        num_evals += mutation_result.num_evals::Float64
-
-        if mutation_result.return_immediately
-            @assert(
-                mutation_result.member isa P,
-                "Mutation result must return a `PopMember` if `return_immediately` is true"
-            )
-            if options.tracking
-                if mutation_result isa LLMMutationResult{N,P}
-                    # increment the llm contribution
-                    mutation_result.member.llm_contribution += 1
-                else
-                    mutation_result.member.sr_contribution += 1
-                end
-                mutation_result.member.total_contribution += 1
-            end
-
-            return mutation_result.member::P, true, num_evals
-        else
-            @assert(
-                mutation_result.tree isa N,
-                "Mutation result must return a tree if `return_immediately` is false"
-            )
-            rtree[] = mutation_result.tree::N
-            successful_mutation = check_constraints(rtree[], options, curmaxsize)
-            attempts += 1
-            if options.tracking
-                new_contribution = deepcopy(old_contribution)
-                if mutation_result isa LLMMutationResult{N,P}
-                    # increment the llm contribution
-                    new_contribution[1] += 1
-                else
-                    # increment the sr contribution
-                    new_contribution[2] += 1
-                end
-                new_contribution[3] += 1
-            end
-        end
-    end
-
-    tree = rtree[]
-
-    if !successful_mutation
-        @recorder begin
-            tmp_recorder["result"] = "reject"
-            tmp_recorder["reason"] = "failed_constraint_check"
-        end
-        mutation_accepted = false
-        ret = if options.tracking
-            TrackedPopMember(
-                PopMember(
-                    copy_into!(node_storage, member.tree),
-                    before_cost,
-                    before_loss,
-                    options,
-                    compute_complexity(member, options);
-                    parent=parent_ref,
-                    deterministic=options.deterministic,
-                ),
-                old_contribution...,
-            )
-        else
-            PopMember(
-                copy_into!(node_storage, member.tree),
-                before_cost,
-                before_loss,
-                options,
-                compute_complexity(member, options);
-                parent=parent_ref,
-                deterministic=options.deterministic,
-            )
-        end
-        return (ret, mutation_accepted, num_evals)
-    end
-
-    after_cost, after_loss = eval_cost(dataset, tree, options)
-    num_evals += dataset_fraction(dataset)
-
-    if isnan(after_cost)
-        @recorder begin
-            tmp_recorder["result"] = "reject"
-            tmp_recorder["reason"] = "nan_loss"
-        end
-        mutation_accepted = false
-        ret = if options.tracking
-            TrackedPopMember(
-                PopMember(
-                    copy_into!(node_storage, member.tree),
-                    before_cost,
-                    before_loss,
-                    options,
-                    compute_complexity(member, options);
-                    parent=parent_ref,
-                    deterministic=options.deterministic,
-                ),
-                old_contribution...,
-            )
-        else
-            PopMember(
-                copy_into!(node_storage, member.tree),
-                before_cost,
-                before_loss,
-                options,
-                compute_complexity(member, options);
-                parent=parent_ref,
-                deterministic=options.deterministic,
-            )
-        end
-        return (ret, mutation_accepted, num_evals)
-    end
-
-    probChange = 1.0
-    if options.annealing
-        delta = after_cost - before_cost
-        probChange *= exp(-delta / (temperature * options.alpha))
-    end
-    newSize = -1
-    if options.use_frequency
-        oldSize = compute_complexity(member, options)
-        newSize = compute_complexity(tree, options)
-        old_frequency = if (0 < oldSize <= options.maxsize)
-            running_search_statistics.normalized_frequencies[oldSize]
-        else
-            1e-6
-        end
-        new_frequency = if (0 < newSize <= options.maxsize)
-            running_search_statistics.normalized_frequencies[newSize]
-        else
-            1e-6
-        end
-        probChange *= old_frequency / new_frequency
-    end
-
-    if probChange < rand()
-        @recorder begin
-            tmp_recorder["result"] = "reject"
-            tmp_recorder["reason"] = "annealing_or_frequency"
-        end
-        mutation_accepted = false
-        ret = if options.tracking
-            TrackedPopMember(
-                PopMember(
-                    copy_into!(node_storage, member.tree),
-                    before_cost,
-                    before_loss,
-                    options,
-                    compute_complexity(member, options);
-                    parent=parent_ref,
-                    deterministic=options.deterministic,
-                ),
-                old_contribution...,
-            )
-        else
-            PopMember(
-                copy_into!(node_storage, member.tree),
-                before_cost,
-                before_loss,
-                options,
-                compute_complexity(member, options);
-                parent=parent_ref,
-                deterministic=options.deterministic,
-            )
-        end
-        return (ret, mutation_accepted, num_evals)
-    else
-        @recorder begin
-            tmp_recorder["result"] = "accept"
-            tmp_recorder["reason"] = "pass"
-        end
-        mutation_accepted = true
-        ret = if options.tracking
-            TrackedPopMember(
-                PopMember(
-                    tree,
-                    after_cost,
-                    after_loss,
-                    options,
-                    newSize;
-                    parent=parent_ref,
-                    deterministic=options.deterministic,
-                ),
-                new_contribution...,
-            )
-        else
-            PopMember(
-                tree,
-                after_cost,
-                after_loss,
-                options,
-                newSize;
-                parent=parent_ref,
-                deterministic=options.deterministic,
-            )
-        end
-
-        return (ret, mutation_accepted, num_evals)
-    end
 end
 
 function mutate!(
@@ -358,12 +51,10 @@ function mutate!(
     options::SymbolicRegression.AbstractOptions;
     recorder::SymbolicRegression.RecordType,
     kws...,
-) where {
-    T,N<:SymbolicRegression.AbstractExpression{T},P<:SymbolicRegression.AbstractPopMember
-}
+) where {T,N<:SymbolicRegression.AbstractExpression{T},P<:AbstractPopMember}
     tree = llm_mutate_tree(tree, options)
     @recorder recorder["type"] = "llm_mutate"
-    return LLMMutationResult{N,P}(; tree=tree)
+    return MutationResult{N,P}(; tree=tree)
 end
 
 function mutate!(
@@ -376,12 +67,10 @@ function mutate!(
     curmaxsize,
     nfeatures,
     kws...,
-) where {
-    T,N<:SymbolicRegression.AbstractExpression{T},P<:SymbolicRegression.AbstractPopMember
-}
+) where {T,N<:SymbolicRegression.AbstractExpression{T},P<:AbstractPopMember}
     tree = llm_randomize_tree(tree, curmaxsize, options, nfeatures)
     @recorder recorder["type"] = "llm_randomize"
-    return LLMMutationResult{N,P}(; tree=tree)
+    return MutationResult{N,P}(; tree=tree)
 end
 
 """
@@ -396,10 +85,9 @@ function crossover_generation(
     recorder::SymbolicRegression.RecordType=SymbolicRegression.RecordType(),
 )::Tuple{
     P,P,Bool,Float64
-} where {
-    T,L,D<:SymbolicRegression.Dataset{T,L},N,P<:SymbolicRegression.AbstractPopMember{T,L,N}
-}
+} where {T,L,D<:SymbolicRegression.Dataset{T,L},N,P<:AbstractPopMember{T,L,N}}
     llm_skip = false
+    num_evals = 0.0
 
     if options.use_llm && (rand() < options.llm_operation_weights.llm_crossover)
         tree1 = member1.tree
@@ -459,88 +147,46 @@ function crossover_generation(
         end
     end
 
-    contribution = [
-        if member1 isa TrackedPopMember
-            [member1.llm_contribution, member1.sr_contribution, member1.total_contribution]
-        else
-            [0.0, 0.0, 0.0]
-        end,
-        if member2 isa TrackedPopMember
-            [member2.llm_contribution, member2.sr_contribution, member2.total_contribution]
-        else
-            [0.0, 0.0, 0.0]
-        end,
-    ]
-
     if !llm_skip
-        # Fall back to the default SR approach
-        m1 = if member1 isa TrackedPopMember
-            member1.pm
-        else
-            member1
-        end
-        m2 = if member2 isa TrackedPopMember
-            member2.pm
-        else
-            member2
-        end
-        new_member1, new_member2, crossover_accepted, num_evals = crossover_generation(
-            m1, m2, dataset, curmaxsize, options.sr_options; recorder=recorder
+        return crossover_generation(
+            member1, member2, dataset, curmaxsize, options.sr_options; recorder=recorder
         )
     else
-        # If we used the LLM for crossover, we need to evaluate the cost of the new trees
-        after_cost1, after_loss1 = eval_cost(dataset, child_tree1, options)
-        after_cost2, after_loss2 = eval_cost(dataset, child_tree2, options)
-
-        num_evals = dataset_fraction(dataset) * 2
-
-        new_member1 = PopMember(
-            child_tree1,
+        after_cost1, after_loss1 = eval_cost(
+            dataset, child_tree1, options; complexity=afterSize1
+        )
+        after_cost2, after_loss2 = eval_cost(
+            dataset, child_tree2, options; complexity=afterSize2
+        )
+        num_evals += 2.0 * dataset_fraction(dataset)
+        baby1 = create_child(
+            (member1, member2),
+            child_tree1::AbstractExpression,
             after_cost1,
             after_loss1,
-            options,
-            afterSize1;
-            parent=member1.ref,
-            deterministic=options.deterministic,
-        )
-        new_member2 = PopMember(
-            child_tree2,
+            options;
+            complexity=afterSize1,
+            parent_ref=member1.ref,
+            mutation_choice=:llm_crossover,
+        )::P
+        baby2 = create_child(
+            (member1, member2),
+            child_tree2::AbstractExpression,
             after_cost2,
             after_loss2,
-            options,
-            afterSize2;
-            parent=member2.ref,
-            deterministic=options.deterministic,
-        )
+            options;
+            complexity=afterSize2,
+            parent_ref=member2.ref,
+            mutation_choice=:llm_crossover,
+        )::P
+        @recorder begin
+            recorder["result"] = "accept"
+            recorder["reason"] = "pass"
+        end
+
         crossover_accepted = true
-        contribution = [
-            if member1 isa TrackedPopMember
-                [
-                    member1.llm_contribution + 1,
-                    member1.sr_contribution,
-                    member1.total_contribution + 1,
-                ]
-            else
-                [1.0, 0.0, 1.0]
-            end,
-            if member2 isa TrackedPopMember
-                [
-                    member2.llm_contribution + 1,
-                    member2.sr_contribution,
-                    member2.total_contribution + 1,
-                ]
-            else
-                [1.0, 0.0, 1.0]
-            end,
-        ]
+        return baby1, baby2, crossover_accepted, num_evals
     end
-
-    if options.tracking
-        new_member1 = TrackedPopMember(new_member1, contribution[1]...)
-        new_member2 = TrackedPopMember(new_member2, contribution[2]...)
-    end
-
-    return new_member1, new_member2, crossover_accepted, num_evals
 end
 
 end
