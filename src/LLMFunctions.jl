@@ -23,7 +23,7 @@ using Compat: Returns, @inline
 using SymbolicRegression:
     Options, DATA_TYPE, gen_random_tree_fixed_size, crossover_trees, AbstractOptions
 using SymbolicRegression.MutationFunctionsModule: with_contents_for_mutation
-using ..LLMOptionsModule: LaSROptions
+using ..LLMOptionsModule: lasr_context
 using ..LLMUtilsModule:
     load_prompt,
     convertDict,
@@ -38,13 +38,16 @@ using PromptingTools:
     SystemMessage,
     UserMessage,
     AIMessage,
-    aigenerate,
     render,
     CustomOpenAISchema,
     OllamaSchema,
     OpenAISchema
 using JSON: parse
 using UUIDs: uuid1
+
+_is_one_constant(expression) = let tree = get_contents(expression)
+    tree.constant && tree.val == one(tree.val)
+end
 
 @unstable function llm_randomize_tree(
     ex::AbstractExpression,
@@ -53,6 +56,7 @@ using UUIDs: uuid1
     nfeatures::Int,
     rng::AbstractRNG=default_rng(),
 )
+    options = lasr_context(options)
     tree = get_contents(ex)
     context = nothing
     ex = with_contents_for_mutation(
@@ -68,6 +72,7 @@ end
     nfeatures::Int,
     rng::AbstractRNG=default_rng(),
 ) where {T<:DATA_TYPE}
+    options = lasr_context(options)
     tree_size_to_generate = rand(rng, 1:curmaxsize)
     return _gen_llm_random_tree(tree_size_to_generate, options, nfeatures, T)
 end
@@ -75,6 +80,7 @@ end
 function _gen_llm_random_tree(
     node_count::Int, options::AbstractOptions, nfeatures::Int, ::Type{T}
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
+    options = lasr_context(options)
     if isnothing(options.idea_database)
         assumptions = []
     else
@@ -85,8 +91,8 @@ function _gen_llm_random_tree(
         )
     end
 
-    if options.llm_context != ""
-        pushfirst!(assumptions, options.llm_context)
+    if options.context != ""
+        pushfirst!(assumptions, options.context)
     end
 
     if !options.use_concepts
@@ -125,7 +131,7 @@ function _gen_llm_random_tree(
 
     msg = nothing
     try
-        msg = aigenerate(
+        msg = options.llm_generate(
             CustomOpenAISchema(),
             conversation;
             variables=get_vars(options),
@@ -165,7 +171,7 @@ function _gen_llm_random_tree(
             String(strip(gen_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        if t.val == 1 && t.constant
+        if _is_one_constant(t)
             continue
         end
         log_generation!(
@@ -174,7 +180,7 @@ function _gen_llm_random_tree(
             mode="gen_random",
             chosen=render_expr(t, options),
         )
-        return t
+        return get_contents(t)
     end
 
     out = parse_expr(
@@ -184,14 +190,15 @@ function _gen_llm_random_tree(
         options.lasr_logger; id=gen_id, mode="gen_random", chosen=render_expr(out, options)
     )
 
-    if out.val == 1 && out.constant
+    if _is_one_constant(out)
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
-    return out
+    return get_contents(out)
 end
 
 function concept_evolution(idea_database, options::AbstractOptions)
+    options = lasr_context(options)
     num_ideas = size(idea_database)[1]
     if num_ideas <= options.max_concepts
         return nothing
@@ -231,7 +238,7 @@ function concept_evolution(idea_database, options::AbstractOptions)
 
     msg = nothing
     try
-        msg = aigenerate(
+        msg = options.llm_generate(
             CustomOpenAISchema(),
             conversation;
             N=options.num_generated_concepts,
@@ -285,6 +292,7 @@ end
 end
 
 function parse_msg_content(msg_content::String, options::AbstractOptions)::Vector{String}
+    options = lasr_context(options)
     # Attempt extraction with several patterns in order
     patterns = [r"```json(.*?)```"s, r"```(.*?)```"s, r"(\[.*?\])"s]
 
@@ -322,6 +330,7 @@ function parse_msg_content(msg_content::String, options::AbstractOptions)::Vecto
 end
 
 function generate_concepts(dominating, worst_members, options::AbstractOptions)
+    options = lasr_context(options)
     # turn dominating pareto curve into ideas as strings
     if isnothing(dominating)
         return nothing
@@ -366,7 +375,7 @@ function generate_concepts(dominating, worst_members, options::AbstractOptions)
 
     msg = nothing
     try
-        msg = aigenerate(
+        msg = options.llm_generate(
             CustomOpenAISchema(),
             conversation;
             variables=get_vars(options),
@@ -427,6 +436,7 @@ end
 function llm_mutate_tree(
     ex::AbstractExpression{T}, options::AbstractOptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
+    options = lasr_context(options)
     tree = get_contents(ex)
     ex = with_contents(ex, llm_mutate_tree(tree, options))
     return ex
@@ -436,6 +446,7 @@ end
 function llm_mutate_tree(
     tree::AbstractExpressionNode{T}, options::AbstractOptions
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
+    options = lasr_context(options)
     expr = render_expr(tree, options)
 
     if isnothing(options.idea_database)
@@ -449,8 +460,8 @@ function llm_mutate_tree(
     if !options.use_concepts
         assumptions = []
     end
-    if options.llm_context != ""
-        pushfirst!(assumptions, options.llm_context)
+    if options.context != ""
+        pushfirst!(assumptions, options.context)
     end
 
     conversation = [
@@ -484,7 +495,7 @@ function llm_mutate_tree(
 
     msg = nothing
     try
-        msg = aigenerate(
+        msg = options.llm_generate(
             CustomOpenAISchema(),
             conversation; #OllamaSchema(), conversation;
             variables=get_vars(options),
@@ -525,14 +536,14 @@ function llm_mutate_tree(
             String(strip(mut_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        if t.val == 1 && t.constant
+        if _is_one_constant(t)
             continue
         end
 
         log_generation!(
             options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(t, options)
         )
-        return t
+        return get_contents(t)
     end
 
     out = parse_expr(
@@ -542,12 +553,13 @@ function llm_mutate_tree(
     log_generation!(
         options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(out, options)
     )
-    return out
+    return get_contents(out)
 end
 
 function llm_crossover_trees(
     ex1::E, ex2::E, options::AbstractOptions
 )::Tuple{E,E} where {T,E<:AbstractExpression{T}}
+    options = lasr_context(options)
     tree1 = get_contents(ex1)
     tree2 = get_contents(ex2)
     tree1, tree2 = llm_crossover_trees(tree1, tree2, options)
@@ -562,6 +574,7 @@ function llm_crossover_trees(
     tree2::AbstractExpressionNode{T},
     options::AbstractOptions,
 )::Tuple{AbstractExpressionNode{T},AbstractExpressionNode{T}} where {T<:DATA_TYPE}
+    options = lasr_context(options)
     expr1 = render_expr(tree1, options)
     expr2 = render_expr(tree2, options)
 
@@ -579,8 +592,8 @@ function llm_crossover_trees(
         assumptions = []
     end
 
-    if options.llm_context != ""
-        pushfirst!(assumptions, options.llm_context)
+    if options.context != ""
+        pushfirst!(assumptions, options.context)
     end
 
     conversation = [
@@ -618,7 +631,7 @@ function llm_crossover_trees(
 
     msg = nothing
     try
-        msg = aigenerate(
+        msg = options.llm_generate(
             CustomOpenAISchema(),
             conversation;
             variables=get_vars(options),
@@ -666,7 +679,7 @@ function llm_crossover_trees(
         log_generation!(
             options.lasr_logger; id=gen_id, mode="crossover", chosen=render_expr(t, options)
         )
-        return t, tree2
+        return get_contents(t), tree2
     end
 
     for i in 1:(2 * N)
@@ -676,31 +689,35 @@ function llm_crossover_trees(
             String(strip(cross_tree_options[l], [' ', '\n', '"', ',', '.', '[', ']'])),
             options,
         )
-        if t.val == 1 && t.constant
+        if _is_one_constant(t)
             continue
         end
 
         if isnothing(cross_tree1)
-            cross_tree1 = t
+            cross_tree1 = get_contents(t)
         elseif isnothing(cross_tree2)
-            cross_tree2 = t
+            cross_tree2 = get_contents(t)
             break
         end
     end
 
     if isnothing(cross_tree1)
-        cross_tree1 = parse_expr(
-            T,
-            String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
-            options,
+        cross_tree1 = get_contents(
+            parse_expr(
+                T,
+                String(strip(cross_tree_options[1], [' ', '\n', '"', ',', '.', '[', ']'])),
+                options,
+            ),
         )
     end
 
     if isnothing(cross_tree2)
-        cross_tree2 = parse_expr(
-            T,
-            String(strip(cross_tree_options[2], [' ', '\n', '"', ',', '.', '[', ']'])),
-            options,
+        cross_tree2 = get_contents(
+            parse_expr(
+                T,
+                String(strip(cross_tree_options[2], [' ', '\n', '"', ',', '.', '[', ']'])),
+                options,
+            ),
         )
     end
 

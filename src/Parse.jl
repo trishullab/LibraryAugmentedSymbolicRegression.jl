@@ -4,6 +4,7 @@ using DispatchDoctor: @unstable
 using DynamicExpressions
 using DynamicExpressions.NodeModule: Node
 using SymbolicRegression: AbstractOptions, DATA_TYPE
+using ..LLMOptionsModule: lasr_context
 
 """
     parse_expr(expr_str::String, options)
@@ -15,6 +16,7 @@ AbstractExpressionNode.
 @unstable function parse_expr(
     ::Type{T}, expr_str::String, options::AbstractOptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
+    options = lasr_context(options)
     node_type = options.node_type{T}::Type{<:AbstractExpressionNode{T}}
     expression_type = options.expression_type{T,node_type}::Type{<:AbstractExpression{T}}
     ops = options.operators
@@ -125,6 +127,7 @@ end
 end
 
 function render_expr(tree::AbstractExpressionNode{T}, options)::String where {T<:DATA_TYPE}
+    options = lasr_context(options)
     variable_names = get_variable_names(options.variable_names)
     return string_tree(
         tree, options.operators; f_constant=_sketch_const, variable_names=variable_names

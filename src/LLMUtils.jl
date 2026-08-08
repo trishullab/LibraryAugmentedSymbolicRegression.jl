@@ -20,7 +20,8 @@ using DynamicExpressions:
     string_tree,
     AbstractOperatorEnum
 using SymbolicRegression: DATA_TYPE, AbstractOptions
-using ..CoreModule: LLMOptions
+using ..LLMOptionsStructModule: LLMOptions
+using ..LLMOptionsModule: lasr_context
 using ..ParseModule: render_expr, get_variable_names
 using JSON: parse
 
@@ -38,6 +39,7 @@ function convertDict(d)::NamedTuple
 end
 
 function get_vars(options::AbstractOptions)::String
+    options = lasr_context(options)
     variable_names = get_variable_names(options.variable_names)
     return join(variable_names, ", ")
 end

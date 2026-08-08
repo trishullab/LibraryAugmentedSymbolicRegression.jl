@@ -45,12 +45,12 @@ end
     include("test_lasr_prompt_construction.jl")
 end
 
+@testitem "Test SR v2 plugin integration" tags = [:online] begin
+    include("test_plugin.jl")
+end
+
 # Test SymbolicRegression.jl backwards compatibility (~15 min)
 include("test_backwards_compat.jl")
-
-@testitem "Test whether the precompilation script works." tags = [:online] begin
-    include("test_precompilation.jl")
-end
 
 @testitem "Aqua tests" tags = [:online, :aqua] begin
     include("test_aqua.jl")

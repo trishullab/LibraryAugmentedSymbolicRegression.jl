@@ -1,14 +1,13 @@
 # These are some "stress tests" copied over from the SymbolicRegression.jl package.
-# They are meant to test the backwards compatibility of the LaSROptions struct through
-# the MLJInterface.jl module.
+# They are meant to test the MLJ constructor compatibility layer.
 @testitem "Generic interface tests" tags = [:online] begin
     using LibraryAugmentedSymbolicRegression:
-        LaSRTestRegressor, MultitargetLaSRTestRegressor
+        LaSRRegressor, MultitargetLaSRRegressor
     using MLJTestInterface: MLJTestInterface as MTI
     include("test_params.jl")
 
     failures, summary = MTI.test(
-        [LaSRTestRegressor],
+        [LaSRRegressor(; niterations=1)],
         MTI.make_regression()...;
         mod=@__MODULE__,
         verbosity=0,
@@ -21,7 +20,13 @@
     (X, Y) = MTI.table.((X, Y))
     w = ones(100)
     failures, summary = MTI.test(
-        [MultitargetLaSRTestRegressor], X, Y, w; mod=@__MODULE__, verbosity=0, throw=true
+        [MultitargetLaSRRegressor(; niterations=1)],
+        X,
+        Y,
+        w;
+        mod=@__MODULE__,
+        verbosity=0,
+        throw=true,
     )
     @test isempty(failures)
 end

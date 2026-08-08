@@ -5,9 +5,11 @@ Pkg.instantiate()
 using Revise
 using TensorBoardLogger
 using LibraryAugmentedSymbolicRegression:
-    LaSROptions,
-    LaSRMutationWeights,
-    LLMOperationWeights,
+    LaSRPlugin,
+    LLMOptions,
+    LLMMutateMutation,
+    LLMRandomizeMutation,
+    LLMCrossover,
     equation_search,
     calculate_pareto_frontier,
     compute_complexity,
@@ -23,25 +25,27 @@ X = randn(Float32, 2, 100)
 y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
 p = 0.001
+llm_options = LLMOptions(;
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+    verbose=true,
+)
+plugin = LaSRPlugin(;
+    llm_options,
+    use_concepts=true,
+    use_concept_evolution=true,
+    context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
+    variable_names=Dict("x1" => "theta", "x2" => "offset"),
+)
 model = LaSRRegressor(;
+    plugin,
+    mutations=(LLMMutateMutation() => p, LLMRandomizeMutation() => p),
+    crossovers=(LLMCrossover() => p,),
     niterations=40,
     logger=logger,
     binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
     populations=20,
-    use_llm=true,
-    use_concepts=true,
-    use_concept_evolution=true,
-    llm_operation_weights=LLMOperationWeights(;
-        llm_crossover=p, llm_mutate=p, llm_randomize=p
-    ),
-    llm_context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
-    variable_names=Dict("x1" => "theta", "x2" => "offset"),
-    prompts_dir="prompts/",
-    api_key="token-abc123",
-    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
-    api_kwargs=Dict("url" => "http://localhost:11440/v1"),
-    verbose=true, # Set to true to see LLM generation logs.
 )
 
 mach = machine(model, transpose(X), y)
