@@ -279,6 +279,41 @@ function concept_evolution(idea_database, options::AbstractOptions)
     return chosen_idea
 end
 
+"""
+    safe_literal_parse(s::AbstractString)
+
+Read `s` as a Julia *literal* vector/dict of strings and numbers, without evaluating it.
+
+Only array/tuple/dict literals and their scalar elements are accepted; anything that
+would require running code (function calls, `:call` nodes, interpolation, ...) is
+rejected. This is the safe counterpart to `eval(Meta.parse(s))`, which would execute
+arbitrary code contained in an LLM response.
+"""
+@unstable function safe_literal_parse(s::AbstractString)
+    return _literal_value(Meta.parse(strip(s)))
+end
+
+@unstable function _literal_value(x)
+    # Bare literals parsed by `Meta.parse` come back as plain values.
+    (x isa String || x isa Number || x isa Bool) && return x
+    x isa QuoteNode && return _literal_value(x.value)
+    x isa Symbol && throw(ArgumentError("refusing to resolve symbol `$(x)`"))
+    x isa Expr || throw(ArgumentError("unsupported literal of type $(typeof(x))"))
+
+    if x.head === :vect || x.head === :tuple || x.head === :hcat || x.head === :vcat
+        return Any[_literal_value(a) for a in x.args]
+    elseif x.head === :call && !isempty(x.args) && x.args[1] === :Dict
+        d = Dict{Any,Any}()
+        for a in x.args[2:end]
+            a isa Expr && a.head === :call && a.args[1] === :(=>) ||
+                throw(ArgumentError("unsupported Dict entry"))
+            d[_literal_value(a.args[2])] = _literal_value(a.args[3])
+        end
+        return d
+    end
+    throw(ArgumentError("refusing to evaluate expression head `$(x.head)`"))
+end
+
 @unstable function try_capture(pattern::Regex, text::String)::Union{Nothing,AbstractString}
     m = match(pattern, text)
     return m === nothing ? nothing : get(m.captures, 1, nothing)
@@ -305,11 +340,16 @@ function parse_msg_content(msg_content::String, options::AbstractOptions)::Vecto
         end
     end
 
-    try
-        out = eval(Meta.parse(msg_content))
-    catch
-        if options.verbose
-            @debug "Failed to eval content: $content"
+    # Fall back to a *literal-only* reader for Julia-style vectors (e.g. `["x + y"]`)
+    # that are not valid JSON. This deliberately never evaluates the model output:
+    # LLM responses are untrusted input, and `eval` on them is remote code execution.
+    if isnothing(out)
+        try
+            out = safe_literal_parse(msg_content)
+        catch
+            if options.verbose
+                @debug "Failed to read content as a literal: $content"
+            end
         end
     end
 

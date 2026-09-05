@@ -45,6 +45,10 @@ end
     include("test_lasr_prompt_construction.jl")
 end
 
+@testitem "Test llm output is never executed" tags = [:online] begin
+    include("test_lasr_parse_msg_safety.jl")
+end
+
 # Test SymbolicRegression.jl backwards compatibility (~15 min)
 include("test_backwards_compat.jl")
 

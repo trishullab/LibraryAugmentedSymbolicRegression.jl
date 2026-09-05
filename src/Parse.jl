@@ -132,6 +132,10 @@ function render_expr(tree::AbstractExpressionNode{T}, options)::String where {T<
 end
 
 function get_variable_names(variable_names::Dict)::Vector{String}
+    # An empty Dict must fall back to the defaults. Returning an empty name list here
+    # makes every parse fail with "Variable `x` not found in `variable_names`", which
+    # silently discards *every* LLM suggestion rather than surfacing an error.
+    isempty(variable_names) && return get_variable_names(nothing)
     return [variable_names[key] for key in sort(collect(keys(variable_names)))]
 end
 
