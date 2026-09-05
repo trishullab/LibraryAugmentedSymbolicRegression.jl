@@ -32,6 +32,7 @@ end
 
 struct LLMMutateMutation <: AbstractMutation end
 struct LLMRandomizeMutation <: AbstractMutation end
+struct LLMGenerateMutation <: AbstractMutation end
 struct LLMCrossover <: AbstractCrossover end
 
 """
@@ -63,6 +64,8 @@ struct LaSRPlugin <: AbstractPlugin
     mutate_weight::Float64
     randomize_weight::Float64
     crossover_probability::Float64
+    generate_weight::Float64
+    amnesty_complexity::Int
     function LaSRPlugin(;
         llm_options::LLMOptions=LLMOptions(),
         use_llm::Bool=true,
@@ -87,12 +90,22 @@ struct LaSRPlugin <: AbstractPlugin
         mutate_weight::Real=0.0,
         randomize_weight::Real=0.0,
         crossover_probability::Real=0.0,
+        generate_weight::Real=0.0,
+        # Structural amnesty: any population member whose complexity is at least
+        # `amnesty_complexity` has its constants re-optimized in `on_generation_end!`
+        # before selection can cull it, so good structure is not lost to a bad
+        # constant fit. `0` disables the pass.
+        amnesty_complexity::Integer=0,
     )
         mutate_weight >= 0 || throw(ArgumentError("`mutate_weight` must be nonnegative."))
         randomize_weight >= 0 ||
             throw(ArgumentError("`randomize_weight` must be nonnegative."))
         0 <= crossover_probability <= 1 ||
             throw(ArgumentError("`crossover_probability` must be between 0 and 1."))
+        generate_weight >= 0 ||
+            throw(ArgumentError("`generate_weight` must be nonnegative."))
+        amnesty_complexity >= 0 ||
+            throw(ArgumentError("`amnesty_complexity` must be nonnegative."))
         store = something(
             idea_store,
             WindowedIdeaStore(;
@@ -118,6 +131,8 @@ struct LaSRPlugin <: AbstractPlugin
             Float64(mutate_weight),
             Float64(randomize_weight),
             Float64(crossover_probability),
+            Float64(generate_weight),
+            Int(amnesty_complexity),
         )
     end
 end

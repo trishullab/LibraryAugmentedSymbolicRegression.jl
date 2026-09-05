@@ -15,6 +15,7 @@ using DynamicExpressions:
     constructorof,
     set_node!,
     count_nodes,
+    filter_map,
     has_constants,
     has_operators,
     string_tree,
@@ -182,6 +183,110 @@ end
     end
 
     return get_contents(out)
+end
+
+"""
+    _is_usable_candidate(tree, nfeatures, curmaxsize)
+
+A generated skeleton is usable if it fits within `curmaxsize` nodes and references at
+least one valid input feature (features `1:nfeatures`). Pure-constant proposals (e.g.
+`"1.0"`) reference no feature and are rejected, mirroring the `_is_one_constant` guard the
+single-shot generators apply, but generalized to any constant-only tree.
+"""
+function _is_usable_candidate(
+    tree::AbstractExpressionNode, nfeatures::Int, curmaxsize::Int
+)::Bool
+    count_nodes(tree) <= curmaxsize || return false
+    features = filter_map(
+        node -> node.degree == 0 && !node.constant, node -> Int(node.feature), tree, Int
+    )
+    return !isempty(features) && all(f -> 1 <= f <= nfeatures, features)
+end
+
+"""
+    llm_generate_candidates(options, curmaxsize, nfeatures, ::Type{T})
+
+Ask the LLM for a batch of full-expression proposals (a single batched call) and return
+every proposal that parses and is usable (feature-referencing and within `curmaxsize`).
+Unlike `_gen_llm_random_tree`, which samples a single tree, this keeps all usable
+candidates so the caller can constant-fit each and keep the best. Returns an empty vector
+if the call fails or nothing usable was produced.
+"""
+@unstable function llm_generate_candidates(
+    options::AbstractOptions, curmaxsize::Int, nfeatures::Int, ::Type{T}
+)::Vector{<:AbstractExpressionNode{T}} where {T<:DATA_TYPE}
+    options = lasr_context(options)
+    assumptions = retrieve_ideas(options.idea_store, options.num_pareto_context)
+
+    if options.context != ""
+        pushfirst!(assumptions, options.context)
+    end
+
+    if !options.use_concepts
+        assumptions = []
+    end
+
+    conversation = [
+        SystemMessage(load_prompt(options.prompts_dir * "gen_random_system.prompt")),
+        UserMessage(
+            construct_prompt(
+                load_prompt(options.prompts_dir * "gen_random_user.prompt"),
+                assumptions,
+                "assump",
+            ),
+        ),
+    ]
+
+    gen_id = uuid1()
+    log_generation!(options.lasr_logger; id=gen_id, mode="gen_candidates")
+
+    msg = nothing
+    try
+        msg = options.llm_generate(
+            CustomOpenAISchema(),
+            conversation;
+            variables=get_vars(options),
+            operators=get_ops(options),
+            N=options.num_generated_equations,
+            api_key=options.api_key,
+            model=options.model,
+            api_kwargs=convertDict(options.api_kwargs),
+            http_kwargs=convertDict(options.http_kwargs),
+            no_system_message=false,
+            verbose=options.verbose,
+        )
+    catch e
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode="gen_candidates", failed="None." * string(e)
+        )
+        return AbstractExpressionNode{T}[]
+    end
+
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="gen_candidates", llm_output=string(msg.content)
+    )
+
+    # `parse_msg_content` returns the raw proposal strings; parse each into a tree the same
+    # way the single-shot generators do, then keep the usable ones.
+    gen_tree_options = parse_msg_content(String(msg.content), options)
+
+    candidates = AbstractExpressionNode{T}[]
+    for raw in gen_tree_options
+        local tree
+        try
+            tree = get_contents(
+                parse_expr(
+                    T, String(strip(raw, [' ', '\n', '"', ',', '.', '[', ']'])), options
+                ),
+            )
+        catch
+            continue
+        end
+        if _is_usable_candidate(tree, nfeatures, curmaxsize)
+            push!(candidates, tree)
+        end
+    end
+    return candidates
 end
 
 @unstable function concept_evolution(options::AbstractOptions)

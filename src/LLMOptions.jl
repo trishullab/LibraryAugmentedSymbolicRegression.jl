@@ -9,6 +9,7 @@ using ..LLMOptionsStructModule:
     LLMOperationWeights,
     LLMMutateMutation,
     LLMRandomizeMutation,
+    LLMGenerateMutation,
     LLMCrossover,
     LaSRPlugin,
     LaSRPluginState,
@@ -44,6 +45,8 @@ function plugin_mutations(plugin::LaSRPlugin)
     plugin.mutate_weight > 0 && push!(pairs, LLMMutateMutation() => plugin.mutate_weight)
     plugin.randomize_weight > 0 &&
         push!(pairs, LLMRandomizeMutation() => plugin.randomize_weight)
+    plugin.generate_weight > 0 &&
+        push!(pairs, LLMGenerateMutation() => plugin.generate_weight)
     return pairs
 end
 
@@ -103,6 +106,7 @@ function _mutation_pairs(weights::LaSRMutationWeights)
     ]
     push!(mutation_pairs, LLMMutateMutation() => weights.llm_mutate)
     push!(mutation_pairs, LLMRandomizeMutation() => weights.llm_randomize)
+    push!(mutation_pairs, LLMGenerateMutation() => weights.llm_generate)
     return mutation_pairs
 end
 
@@ -119,6 +123,8 @@ with a [`LaSRPlugin`](@ref). New code should construct `LLMOptions`,
     use_concept_evolution::Bool=false,
     mutation_weights::Union{LaSRMutationWeights,NamedTuple,Nothing}=nothing,
     llm_operation_weights::Union{LLMOperationWeights,NamedTuple,Nothing}=nothing,
+    generate_weight::Real=0.0,
+    amnesty_complexity::Integer=0,
     num_pareto_context::Integer=5,
     num_generated_equations::Integer=5,
     num_generated_concepts::Integer=5,
@@ -160,6 +166,9 @@ with a [`LaSRPlugin`](@ref). New code should construct `LLMOptions`,
         weights.llm_mutate = 0.0
         weights.llm_randomize = 0.0
     end
+    # `generate_weight` is a direct (non-probability-redistributed) weight, mirroring how the
+    # plugin threads `mutate_weight`/`randomize_weight`; keep it opt-in and off when disabled.
+    weights.llm_generate = use_llm ? Float64(generate_weight) : 0.0
 
     prompt_path =
         something(prompts_dir, joinpath(pkgdir(parentmodule(@__MODULE__)), "prompts")) * "/"
@@ -190,6 +199,8 @@ with a [`LaSRPlugin`](@ref). New code should construct `LLMOptions`,
         mutate_weight=weights.llm_mutate,
         randomize_weight=weights.llm_randomize,
         crossover_probability=use_llm ? probabilities.llm_crossover : 0.0,
+        generate_weight=weights.llm_generate,
+        amnesty_complexity,
     )
     resolved_mutations = isnothing(mutations) ? _mutation_pairs(weights) : mutations
     resolved_defaults = isnothing(default_mutations) ? () : default_mutations

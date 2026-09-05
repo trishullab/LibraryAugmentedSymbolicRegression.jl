@@ -54,6 +54,10 @@ AbstractExpressionNode.
     ast = _rhs_of_assignment(ast)
 
     try
+        # LLMs emit operator idioms the operator enum does not carry (unary `-`/`+`,
+        # `pow(a, b)`). Left as-is these trees fail to parse and are discarded and a
+        # constant node substituted; rewrite them into equivalent registered forms first.
+        ast = _rewrite_llm_ops(ast)
         return parse_expression(
             ast;
             operators=ops,
@@ -83,12 +87,40 @@ end
     return ast
 end
 
+"""
+    _rewrite_llm_ops(ast)
+
+Rewrite LLM operator idioms the operator enum does not carry into equivalent forms the
+parser accepts: unary `-a` becomes `0 - a` (binary `-` is registered), unary `+a` becomes
+`a`, and `pow(a, b)` becomes `a ^ b`. Recurses through the whole tree. Negative literals
+like `-0.5` are parsed by `Meta.parse` as numbers, not unary calls, so they are untouched.
+"""
+_rewrite_llm_ops(ast) = ast
+
+@unstable function _rewrite_llm_ops(ast::Expr)
+    if ast.head === :call && length(ast.args) == 2 && ast.args[1] === :-
+        return Expr(:call, :-, 0.0, _rewrite_llm_ops(ast.args[2]))
+    elseif ast.head === :call && length(ast.args) == 2 && ast.args[1] === :+
+        return _rewrite_llm_ops(ast.args[2])
+    elseif ast.head === :call && length(ast.args) == 3 && ast.args[1] === :pow
+        return Expr(:call, :^, _rewrite_llm_ops(ast.args[2]), _rewrite_llm_ops(ast.args[3]))
+    else
+        return Expr(ast.head, map(_rewrite_llm_ops, ast.args)...)
+    end
+end
+
 function _normalize_expr_string(s::AbstractString)
     # Normalize whitespace
     s = replace(s, r"\s+" => " ")
     # Replace standalone C or (C) with 1.0 or (1.0)
     s = replace(s, r"(?<!\w)C(?!\w)" => "1.0")
     s = replace(s, r"(?<!\w)\(C\)(?!\w)" => "(1.0)")
+    # LLMs write absolute value in pipe notation `|expr|`, which is not valid Julia
+    # (`Meta.parse` rejects it and `parse_expr` falls back to the constant-1 node).
+    # Rewrite each non-nested pipe pair into the registered `abs(...)` operator so
+    # idioms like `|x|` and `|x|^(1/3)` map onto `abs`. Requires `abs` to be in the
+    # provided operator set, exactly like any other operator name.
+    s = replace(s, r"\|([^|]+)\|" => s"abs(\1)")
     # TODO: Right now, making all variables lowercase. This might not always be desired.
     s = lowercase(s)
     s = replace(s, r"\*\*" => "^")

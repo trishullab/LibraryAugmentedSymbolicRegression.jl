@@ -14,6 +14,8 @@ using SymbolicRegression:
     check_constraints,
     compute_complexity,
     gen_random_tree_fixed_size
+using SymbolicRegression.PopMemberModule: PopMember
+using SymbolicRegression.ConstantOptimizationModule: optimize_constants
 import SymbolicRegression:
     mutate!,
     crossover,
@@ -23,10 +25,19 @@ import SymbolicRegression:
     on_generation_end!,
     refresh_worker_plugin_state
 using ..LLMOptionsStructModule:
-    LaSRPlugin, LaSRPluginState, LLMMutateMutation, LLMRandomizeMutation, LLMCrossover
+    LaSRPlugin,
+    LaSRPluginState,
+    LLMMutateMutation,
+    LLMRandomizeMutation,
+    LLMGenerateMutation,
+    LLMCrossover
 using ..LLMOptionsModule: lasr_context, lasr_state
 using ..LLMFunctionsModule:
-    llm_mutate_tree, llm_crossover_trees, llm_randomize_tree, generate_concepts
+    llm_mutate_tree,
+    llm_crossover_trees,
+    llm_randomize_tree,
+    llm_generate_candidates,
+    generate_concepts
 using ..LoggingModule: LaSRLogger, log_generation!
 using ..ParseModule: render_expr
 
@@ -47,14 +58,73 @@ function mutate!(
     member::P,
     ::LLMRandomizeMutation,
     options::AbstractOptions;
+    dataset,
     plugin_states::Tuple,
     curmaxsize::Int,
     nfeatures::Int,
     kws...,
 ) where {N<:AbstractExpression,P<:AbstractPopMember}
     context = lasr_context(options, lasr_state(options, plugin_states))
+    tree = llm_randomize_tree(tree, curmaxsize, context, nfeatures)
+    # Fit the freshly generated skeleton's constants before it competes, mirroring
+    # LLM-SR's generate-then-optimize step. Without this a generated tree enters the
+    # population with unfit (often literal-1) constants, scores poorly, and is culled
+    # before its structure can prove out -- which is why a generation-heavy config
+    # underperformed. If the optimized candidate is constraint-valid we accept it
+    # immediately (generate-and-evaluate); otherwise we hand the tree back to the normal
+    # flow so SR's constraint retry/annealing still applies. Constant fitting uses the
+    # genuine SR `options` (not the LaSR `context`).
+    new_member = PopMember(dataset, tree, options; deterministic=options.deterministic)
+    opt_member, num_evals = optimize_constants(dataset, new_member, options)
+    if check_constraints(opt_member.tree, options, curmaxsize)
+        return MutationResult{N,P}(;
+            member=opt_member, num_evals=num_evals, return_immediately=true
+        )
+    end
+    return MutationResult{N,P}(; tree=opt_member.tree, num_evals=num_evals)
+end
+
+function mutate!(
+    tree::N,
+    member::P,
+    ::LLMGenerateMutation,
+    options::AbstractOptions;
+    dataset,
+    plugin_states::Tuple,
+    curmaxsize::Int,
+    nfeatures::Int,
+    kws...,
+) where {T,L,N<:AbstractExpression,P<:AbstractPopMember{T,L,N}}
+    # Ask the LLM for a batch of full-expression skeletons, constant-fit each, and keep the
+    # best-scoring constraint-valid candidate. This "generate K, evaluate all, keep best"
+    # step lets the search adopt a complex structure wholesale instead of building it up one
+    # node at a time -- the primary fix for LaSR under-building complex expressions. When
+    # the LLM returns nothing usable we hand the parent tree back unchanged (a no-op
+    # mutation). Constant fitting uses the genuine SR `options`, not the LaSR `context`.
+    context = lasr_context(options, lasr_state(options, plugin_states))
+    candidates = llm_generate_candidates(context, curmaxsize, nfeatures, T)
+    best_member = nothing
+    total_evals = 0.0
+    for cand in candidates
+        ex = with_contents(copy(tree), cand)
+        new_member = PopMember(dataset, ex, options; deterministic=options.deterministic)
+        opt_member, num_evals = optimize_constants(dataset, new_member, options)
+        total_evals += num_evals
+        if check_constraints(opt_member.tree, options, curmaxsize) &&
+            (best_member === nothing || opt_member.loss < best_member.loss)
+            best_member = opt_member
+        end
+    end
+    if best_member === nothing
+        # Hand the untouched parent back (not a fresh failed candidate) so SR's constraint
+        # retry does NOT re-invoke this expensive batched-K LLM call -- the same
+        # expensive-op guard `LLMCrossover` applies via its `attempt` check. This is a
+        # deliberate asymmetry with `LLMRandomizeMutation`, whose single cheap draw hands its
+        # failed candidate back to trigger SR's constraint retry/annealing.
+        return MutationResult{N,P}(; tree=tree, num_evals=total_evals)
+    end
     return MutationResult{N,P}(;
-        tree=llm_randomize_tree(tree, curmaxsize, context, nfeatures)
+        member=best_member, num_evals=total_evals, return_immediately=true
     )
 end
 
@@ -107,6 +177,24 @@ function on_generation_end!(
     returned_pop,
 )
     config = plugin
+
+    # Complexity amnesty: re-fit the constants of structurally-rich members before
+    # selection can cull them, so good structure is not lost to a bad constant fit.
+    # Runs regardless of `use_llm` (it is pure constant optimization), gated only on
+    # `amnesty_complexity > 0`. Kept BEFORE the LLM/concept-evolution guard below so
+    # the LLM-off path still benefits. `optimize_constants` mutates the member in
+    # place (and guarantees non-increasing loss, resetting to the original constants
+    # when it cannot improve), so there is nothing to reassign back into
+    # `returned_pop.members`. The HoF is left untouched — SR's next-generation HoF
+    # update captures any newly-good member.
+    if config.amnesty_complexity > 0
+        for member in returned_pop.members
+            if compute_complexity(member, options) >= config.amnesty_complexity
+                optimize_constants(dataset, member, options)
+            end
+        end
+    end
+
     config.use_llm && config.use_concept_evolution || return nothing
 
     state.generations += 1

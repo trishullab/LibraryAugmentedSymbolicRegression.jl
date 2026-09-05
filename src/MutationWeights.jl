@@ -23,6 +23,7 @@ Base.@kwdef mutable struct LaSRMutationWeights
     break_connection::Float64 = 0.1
     llm_mutate::Float64 = 0.0
     llm_randomize::Float64 = 0.0
+    llm_generate::Float64 = 0.0
 end
 
 function Base.copy(w::LaSRMutationWeights)

@@ -57,6 +57,18 @@ end
     include("test_plugin.jl")
 end
 
+@testitem "Test extended operators (abs/cbrt/tan, pipe idiom)" tags = [:online] begin
+    include("test_lasr_operators_extended.jl")
+end
+
+@testitem "Test LLMGenerateMutation operator" tags = [:online] begin
+    include("test_lasr_generate_operator.jl")
+end
+
+@testitem "Test complexity amnesty" tags = [:online] begin
+    include("test_lasr_amnesty.jl")
+end
+
 # Test SymbolicRegression.jl backwards compatibility (~15 min)
 include("test_backwards_compat.jl")
 

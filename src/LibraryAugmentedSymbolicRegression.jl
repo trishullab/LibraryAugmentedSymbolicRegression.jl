@@ -3,6 +3,7 @@ module LibraryAugmentedSymbolicRegression
 export LaSRPlugin,
     LLMMutateMutation,
     LLMRandomizeMutation,
+    LLMGenerateMutation,
     LLMCrossover,
     LLMOptions,
     LLMOperationWeights,
@@ -67,6 +68,7 @@ using .LLMOptionsStructModule:
     LaSRPlugin,
     LLMMutateMutation,
     LLMRandomizeMutation,
+    LLMGenerateMutation,
     LLMCrossover
 using .LLMOptionsModule: LaSROptions
 using .LLMServeModule:
