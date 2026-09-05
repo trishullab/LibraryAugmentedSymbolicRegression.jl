@@ -78,7 +78,6 @@ struct LaSRPlugin <: AbstractPlugin
     num_generated_concepts::Int
     num_concept_crossover::Int
     max_concepts::Int
-    is_parametric::Bool
     context::String
     variable_names::Union{Dict,Nothing}
     prompts_dir::String
@@ -105,7 +104,7 @@ struct LaSRPlugin <: AbstractPlugin
     function LaSRPlugin(;
         api_key::Union{String,Nothing}=nothing,
         model::Union{String,Nothing}=nothing,
-        api_kwargs::Dict=Dict("max_tokens" => 1000),
+        api_kwargs::Dict=Dict("max_tokens" => 4096),
         http_kwargs::Dict=Dict("retries" => 3, "readtimeout" => 3600),
         llm_generate::Function=aigenerate,
         verbose::Bool=true,
@@ -117,7 +116,6 @@ struct LaSRPlugin <: AbstractPlugin
         num_generated_concepts::Integer=5,
         num_concept_crossover::Integer=2,
         max_concepts::Integer=30,
-        is_parametric::Bool=false,
         context::AbstractString="",
         variable_names::Union{Dict,Nothing}=nothing,
         prompts_dir::AbstractString=default_prompts_dir(),
@@ -153,6 +151,15 @@ struct LaSRPlugin <: AbstractPlugin
             throw(ArgumentError("`generate_weight` must be nonnegative."))
         amnesty_complexity >= 0 ||
             throw(ArgumentError("`amnesty_complexity` must be nonnegative."))
+        if use_llm &&
+            iszero(mutate_weight) &&
+            iszero(randomize_weight) &&
+            iszero(crossover_probability) &&
+            iszero(generate_weight)
+            @warn "`LaSRPlugin` has `use_llm=true` but every LLM operator weight is zero, " *
+                "so no LLM call will ever be made. Set at least one of `mutate_weight`, " *
+                "`randomize_weight`, `generate_weight`, or `crossover_probability`."
+        end
         isnothing(max_llm_calls) ||
             max_llm_calls > 0 ||
             throw(ArgumentError("`max_llm_calls` must be positive, or `nothing`."))
@@ -175,7 +182,6 @@ struct LaSRPlugin <: AbstractPlugin
             Int(num_generated_concepts),
             Int(num_concept_crossover),
             Int(max_concepts),
-            is_parametric,
             String(context),
             variable_names,
             normalize_prompts_dir(prompts_dir),

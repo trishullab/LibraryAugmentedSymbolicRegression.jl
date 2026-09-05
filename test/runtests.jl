@@ -45,10 +45,6 @@ end
     include("test_lasr_prompt_construction.jl")
 end
 
-@testitem "Test llm output is never executed" tags = [:online] begin
-    include("test_lasr_parse_msg_safety.jl")
-end
-
 @testitem "Test prompt path resolution" tags = [:online] begin
     include("test_prompt_paths.jl")
 end
@@ -75,6 +71,10 @@ end
 
 @testitem "Test complexity amnesty" tags = [:online] begin
     include("test_lasr_amnesty.jl")
+end
+
+@testitem "Test llm output is never executed" tags = [:online] begin
+    include("test_lasr_parse_msg_safety.jl")
 end
 
 @testitem "Test llm round trip against a mock server" tags = [:online] begin

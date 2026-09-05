@@ -21,3 +21,6 @@ docs/src/index.md
 .vscode
 **/*.json
 LocalPreferences.toml
+
+# test run artifacts
+outputs/
