@@ -24,6 +24,7 @@ LocalPreferences.toml
 
 # test run artifacts
 outputs/
+logs/
 
 # agent-authored planning docs never ship with the package
 docs/superpowers/
