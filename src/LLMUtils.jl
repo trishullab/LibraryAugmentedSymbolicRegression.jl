@@ -20,7 +20,9 @@ using DynamicExpressions:
     string_tree,
     AbstractOperatorEnum
 using SymbolicRegression: DATA_TYPE, AbstractOptions
-using ..CoreModule: LLMOptions
+using DispatchDoctor: @unstable
+using ..LLMOptionsStructModule: LLMOptions
+using ..LLMOptionsModule: lasr_context
 using ..ParseModule: render_expr, get_variable_names
 using JSON: parse
 
@@ -33,11 +35,15 @@ function load_prompt(path::String)::String
     return s
 end
 
-function convertDict(d)::NamedTuple
+# A NamedTuple built from a runtime `Dict` has a value-dependent concrete type, so its
+# return type is genuinely `NamedTuple` (abstract). Mark `@unstable` — this is a per-call
+# argument-marshalling helper, so the inference boundary here is harmless.
+@unstable function convertDict(d)::NamedTuple
     return (; Dict(Symbol(k) => v for (k, v) in d)...)
 end
 
 function get_vars(options::AbstractOptions)::String
+    options = lasr_context(options)
     variable_names = get_variable_names(options.variable_names)
     return join(variable_names, ", ")
 end

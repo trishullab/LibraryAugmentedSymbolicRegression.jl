@@ -1,24 +1,13 @@
 module LLMOptionsStructModule
 
-using DispatchDoctor: @unstable
-using StatsBase: StatsBase
-using Base: isvalid
-using SymbolicRegression
+using PromptingTools: aigenerate
+using SymbolicRegression:
+    AbstractMutation, AbstractCrossover, AbstractOptions, AbstractPlugin, Options
 using ..LaSRMutationWeightsModule: LaSRMutationWeights
 using ..LoggingModule: LaSRLogger
 
-"""
-    LLMOperationWeights(;kws...)
+const DEFAULT_PROMPTS_DIR = joinpath(pkgdir(parentmodule(@__MODULE__)), "prompts") * "/"
 
-Defines the probability of different LLM-based mutation operations.
-NOTE: The LLM operations can be significantly slower than their symbolic counterparts,
-so higher probabilities will result in slower operations. By default, we set all probs to 0.0.
-The maximum value for these parameters is 1.0 (100% of the time).
-# Arguments
-- `llm_crossover::Float64`: Probability of calling LLM version of crossover.
-- `llm_mutate::Float64`: Probability of calling LLM version of mutation.
-- `llm_gen_random::Float64`: Probability of calling LLM version of gen_random.
-"""
 Base.@kwdef mutable struct LLMOperationWeights
     llm_crossover::Float64 = 0.0
     llm_mutate::Float64 = 0.0
@@ -26,143 +15,135 @@ Base.@kwdef mutable struct LLMOperationWeights
 end
 
 """
-    set_llm_mutation_weights(mutation_weights::LaSRMutationWeights, llm_operation_weights::LLMOperationWeights)
+    LLMOptions(; kws...)
 
-Set the mutation weights for a LaSR model based on the provided LLM operation weights.
-
-# Arguments
-- `mutation_weights::LaSRMutationWeights`: An instance of `LaSRMutationWeights` containing the current mutation weights.
-- `llm_operation_weights::LLMOperationWeights`: An instance of `LLMOperationWeights` containing the weights for LLM operations.
-
-# Returns
-- `mutation_weights::LaSRMutationWeights`: The updated `mutation_weights` with modified values based on the LLM operation weights.
-
-# Description
-This function adjusts the mutation weights of a LaSR model by incorporating the weights from LLM operations. It performs the following steps:
-1. Extracts the `randomize` weight from `mutation_weights`.
-2. Creates a dictionary of other mutation weights excluding those starting with `llm_` or `randomize`.
-3. Computes new values for `llm_randomize` and `llm_mutate` based on the LLM operation weights and the current mutation weights.
-4. Updates the original mutation weights by scaling them with the complementary LLM operation weights.
-5. Sets the new values for `llm_randomize` and `llm_mutate` in the `mutation_weights`.
-
-The function returns the updated `mutation_weights` with the new values.
-
-We give special consideration to the `randomize` weight because it is independently sampled from the other mutation weights.
-"""
-function set_llm_mutation_weights(
-    mutation_weights::LaSRMutationWeights, llm_operation_weights::LLMOperationWeights
-)::LaSRMutationWeights
-    randomize_w = mutation_weights.randomize
-    oth_mutations = Dict([
-        sym => getproperty(mutation_weights, sym) for
-        sym in fieldnames(typeof(mutation_weights)) if
-        !startswith(string(sym), r"llm_|randomize")
-    ])
-
-    llm_randomize_w = llm_operation_weights.llm_randomize * randomize_w
-    llm_mutate_w =
-        llm_operation_weights.llm_mutate * sum(values(oth_mutations)) /
-        length(oth_mutations)
-
-    # modify the original values of the mutation weights
-    mutation_weights.randomize = (1 - llm_operation_weights.llm_randomize) * randomize_w
-    for (sym, val) in oth_mutations
-        setproperty!(mutation_weights, sym, (1 - llm_operation_weights.llm_mutate) * val)
-    end
-
-    # if llm_randomize or llm_mutate are not 0.0, we should respect user values.
-    mutation_weights.llm_randomize = if mutation_weights.llm_randomize == 0.0
-        llm_randomize_w
-    else
-        mutation_weights.llm_mutate
-    end
-    mutation_weights.llm_mutate =
-        mutation_weights.llm_mutate == 0.0 ? llm_mutate_w : mutation_weights.llm_mutate
-
-    return mutation_weights
-end
-
-function set_llm_mutation_weights(
-    mutation_weights::NamedTuple, llm_operation_weights::NamedTuple
-)::LaSRMutationWeights
-    return set_llm_mutation_weights(
-        LaSRMutationWeights(; mutation_weights...),
-        LLMOperationWeights(; llm_operation_weights...),
-    )
-end
-
-"""
-    LLMOptions(;kws...)
-
-This defines how to call the LLM inference functions. LLM inference is managed by PromptingTools.jl but
-this module serves as the entry point to define new options for the LLM inference.
+Options for the language model itself: which model to call, and how. All
+LaSR search/prompt behavior is configured directly on [`LaSRPlugin`](@ref).
 """
 Base.@kwdef mutable struct LLMOptions
-    # LaSR Ablation Modifiers
+    api_key::Union{String,Nothing} = nothing
+    model::Union{String,Nothing} = nothing
+    api_kwargs::Dict = Dict("max_tokens" => 1000)
+    http_kwargs::Dict = Dict("retries" => 3, "readtimeout" => 3600)
+    llm_generate::Function = aigenerate
+    verbose::Bool = true
+end
+
+struct LLMMutateMutation <: AbstractMutation end
+struct LLMRandomizeMutation <: AbstractMutation end
+struct LLMCrossover <: AbstractCrossover end
+
+"""
+    LaSRPlugin(; kws...)
+
+Library-augmented symbolic regression plugin. Pass it through
+`Options(; plugins=(LaSRPlugin(...),), ...)`. LLM client settings
+(`model`, `api_key`, ...) live in [`LLMOptions`](@ref); everything else is
+set directly on the plugin. The mutation weights are unnormalized, like all
+entries in `Options.mutations`; `crossover_probability` is conditional on
+SR selecting crossover.
+"""
+struct LaSRPlugin <: AbstractPlugin
+    llm_options::LLMOptions
     use_llm::Bool
     use_concepts::Bool
     use_concept_evolution::Bool
-    mutation_weights::Union{LaSRMutationWeights,Nothing}
-    llm_operation_weights::Union{LLMOperationWeights,Nothing}
-    # LaSR Performance Modifiers
-    num_pareto_context::Integer
-    num_generated_equations::Integer
-    num_generated_concepts::Integer
-    num_concept_crossover::Integer
-    max_concepts::Integer
-    # This is a cheeky hack to not have to deal with parametric types in LLMFunctions.jl. TODO: High priority rectify.
+    num_pareto_context::Int
+    num_generated_equations::Int
+    num_generated_concepts::Int
+    num_concept_crossover::Int
+    max_concepts::Int
     is_parametric::Bool
-    llm_context::Union{String,Nothing}
-
-    # LaSR Bookkeeping Utilities
-    # llm_logger::Union{SymbolicRegression.AbstractSRLogger, Nothing}
+    context::String
     variable_names::Union{Dict,Nothing}
-    prompts_dir::Union{String,Nothing}
-    idea_database::Union{Vector{AbstractString},Nothing}
-
-    # LaSR LLM API Options
-    api_key::Union{String,Nothing}
-    model::Union{String,Nothing}
-    api_kwargs::Union{Dict,Nothing}
-    http_kwargs::Union{Dict,Nothing}
+    prompts_dir::String
+    idea_database::Vector{AbstractString}
     lasr_logger::Union{LaSRLogger,Nothing}
-    verbose::Bool
+    mutate_weight::Float64
+    randomize_weight::Float64
+    crossover_probability::Float64
+    function LaSRPlugin(;
+        llm_options::LLMOptions=LLMOptions(),
+        use_llm::Bool=true,
+        use_concepts::Bool=false,
+        use_concept_evolution::Bool=false,
+        num_pareto_context::Integer=5,
+        num_generated_equations::Integer=5,
+        num_generated_concepts::Integer=5,
+        num_concept_crossover::Integer=2,
+        max_concepts::Integer=30,
+        is_parametric::Bool=false,
+        context::AbstractString="",
+        variable_names::Union{Dict,Nothing}=nothing,
+        prompts_dir::AbstractString=DEFAULT_PROMPTS_DIR,
+        idea_database::Vector{<:AbstractString}=AbstractString[],
+        lasr_logger::Union{LaSRLogger,Nothing}=nothing,
+        mutate_weight::Real=0.0,
+        randomize_weight::Real=0.0,
+        crossover_probability::Real=0.0,
+    )
+        mutate_weight >= 0 || throw(ArgumentError("`mutate_weight` must be nonnegative."))
+        randomize_weight >= 0 ||
+            throw(ArgumentError("`randomize_weight` must be nonnegative."))
+        0 <= crossover_probability <= 1 ||
+            throw(ArgumentError("`crossover_probability` must be between 0 and 1."))
+        return new(
+            llm_options,
+            use_llm,
+            use_concepts,
+            use_concept_evolution,
+            Int(num_pareto_context),
+            Int(num_generated_equations),
+            Int(num_generated_concepts),
+            Int(num_concept_crossover),
+            Int(max_concepts),
+            is_parametric,
+            String(context),
+            variable_names,
+            String(prompts_dir),
+            AbstractString[idea_database...],
+            lasr_logger,
+            Float64(mutate_weight),
+            Float64(randomize_weight),
+            Float64(crossover_probability),
+        )
+    end
 end
 
-const llm_mutations = fieldnames(LLMOperationWeights)
-const v_llm_mutations = Symbol[llm_mutations...]
+mutable struct LaSRPluginState
+    idea_database::Vector{AbstractString}
+    lasr_logger::Union{LaSRLogger,Nothing}
+    variable_names::Dict
+    generations::Int
+    worst_members::Vector{Any}
+end
 
-"""
-    LaSROptions(;kws...)
-
-This defines the options for the LibraryAugmentedSymbolicRegression module. It is a composite
-type that contains both the LLMOptions and the SymbolicRegression.Options.
-# Arguments
-- `llm_options::LLMOptions`: Options for the LLM inference.
-- `sr_options::SymbolicRegression.Options`: Options for the SymbolicRegression module.
-
-# Example
-```julia
-llm_options = LLMOptions(;
-    ...
-)
-
-options = Options(;
-    binary_operators = (+, *, -, /, ^),
-    unary_operators = (cos, log),
-    nested_constraints = [(^) => [(^) => 0, cos => 0, log => 0], (/) => [(/) => 1], (cos) => [cos => 0, log => 0], log => [log => 0, cos => 0, (^) => 0]],
-    constraints = [(^) => (3, 1), log => 5, cos => 7],
-    populations=20,
-)
-
-lasr_options = LaSROptions(llm_options, options)
-```
-
-"""
-struct LaSROptions{O<:SymbolicRegression.Options} <: SymbolicRegression.AbstractOptions
-    llm_options::LLMOptions
+struct LaSRContext{O<:Options,S} <: AbstractOptions
     sr_options::O
+    plugin::LaSRPlugin
+    state::S
 end
-const LLM_OPTIONS_KEYS = fieldnames(LLMOptions)
 
-end # module
+const _LLM_OPTIONS_KEYS = fieldnames(LLMOptions)
+const _PLUGIN_KEYS = fieldnames(LaSRPlugin)
+
+function Base.getproperty(context::LaSRContext, key::Symbol)
+    if key in (:sr_options, :plugin, :state)
+        return getfield(context, key)
+    elseif key === :idea_database && !isnothing(getfield(context, :state))
+        return getfield(context, :state).idea_database
+    elseif key === :lasr_logger && !isnothing(getfield(context, :state))
+        return getfield(context, :state).lasr_logger
+    elseif key === :variable_names && !isnothing(getfield(context, :state))
+        return getfield(context, :state).variable_names
+    elseif key in _LLM_OPTIONS_KEYS
+        return getproperty(getfield(context, :plugin).llm_options, key)
+    elseif key in _PLUGIN_KEYS && !hasproperty(getfield(context, :sr_options), key)
+        # `hasproperty` guard: never shadow SR options (e.g. `crossover_probability`)
+        return getproperty(getfield(context, :plugin), key)
+    else
+        return getproperty(getfield(context, :sr_options), key)
+    end
+end
+
+end
