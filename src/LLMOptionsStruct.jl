@@ -5,6 +5,7 @@ using PromptingTools: aigenerate
 using SymbolicRegression:
     AbstractMutation, AbstractCrossover, AbstractOptions, AbstractPlugin, Options
 using ..LoggingModule: LaSRLogger
+using ..LLMCacheModule: SuggestionCache, CallBudget
 using ..IdeaStoreModule: AbstractIdeaStore, WindowedIdeaStore
 using ..NormalizeModule: NormalizationRule, ParseFailure
 import ..NormalizeModule: ParseFailureStore, parse_failures, parse_failure_summary
@@ -89,6 +90,14 @@ struct LaSRPlugin <: AbstractPlugin
     generate_weight::Float64
     amnesty_complexity::Int
     parse_rules::Vector{NormalizationRule}
+    # Optional pool of not-yet-used LLM suggestions. Each call already asks for
+    # `num_generated_equations` proposals and consumes one; the rest are banked here and
+    # served to later identical prompts. `nothing` disables caching.
+    suggestion_cache::Union{SuggestionCache,Nothing}
+    # Ceiling on real LLM calls for the whole search (not per iteration). Once exhausted,
+    # the LLM operators fall back to their symbolic counterparts for the remainder of the
+    # run rather than stalling, so this is a hard cost bound. Unbounded by default.
+    call_budget::CallBudget
     # Optional externally-owned parse-failure store. When set, `init_plugin_state` uses
     # THIS store instead of building a fresh one, so a caller (e.g. the PySR seam) holds a
     # live handle to the exact store the (serial) search records into. Default `nothing`.
@@ -131,6 +140,8 @@ struct LaSRPlugin <: AbstractPlugin
         # Scientist-registerable string/expr normalization rules, appended after
         # `DEFAULT_RULES` (in order) by `parse_expr` when this plugin is active.
         parse_rules::Vector{NormalizationRule}=NormalizationRule[],
+        suggestion_cache::Union{SuggestionCache,Nothing}=nothing,
+        max_llm_calls::Union{Int,Nothing}=nothing,
         parse_failure_sink::Union{Nothing,ParseFailureStore}=nothing,
     )
         mutate_weight >= 0 || throw(ArgumentError("`mutate_weight` must be nonnegative."))
@@ -142,6 +153,9 @@ struct LaSRPlugin <: AbstractPlugin
             throw(ArgumentError("`generate_weight` must be nonnegative."))
         amnesty_complexity >= 0 ||
             throw(ArgumentError("`amnesty_complexity` must be nonnegative."))
+        isnothing(max_llm_calls) ||
+            max_llm_calls > 0 ||
+            throw(ArgumentError("`max_llm_calls` must be positive, or `nothing`."))
         store = something(
             idea_store,
             WindowedIdeaStore(; window=Int(max_concepts), seed=String[idea_database...]),
@@ -173,6 +187,8 @@ struct LaSRPlugin <: AbstractPlugin
             Float64(generate_weight),
             Int(amnesty_complexity),
             parse_rules,
+            suggestion_cache,
+            CallBudget(max_llm_calls),
             parse_failure_sink,
         )
     end

@@ -24,6 +24,7 @@ using Compat: Returns, @inline
 using SymbolicRegression:
     Options, DATA_TYPE, gen_random_tree_fixed_size, crossover_trees, AbstractOptions
 using SymbolicRegression.MutationFunctionsModule: with_contents_for_mutation
+using ..LLMCacheModule: cache_key, take_suggestion!, store_suggestions!, claim_call!
 using ..LLMOptionsModule: lasr_context
 using ..LLMUtilsModule:
     load_prompt,
@@ -105,6 +106,31 @@ candidate list and the caller applies its own fallback.
         log_generation!(options.lasr_logger; id=gen_id, mode=mode, llm_input=rendered_msg)
     end
 
+    # The rendered prompt is exactly what determines the answer, so it is the cache key.
+    # Requests that never render one (no `rendered_msg`) simply do not participate.
+    cache = options.suggestion_cache
+    key = if isnothing(cache) || isnothing(rendered_msg)
+        nothing
+    else
+        cache_key(mode, rendered_msg)
+    end
+
+    if !isnothing(key)
+        pooled = take_suggestion!(cache, key)
+        if !isnothing(pooled)
+            log_generation!(options.lasr_logger; id=gen_id, mode=mode, cached=pooled)
+            return String[pooled], gen_id
+        end
+    end
+
+    # Nothing pooled, so this would be a real round trip: check the allowance first.
+    # Refusing here rather than at each operator means every LLM entry point is bounded
+    # by construction.
+    if !claim_call!(options.call_budget)
+        log_generation!(options.lasr_logger; id=gen_id, mode=mode, failed="budget")
+        return String[], gen_id
+    end
+
     msg = try
         options.llm_generate(
             CustomOpenAISchema(),
@@ -131,6 +157,10 @@ candidate list and the caller applies its own fallback.
     # caller; record it the same way a transport error is recorded.
     isempty(candidates) &&
         log_generation!(options.lasr_logger; id=gen_id, mode=mode, failed="None")
+    # Bank everything past the first; the caller consumes from the front.
+    if !isnothing(key) && length(candidates) > 1
+        store_suggestions!(cache, key, candidates[2:end])
+    end
     return candidates, gen_id
 end
 

@@ -81,6 +81,10 @@ end
     include("test_lasr_llm_integration.jl")
 end
 
+@testitem "Test suggestion cache and call budget" tags = [:online] begin
+    include("test_lasr_cache_budget.jl")
+end
+
 @testitem "Test normalization pipeline" tags = [:online] begin
     include("test_lasr_normalize.jl")
 end

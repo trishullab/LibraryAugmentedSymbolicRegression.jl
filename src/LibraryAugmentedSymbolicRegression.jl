@@ -34,7 +34,11 @@ export LaSRPlugin,
     evolution_candidates,
     NormalizationRule,
     parse_failures,
-    parse_failure_summary
+    parse_failure_summary,
+    SuggestionCache,
+    CallBudget,
+    cache_stats,
+    budget_used
 
 using Reexport
 using DispatchDoctor: @stable
@@ -44,6 +48,7 @@ using DispatchDoctor: @stable
     include("Utils.jl")
     include("LLMServe.jl")
     include("Logging.jl")
+    include("LLMCache.jl")
     include("IdeaStore.jl")
     include("Normalize.jl")
     include("LLMOptionsStruct.jl")
@@ -55,6 +60,13 @@ using DispatchDoctor: @stable
 end
 
 using .LoggingModule: LaSRLogger
+using .LLMCacheModule:
+    SuggestionCache,
+    CallBudget,
+    cache_stats,
+    reset_cache!,
+    reset_budget!,
+    budget_used
 using .IdeaStoreModule:
     AbstractIdeaStore,
     WindowedIdeaStore,
