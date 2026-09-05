@@ -32,6 +32,7 @@ using ..LLMOptionsStructModule:
     LLMGenerateMutation,
     LLMCrossover
 using ..LLMOptionsModule: lasr_context, lasr_state
+using ..NormalizeModule: ParseFailureStore
 using ..LLMFunctionsModule:
     llm_mutate_tree,
     llm_crossover_trees,
@@ -135,7 +136,12 @@ function init_plugin_state(plugin::LaSRPlugin, options, dataset)
         copy(plugin.variable_names)
     end
     return LaSRPluginState(
-        deepcopy(plugin.idea_store), plugin.lasr_logger, variable_names, 0, Any[]
+        deepcopy(plugin.idea_store),
+        plugin.lasr_logger,
+        variable_names,
+        0,
+        Any[],
+        something(plugin.parse_failure_sink, ParseFailureStore()),
     )
 end
 
@@ -147,12 +153,20 @@ function on_search_start!(state::LaSRPluginState, ::LaSRPlugin, dataset, options
 end
 
 function _copy_plugin_state(state::LaSRPluginState)
+    # `state.parse_failures` is passed through BY REFERENCE (not deep-copied like every
+    # other field above) so that `:serial`/`:multithreading` workers all record into the
+    # same lock-guarded `ParseFailureStore` and their fallback counts aggregate into one
+    # place instead of being scattered/lost across per-worker copies. `:multiprocessing`
+    # workers run in separate address spaces, so this reference-sharing cannot reach them
+    # -- per-process aggregation there is a documented follow-up (the `lasr_logger` route
+    # already covers cross-process observability in the meantime).
     return LaSRPluginState(
         deepcopy(state.idea_store),
         state.lasr_logger,
         copy(state.variable_names),
         state.generations,
         copy(state.worst_members),
+        state.parse_failures,
     )
 end
 

@@ -5,6 +5,30 @@ using DynamicExpressions
 using DynamicExpressions.NodeModule: Node
 using SymbolicRegression: AbstractOptions, DATA_TYPE
 using ..LLMOptionsModule: lasr_context
+using ..LLMOptionsStructModule: LaSRContext, LaSRPluginState
+using ..NormalizeModule:
+    apply_string_rules,
+    apply_expr_rules,
+    DEFAULT_RULES,
+    resolve_rules,
+    ParseFailure,
+    record_parse_failure!
+
+# Record a constant-1 fallback into the active `LaSRPluginState`'s `ParseFailureStore`,
+# if one is present. `ctx.state` is `nothing` for a `LaSRContext` built directly from a
+# bare `Options` (e.g. a parser unit test with no plugin state) -- skip recording rather
+# than error, since the fallback itself must always succeed regardless of observability.
+@unstable function _record_parse_failure!(
+    ctx::LaSRContext, expr_str::AbstractString, expr_str_norm::AbstractString,
+    stage::Symbol, reason::AbstractString,
+)
+    state = getfield(ctx, :state)
+    state isa LaSRPluginState || return nothing
+    record_parse_failure!(
+        state.parse_failures, ParseFailure(String(expr_str), String(expr_str_norm), stage, String(reason))
+    )
+    return nothing
+end
 
 """
     parse_expr(expr_str::String, options)
@@ -16,12 +40,19 @@ AbstractExpressionNode.
 @unstable function parse_expr(
     ::Type{T}, expr_str::String, options::AbstractOptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
+    # `options` here may be a raw `SymbolicRegression.Options` or already a
+    # `LaSRContext` (every real call site in `LLMFunctions.jl` converts before calling
+    # `parse_expr`). `lasr_context` is idempotent on an existing `LaSRContext` (returns
+    # it unchanged) and is the one function that reaches the active `LaSRPlugin`
+    # regardless of which form `options` arrives in, so resolve through it instead of
+    # gating on `applicable(lasr_plugin, options)` against the pre-conversion argument.
     options = lasr_context(options)
+    rules = resolve_rules(DEFAULT_RULES, options.plugin.parse_rules)
     node_type = options.node_type{T}::Type{<:AbstractExpressionNode{T}}
     expression_type = options.expression_type{T,node_type}::Type{<:AbstractExpression{T}}
     ops = options.operators
     varnames = get_variable_names(options.variable_names)
-    expr_str_norm = _normalize_expr_string(expr_str)
+    expr_str_norm = apply_string_rules(rules, expr_str)
 
     local ast
     try
@@ -35,6 +66,7 @@ AbstractExpressionNode.
                 @warn "Failed to Meta.parse even after stripping LHS: $expr_str"
                 @warn "Error: $e"
                 @warn "Returning a constant node with value 1."
+                _record_parse_failure!(options, expr_str, expr_str_norm, :meta_parse, string(e))
                 return Expression(
                     node_type(; val=convert(T, 1.0));
                     options.operators,
@@ -45,19 +77,31 @@ AbstractExpressionNode.
             @warn "Failed to Meta.parse: $expr_str"
             @warn "Error: $e"
             @warn "Returning a constant node with value 1."
+            _record_parse_failure!(options, expr_str, expr_str_norm, :meta_parse, string(e))
             return Expression(
                 node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
             )
         end
     end
 
-    ast = _rhs_of_assignment(ast)
-
     try
         # LLMs emit operator idioms the operator enum does not carry (unary `-`/`+`,
-        # `pow(a, b)`). Left as-is these trees fail to parse and are discarded and a
-        # constant node substituted; rewrite them into equivalent registered forms first.
-        ast = _rewrite_llm_ops(ast)
+        # `pow(a, b)`), and the raw AST may still carry an LHS assignment (`y = ...`).
+        # Left as-is these trees fail to parse and are discarded and a constant node
+        # substituted; rewrite them into equivalent registered forms first.
+        ast = apply_expr_rules(rules, ast)
+    catch e
+        @warn "Failed to apply expr rules: $expr_str"
+        @warn "Normalized: $expr_str_norm"
+        @warn "Error: $e"
+        @warn "Returning a constant node with value 1."
+        _record_parse_failure!(options, expr_str, expr_str_norm, :expr_stage, string(e))
+        return Expression(
+            node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
+        )
+    end
+
+    try
         return parse_expression(
             ast;
             operators=ops,
@@ -70,61 +114,11 @@ AbstractExpressionNode.
         @warn "Normalized: $expr_str_norm"
         @warn "Error: $e"
         @warn "Returning a constant node with value 1."
+        _record_parse_failure!(options, expr_str, expr_str_norm, :tree_parse, string(e))
         return Expression(
             node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
         )
     end
-end
-
-@unstable function _rhs_of_assignment(ast::Expr)
-    if ast isa Expr
-        if ast.head === :(=) && length(ast.args) ≥ 2
-            return ast.args[2]
-        elseif ast.head === :block && !isempty(ast.args)
-            return _rhs_of_assignment(last(ast.args))
-        end
-    end
-    return ast
-end
-
-"""
-    _rewrite_llm_ops(ast)
-
-Rewrite LLM operator idioms the operator enum does not carry into equivalent forms the
-parser accepts: unary `-a` becomes `0 - a` (binary `-` is registered), unary `+a` becomes
-`a`, and `pow(a, b)` becomes `a ^ b`. Recurses through the whole tree. Negative literals
-like `-0.5` are parsed by `Meta.parse` as numbers, not unary calls, so they are untouched.
-"""
-_rewrite_llm_ops(ast) = ast
-
-@unstable function _rewrite_llm_ops(ast::Expr)
-    if ast.head === :call && length(ast.args) == 2 && ast.args[1] === :-
-        return Expr(:call, :-, 0.0, _rewrite_llm_ops(ast.args[2]))
-    elseif ast.head === :call && length(ast.args) == 2 && ast.args[1] === :+
-        return _rewrite_llm_ops(ast.args[2])
-    elseif ast.head === :call && length(ast.args) == 3 && ast.args[1] === :pow
-        return Expr(:call, :^, _rewrite_llm_ops(ast.args[2]), _rewrite_llm_ops(ast.args[3]))
-    else
-        return Expr(ast.head, map(_rewrite_llm_ops, ast.args)...)
-    end
-end
-
-function _normalize_expr_string(s::AbstractString)
-    # Normalize whitespace
-    s = replace(s, r"\s+" => " ")
-    # Replace standalone C or (C) with 1.0 or (1.0)
-    s = replace(s, r"(?<!\w)C(?!\w)" => "1.0")
-    s = replace(s, r"(?<!\w)\(C\)(?!\w)" => "(1.0)")
-    # LLMs write absolute value in pipe notation `|expr|`, which is not valid Julia
-    # (`Meta.parse` rejects it and `parse_expr` falls back to the constant-1 node).
-    # Rewrite each non-nested pipe pair into the registered `abs(...)` operator so
-    # idioms like `|x|` and `|x|^(1/3)` map onto `abs`. Requires `abs` to be in the
-    # provided operator set, exactly like any other operator name.
-    s = replace(s, r"\|([^|]+)\|" => s"abs(\1)")
-    # TODO: Right now, making all variables lowercase. This might not always be desired.
-    s = lowercase(s)
-    s = replace(s, r"\*\*" => "^")
-    strip(s)
 end
 
 """

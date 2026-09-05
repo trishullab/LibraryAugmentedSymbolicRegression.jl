@@ -61,12 +61,24 @@ end
     include("test_lasr_operators_extended.jl")
 end
 
+@testitem "Test operator extension example (factorial)" tags = [:online] begin
+    include("test_lasr_operator_extension.jl")
+end
+
 @testitem "Test LLMGenerateMutation operator" tags = [:online] begin
     include("test_lasr_generate_operator.jl")
 end
 
 @testitem "Test complexity amnesty" tags = [:online] begin
     include("test_lasr_amnesty.jl")
+end
+
+@testitem "Test normalization pipeline" tags = [:online] begin
+    include("test_lasr_normalize.jl")
+end
+
+@testitem "Test parse-failure sink" tags = [:online] begin
+    include("test_lasr_failure_sink.jl")
 end
 
 # Test SymbolicRegression.jl backwards compatibility (~15 min)

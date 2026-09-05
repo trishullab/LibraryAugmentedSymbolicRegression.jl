@@ -28,7 +28,10 @@ export LaSRPlugin,
     add_idea!,
     retrieve_ideas,
     update_idea_value!,
-    evolution_candidates
+    evolution_candidates,
+    NormalizationRule,
+    parse_failures,
+    parse_failure_summary
 
 using Reexport
 using DispatchDoctor: @stable
@@ -39,6 +42,7 @@ using DispatchDoctor: @stable
     include("LLMServe.jl")
     include("Logging.jl")
     include("IdeaStore.jl")
+    include("Normalize.jl")
     include("LLMOptionsStruct.jl")
     include("LLMOptions.jl")
     include("Parse.jl")
@@ -72,6 +76,8 @@ using .LLMFunctionsModule:
     parse_msg_content,
     generate_concepts
 using .LLMUtilsModule: load_prompt, construct_prompt
+using .NormalizeModule: NormalizationRule
+using .LLMOptionsStructModule: parse_failures, parse_failure_summary
 using .ParseModule: render_expr, parse_expr
 
 include("MLJInterface.jl")
