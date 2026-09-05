@@ -49,6 +49,10 @@ end
     include("test_lasr_parse_msg_safety.jl")
 end
 
+@testitem "Test scored idea store" tags = [:online] begin
+    include("test_scored_idea_store.jl")
+end
+
 @testitem "Test SR v2 plugin integration" tags = [:online] begin
     include("test_plugin.jl")
 end

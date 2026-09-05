@@ -65,7 +65,7 @@ function init_plugin_state(plugin::LaSRPlugin, options, dataset)
         copy(plugin.variable_names)
     end
     return LaSRPluginState(
-        copy(plugin.idea_database), plugin.lasr_logger, variable_names, 0, Any[]
+        deepcopy(plugin.idea_store), plugin.lasr_logger, variable_names, 0, Any[]
     )
 end
 
@@ -78,7 +78,7 @@ end
 
 function _copy_plugin_state(state::LaSRPluginState)
     return LaSRPluginState(
-        copy(state.idea_database),
+        deepcopy(state.idea_store),
         state.lasr_logger,
         copy(state.variable_names),
         state.generations,

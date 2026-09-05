@@ -1,6 +1,6 @@
 module LLMFunctionsModule
 
-using Random: default_rng, AbstractRNG, rand, randperm
+using Random: default_rng, AbstractRNG, rand, randperm, shuffle
 using DispatchDoctor: @unstable
 using DynamicExpressions:
     Node,
@@ -25,13 +25,8 @@ using SymbolicRegression:
 using SymbolicRegression.MutationFunctionsModule: with_contents_for_mutation
 using ..LLMOptionsModule: lasr_context
 using ..LLMUtilsModule:
-    load_prompt,
-    convertDict,
-    get_vars,
-    get_ops,
-    construct_prompt,
-    format_pareto,
-    sample_context
+    load_prompt, convertDict, get_vars, get_ops, construct_prompt, format_pareto
+using ..IdeaStoreModule: retrieve_ideas, add_idea!, evolution_candidates
 using ..ParseModule: render_expr, parse_expr
 using ..LoggingModule: log_generation!
 using PromptingTools:
@@ -81,15 +76,7 @@ end
     node_count::Int, options::AbstractOptions, nfeatures::Int, ::Type{T}
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
     options = lasr_context(options)
-    if isnothing(options.idea_database)
-        assumptions = []
-    else
-        assumptions = sample_context(
-            options.idea_database,
-            min(options.num_pareto_context, length(options.idea_database)),
-            options.max_concepts,
-        )
-    end
+    assumptions = retrieve_ideas(options.idea_store, options.num_pareto_context)
 
     if options.context != ""
         pushfirst!(assumptions, options.context)
@@ -197,14 +184,15 @@ end
     return get_contents(out)
 end
 
-@unstable function concept_evolution(idea_database, options::AbstractOptions)
+@unstable function concept_evolution(options::AbstractOptions)
     options = lasr_context(options)
-    num_ideas = size(idea_database)[1]
-    if num_ideas <= options.max_concepts
-        return nothing
-    end
+    # The store decides which ideas are eligible for distillation: for the windowed store
+    # this is the overflow beyond its sampling window; for the scored store it is the
+    # below-median-value ideas.
+    candidates = evolution_candidates(options.idea_store)
+    isempty(candidates) && return nothing
 
-    ideas = [idea_database[rand((options.max_concepts + 1):num_ideas)] for _ in 1:num_ideas]
+    ideas = shuffle(candidates)
     conversation = [
         SystemMessage(load_prompt(options.prompts_dir * "concept_evolution_system.prompt")),
         UserMessage(
@@ -462,13 +450,13 @@ function generate_concepts(dominating, worst_members, options::AbstractOptions)
         log_generation!(
             options.lasr_logger; id=gen_id, mode="generate_concepts", chosen=chosen_idea
         )
-        push!(options.idea_database, chosen_idea)
+        add_idea!(options.idea_store, chosen_idea)
     end
 
     for _ in 1:(options.num_concept_crossover)
-        out = concept_evolution(options.idea_database, options)
+        out = concept_evolution(options)
         if !isnothing(out)
-            pushfirst!(options.idea_database, out)
+            add_idea!(options.idea_store, out; refined=true)
         end
     end
 end
@@ -489,13 +477,9 @@ end
     options = lasr_context(options)
     expr = render_expr(tree, options)
 
-    if isnothing(options.idea_database)
-        assumptions = []
-    else
-        assumptions = sample_context(
-            options.idea_database, options.num_pareto_context, options.max_concepts
-        )
-    end
+    assumptions = retrieve_ideas(
+        options.idea_store, options.num_pareto_context; query=expr
+    )
 
     if !options.use_concepts
         assumptions = []
@@ -618,15 +602,9 @@ end
     expr1 = render_expr(tree1, options)
     expr2 = render_expr(tree2, options)
 
-    if isnothing(options.idea_database)
-        assumptions = []
-    else
-        assumptions = sample_context(
-            options.idea_database,
-            min(options.num_pareto_context, length(options.idea_database)),
-            options.max_concepts,
-        )
-    end
+    assumptions = retrieve_ideas(
+        options.idea_store, options.num_pareto_context; query=expr1 * " " * expr2
+    )
 
     if !options.use_concepts
         assumptions = []

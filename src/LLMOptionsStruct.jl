@@ -5,6 +5,7 @@ using SymbolicRegression:
     AbstractMutation, AbstractCrossover, AbstractOptions, AbstractPlugin, Options
 using ..LaSRMutationWeightsModule: LaSRMutationWeights
 using ..LoggingModule: LaSRLogger
+using ..IdeaStoreModule: AbstractIdeaStore, WindowedIdeaStore
 
 const DEFAULT_PROMPTS_DIR = joinpath(pkgdir(parentmodule(@__MODULE__)), "prompts") * "/"
 
@@ -57,7 +58,7 @@ struct LaSRPlugin <: AbstractPlugin
     context::String
     variable_names::Union{Dict,Nothing}
     prompts_dir::String
-    idea_database::Vector{AbstractString}
+    idea_store::AbstractIdeaStore
     lasr_logger::Union{LaSRLogger,Nothing}
     mutate_weight::Float64
     randomize_weight::Float64
@@ -77,6 +78,11 @@ struct LaSRPlugin <: AbstractPlugin
         variable_names::Union{Dict,Nothing}=nothing,
         prompts_dir::AbstractString=DEFAULT_PROMPTS_DIR,
         idea_database::Vector{<:AbstractString}=AbstractString[],
+        # Pass a custom `AbstractIdeaStore` (BM25, Scored, RAG, ...) to change how
+        # concepts are retrieved. Defaults to a `WindowedIdeaStore` seeded from
+        # `idea_database` and sized to `max_concepts`, reproducing the historical
+        # uniform-random windowed sampling.
+        idea_store::Union{AbstractIdeaStore,Nothing}=nothing,
         lasr_logger::Union{LaSRLogger,Nothing}=nothing,
         mutate_weight::Real=0.0,
         randomize_weight::Real=0.0,
@@ -87,6 +93,12 @@ struct LaSRPlugin <: AbstractPlugin
             throw(ArgumentError("`randomize_weight` must be nonnegative."))
         0 <= crossover_probability <= 1 ||
             throw(ArgumentError("`crossover_probability` must be between 0 and 1."))
+        store = something(
+            idea_store,
+            WindowedIdeaStore(;
+                window=Int(max_concepts), seed=String[idea_database...]
+            ),
+        )
         return new(
             llm_options,
             use_llm,
@@ -101,7 +113,7 @@ struct LaSRPlugin <: AbstractPlugin
             String(context),
             variable_names,
             String(prompts_dir),
-            AbstractString[idea_database...],
+            store,
             lasr_logger,
             Float64(mutate_weight),
             Float64(randomize_weight),
@@ -111,7 +123,7 @@ struct LaSRPlugin <: AbstractPlugin
 end
 
 mutable struct LaSRPluginState
-    idea_database::Vector{AbstractString}
+    idea_store::AbstractIdeaStore
     lasr_logger::Union{LaSRLogger,Nothing}
     variable_names::Dict
     generations::Int
@@ -130,8 +142,8 @@ const _PLUGIN_KEYS = fieldnames(LaSRPlugin)
 function Base.getproperty(context::LaSRContext, key::Symbol)
     if key in (:sr_options, :plugin, :state)
         return getfield(context, key)
-    elseif key === :idea_database && !isnothing(getfield(context, :state))
-        return getfield(context, :state).idea_database
+    elseif key === :idea_store && !isnothing(getfield(context, :state))
+        return getfield(context, :state).idea_store
     elseif key === :lasr_logger && !isnothing(getfield(context, :state))
         return getfield(context, :state).lasr_logger
     elseif key === :variable_names && !isnothing(getfield(context, :state))

@@ -24,7 +24,14 @@ export LaSRPlugin,
     LLAMAFILE_MODEL,
     LLAMAFILE_PATH,
     LLAMAFILE_URL,
-    LLM_PORT
+    LLM_PORT,
+    AbstractIdeaStore,
+    WindowedIdeaStore,
+    ScoredIdeaStore,
+    add_idea!,
+    retrieve_ideas,
+    update_idea_value!,
+    evolution_candidates
 
 using Reexport
 using DispatchDoctor: @stable
@@ -35,6 +42,7 @@ using DispatchDoctor: @stable
     include("LLMServe.jl")
     include("MutationWeights.jl")
     include("Logging.jl")
+    include("IdeaStore.jl")
     include("LLMOptionsStruct.jl")
     include("LLMOptions.jl")
     include("Parse.jl")
@@ -45,6 +53,14 @@ end
 
 using .LaSRMutationWeightsModule: LaSRMutationWeights
 using .LoggingModule: LaSRLogger
+using .IdeaStoreModule:
+    AbstractIdeaStore,
+    WindowedIdeaStore,
+    ScoredIdeaStore,
+    add_idea!,
+    retrieve_ideas,
+    update_idea_value!,
+    evolution_candidates
 using .LLMOptionsStructModule:
     LLMOperationWeights,
     LLMOptions,

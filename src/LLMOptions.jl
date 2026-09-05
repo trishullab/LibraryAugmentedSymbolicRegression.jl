@@ -15,6 +15,7 @@ using ..LLMOptionsStructModule:
     LaSRContext
 using ..LaSRMutationWeightsModule: LaSRMutationWeights
 using ..LLMServeModule: LLAMAFILE_MODEL
+using ..IdeaStoreModule: AbstractIdeaStore
 
 function set_llm_mutation_weights(
     weights::LaSRMutationWeights, probabilities::LLMOperationWeights
@@ -128,6 +129,7 @@ with a [`LaSRPlugin`](@ref). New code should construct `LLMOptions`,
     variable_names::Union{Dict,Nothing}=nothing,
     prompts_dir::Union{String,Nothing}=nothing,
     idea_database::Union{Vector{<:AbstractString},Nothing}=nothing,
+    idea_store::Union{AbstractIdeaStore,Nothing}=nothing,
     api_key::Union{String,Nothing}=nothing,
     model::Union{String,Nothing}=nothing,
     api_kwargs::Union{Dict,Nothing}=nothing,
@@ -184,6 +186,7 @@ with a [`LaSRPlugin`](@ref). New code should construct `LLMOptions`,
         variable_names,
         prompts_dir=prompt_path,
         idea_database=AbstractString[something(idea_database, AbstractString[])...],
+        idea_store,
         mutate_weight=weights.llm_mutate,
         randomize_weight=weights.llm_randomize,
         crossover_probability=use_llm ? probabilities.llm_crossover : 0.0,
