@@ -18,6 +18,9 @@ export LaSRPlugin,
     parse_msg_content,
     construct_prompt,
     load_prompt,
+    default_prompts_dir,
+    prompt_path,
+    copy_prompts,
     LLAMAFILE_MODEL,
     LLAMAFILE_PATH,
     LLAMAFILE_URL,
@@ -65,7 +68,8 @@ using .LLMOptionsStructModule:
     LLMMutateMutation,
     LLMRandomizeMutation,
     LLMGenerateMutation,
-    LLMCrossover
+    LLMCrossover,
+    default_prompts_dir
 using .LLMServeModule:
     async_run_llm_server, LLAMAFILE_MODEL, LLAMAFILE_PATH, LLAMAFILE_URL, LLM_PORT
 using .LLMFunctionsModule:
@@ -75,7 +79,7 @@ using .LLMFunctionsModule:
     concept_evolution,
     parse_msg_content,
     generate_concepts
-using .LLMUtilsModule: load_prompt, construct_prompt
+using .LLMUtilsModule: load_prompt, construct_prompt, prompt_path, copy_prompts
 using .NormalizeModule: NormalizationRule
 using .LLMOptionsStructModule: parse_failures, parse_failure_summary
 using .ParseModule: render_expr, parse_expr
@@ -87,8 +91,7 @@ function __init__()
     should_start_llamafile =
         get(ENV, "START_LLAMASERVER", "false") == "true" ||
         get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "") == "online_llamafile"
-    should_start_llamafile &&
-        async_run_llm_server(LLAMAFILE_URL, LLAMAFILE_PATH, LLM_PORT)
+    should_start_llamafile && async_run_llm_server(LLAMAFILE_URL, LLAMAFILE_PATH, LLM_PORT)
     return nothing
 end
 

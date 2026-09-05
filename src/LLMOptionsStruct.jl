@@ -9,7 +9,43 @@ using ..IdeaStoreModule: AbstractIdeaStore, WindowedIdeaStore
 using ..NormalizeModule: NormalizationRule, ParseFailure
 import ..NormalizeModule: ParseFailureStore, parse_failures, parse_failure_summary
 
-const DEFAULT_PROMPTS_DIR = joinpath(pkgdir(parentmodule(@__MODULE__)), "prompts") * "/"
+"""
+    default_prompts_dir()
+
+Absolute path of the prompt templates shipped with LaSR (the package's `prompts/`
+directory). Deliberately a function, not a `const`: a constant computed from
+`pkgdir` is evaluated at *precompile* time and its absolute path is frozen into the
+cache, so a depot that is later moved or copied (container image, restored CI
+cache, depot built as one user and run as another) keeps a valid pkgimage pointing
+at a path that no longer exists, and every prompt load fails. Resolving per call
+tracks wherever the package actually lives.
+
+On a `Pkg.add` install this directory is READ-ONLY (files land mode 444). To edit
+the templates, materialize a writable copy with [`copy_prompts`](@ref) and pass it
+as `prompts_dir`.
+"""
+function default_prompts_dir()::String
+    root = pkgdir(parentmodule(@__MODULE__))
+    root === nothing && error("cannot locate the LaSR package directory")
+    return normpath(joinpath(root, "prompts"))
+end
+
+# `prompts_dir` is joined with template names (never concatenated), so a trailing
+# separator is optional. A directory that does not exist is a typo: fail here rather
+# than minutes into a search at the first LLM call.
+function normalize_prompts_dir(dir::AbstractString)::String
+    raw = normpath(abspath(expanduser(String(dir))))
+    # `normpath` keeps a trailing separator; drop it so `plugin.prompts_dir` is canonical
+    # and "dir" and "dir/" are the same configuration.
+    path = length(raw) > 1 ? String(rstrip(raw, ('/', '\\'))) : raw
+    isdir(path) || throw(
+        ArgumentError(
+            "prompts_dir does not exist: $path -- pass a directory of `.prompt` " *
+            "templates (see `copy_prompts`), or omit it to use `default_prompts_dir()`",
+        ),
+    )
+    return path
+end
 
 struct LLMMutateMutation <: AbstractMutation end
 struct LLMRandomizeMutation <: AbstractMutation end
@@ -75,7 +111,7 @@ struct LaSRPlugin <: AbstractPlugin
         is_parametric::Bool=false,
         context::AbstractString="",
         variable_names::Union{Dict,Nothing}=nothing,
-        prompts_dir::AbstractString=DEFAULT_PROMPTS_DIR,
+        prompts_dir::AbstractString=default_prompts_dir(),
         idea_database::Vector{<:AbstractString}=AbstractString[],
         # Pass a custom `AbstractIdeaStore` (BM25, Scored, RAG, ...) to change how
         # concepts are retrieved. Defaults to a `WindowedIdeaStore` seeded from
@@ -108,9 +144,7 @@ struct LaSRPlugin <: AbstractPlugin
             throw(ArgumentError("`amnesty_complexity` must be nonnegative."))
         store = something(
             idea_store,
-            WindowedIdeaStore(;
-                window=Int(max_concepts), seed=String[idea_database...]
-            ),
+            WindowedIdeaStore(; window=Int(max_concepts), seed=String[idea_database...]),
         )
         return new(
             api_key,
@@ -130,7 +164,7 @@ struct LaSRPlugin <: AbstractPlugin
             is_parametric,
             String(context),
             variable_names,
-            String(prompts_dir),
+            normalize_prompts_dir(prompts_dir),
             store,
             lasr_logger,
             Float64(mutate_weight),

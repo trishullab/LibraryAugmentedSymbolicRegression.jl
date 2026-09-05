@@ -22,8 +22,54 @@ using DynamicExpressions:
 using SymbolicRegression: DATA_TYPE, AbstractOptions
 using DispatchDoctor: @unstable
 using ..LLMOptionsModule: lasr_context
+using ..LLMOptionsStructModule: default_prompts_dir
 using ..ParseModule: render_expr, get_variable_names
 using JSON: parse
+
+"""
+    prompt_path(prompts_dir, name)
+
+Path of prompt template `name` for a plugin configured with `prompts_dir`. A
+template present in `prompts_dir` wins; anything the user did not override falls
+back to the packaged copy, so a custom directory may hold just the one template it
+changes. `prompts_dir` is *joined* with `name`, so a trailing separator is optional
+(concatenating it silently produced `.../my_promptsmutate_user.prompt` before).
+"""
+function prompt_path(prompts_dir::AbstractString, name::AbstractString)::String
+    path = joinpath(prompts_dir, name)
+    isfile(path) && return path
+    packaged = joinpath(default_prompts_dir(), name)
+    isfile(packaged) && return packaged
+    return throw(
+        ArgumentError(
+            "prompt template \"$name\" not found in $prompts_dir, and no packaged " *
+            "template of that name exists in $(default_prompts_dir())",
+        ),
+    )
+end
+
+"""
+    copy_prompts(dest; force=false)
+
+Copy the packaged `.prompt` templates into `dest` (created if needed) as *writable*
+files, and return `dest`. The installed originals are read-only (mode 444 after
+`Pkg.add`) and are replaced wholesale on upgrade, so editing prompts means editing a
+copy and passing it as `prompts_dir`. Existing files in `dest` are left alone unless
+`force=true`, so re-running this never discards edits.
+"""
+function copy_prompts(dest::AbstractString; force::Bool=false)::String
+    target = normpath(abspath(expanduser(String(dest))))
+    packaged = default_prompts_dir()
+    mkpath(target)
+    for name in readdir(packaged)
+        endswith(name, ".prompt") || continue
+        out = joinpath(target, name)
+        (isfile(out) && !force) && continue
+        cp(joinpath(packaged, name), out; force=true)
+        chmod(out, 0o644)
+    end
+    return target
+end
 
 function load_prompt(path::String)::String
     # load prompt file 

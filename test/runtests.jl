@@ -49,6 +49,10 @@ end
     include("test_lasr_parse_msg_safety.jl")
 end
 
+@testitem "Test prompt path resolution" tags = [:online] begin
+    include("test_prompt_paths.jl")
+end
+
 @testitem "Test scored idea store" tags = [:online] begin
     include("test_scored_idea_store.jl")
 end

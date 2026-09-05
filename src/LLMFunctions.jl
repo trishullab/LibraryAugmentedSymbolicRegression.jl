@@ -26,7 +26,13 @@ using SymbolicRegression:
 using SymbolicRegression.MutationFunctionsModule: with_contents_for_mutation
 using ..LLMOptionsModule: lasr_context
 using ..LLMUtilsModule:
-    load_prompt, convertDict, get_vars, get_ops, construct_prompt, format_pareto
+    load_prompt,
+    prompt_path,
+    convertDict,
+    get_vars,
+    get_ops,
+    construct_prompt,
+    format_pareto
 using ..IdeaStoreModule: retrieve_ideas, add_idea!, evolution_candidates
 using ..ParseModule: render_expr, parse_expr
 using ..LoggingModule: log_generation!
@@ -41,9 +47,10 @@ using PromptingTools:
 using JSON: parse
 using UUIDs: uuid1
 
-_is_one_constant(expression) = let tree = get_contents(expression)
-    tree.constant && tree.val == one(tree.val)
-end
+_is_one_constant(expression) =
+    let tree = get_contents(expression)
+        tree.constant && tree.val == one(tree.val)
+    end
 
 @unstable function llm_randomize_tree(
     ex::AbstractExpression,
@@ -88,10 +95,12 @@ end
     end
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "gen_random_system.prompt")),
+        SystemMessage(
+            load_prompt(prompt_path(options.prompts_dir, "gen_random_system.prompt"))
+        ),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "gen_random_user.prompt"),
+                load_prompt(prompt_path(options.prompts_dir, "gen_random_user.prompt")),
                 assumptions,
                 "assump",
             ),
@@ -227,10 +236,12 @@ if the call fails or nothing usable was produced.
     end
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "gen_random_system.prompt")),
+        SystemMessage(
+            load_prompt(prompt_path(options.prompts_dir, "gen_random_system.prompt"))
+        ),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "gen_random_user.prompt"),
+                load_prompt(prompt_path(options.prompts_dir, "gen_random_user.prompt")),
                 assumptions,
                 "assump",
             ),
@@ -257,13 +268,19 @@ if the call fails or nothing usable was produced.
         )
     catch e
         log_generation!(
-            options.lasr_logger; id=gen_id, mode="gen_candidates", failed="None." * string(e)
+            options.lasr_logger;
+            id=gen_id,
+            mode="gen_candidates",
+            failed="None." * string(e),
         )
         return AbstractExpressionNode{T}[]
     end
 
     log_generation!(
-        options.lasr_logger; id=gen_id, mode="gen_candidates", llm_output=string(msg.content)
+        options.lasr_logger;
+        id=gen_id,
+        mode="gen_candidates",
+        llm_output=string(msg.content),
     )
 
     # `parse_msg_content` returns the raw proposal strings; parse each into a tree the same
@@ -299,10 +316,14 @@ end
 
     ideas = shuffle(candidates)
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "concept_evolution_system.prompt")),
+        SystemMessage(
+            load_prompt(prompt_path(options.prompts_dir, "concept_evolution_system.prompt"))
+        ),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "concept_evolution_user.prompt"),
+                load_prompt(
+                    prompt_path(options.prompts_dir, "concept_evolution_user.prompt")
+                ),
                 ideas,
                 "idea",
             ),
@@ -473,11 +494,15 @@ function generate_concepts(dominating, worst_members, options::AbstractOptions)
     bexpr = format_pareto(worst_members, options, options.num_pareto_context)
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "generate_concepts_system.prompt")),
+        SystemMessage(
+            load_prompt(prompt_path(options.prompts_dir, "generate_concepts_system.prompt"))
+        ),
         UserMessage(
             construct_prompt(
                 construct_prompt(
-                    load_prompt(options.prompts_dir * "generate_concepts_user.prompt"),
+                    load_prompt(
+                        prompt_path(options.prompts_dir, "generate_concepts_user.prompt")
+                    ),
                     gexpr,
                     "gexpr",
                 ),
@@ -582,9 +607,7 @@ end
     options = lasr_context(options)
     expr = render_expr(tree, options)
 
-    assumptions = retrieve_ideas(
-        options.idea_store, options.num_pareto_context; query=expr
-    )
+    assumptions = retrieve_ideas(options.idea_store, options.num_pareto_context; query=expr)
 
     if !options.use_concepts
         assumptions = []
@@ -594,10 +617,12 @@ end
     end
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "mutate_system.prompt")),
+        SystemMessage(
+            load_prompt(prompt_path(options.prompts_dir, "mutate_system.prompt"))
+        ),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "mutate_user.prompt"),
+                load_prompt(prompt_path(options.prompts_dir, "mutate_user.prompt")),
                 assumptions,
                 "assump",
             ),
@@ -720,10 +745,12 @@ end
     end
 
     conversation = [
-        SystemMessage(load_prompt(options.prompts_dir * "crossover_system.prompt")),
+        SystemMessage(
+            load_prompt(prompt_path(options.prompts_dir, "crossover_system.prompt"))
+        ),
         UserMessage(
             construct_prompt(
-                load_prompt(options.prompts_dir * "crossover_user.prompt"),
+                load_prompt(prompt_path(options.prompts_dir, "crossover_user.prompt")),
                 assumptions,
                 "assump",
             ),

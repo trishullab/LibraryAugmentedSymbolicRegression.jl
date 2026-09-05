@@ -46,8 +46,33 @@ The mutation weights are unnormalized, exactly like other entries in
 `Options.mutations`. `crossover_probability` is conditional on SR first
 selecting crossover via `crossover_probability`.
 
-LaSR ships its prompt templates in `prompts/`; `LaSRPlugin()` uses that package
-directory by default. Set `prompts_dir` to use domain-specific templates.
+## Prompt templates
+
+LaSR ships its templates inside the package; `default_prompts_dir()` returns where
+they live and `LaSRPlugin()` uses them by default. On a `Pkg.add` install that
+directory is read-only (files land mode 444) and is replaced on upgrade, so edit a
+copy rather than the originals:
+
+```julia
+dir = copy_prompts("~/my_lasr_prompts")   # writable copies of every .prompt
+plugin = LaSRPlugin(; prompts_dir=dir)
+```
+
+`prompts_dir` is *joined* with template names, so a trailing slash is optional, and
+the directory needs only the templates you changed -- anything absent falls back to
+the packaged copy (`prompt_path(dir, name)` resolves one file). A `prompts_dir` that
+does not exist is rejected when the plugin is constructed, not minutes into a search.
+
+From Python (`juliacall`, e.g. under PySR):
+
+```python
+from juliacall import Main as jl
+jl.seval("using LibraryAugmentedSymbolicRegression")
+LaSR = jl.LibraryAugmentedSymbolicRegression
+
+print(LaSR.default_prompts_dir())                        # read the shipped defaults
+prompts_dir = str(LaSR.copy_prompts("~/my_lasr_prompts"))  # edit these, then pass along
+```
 
 ## MLJ
 
