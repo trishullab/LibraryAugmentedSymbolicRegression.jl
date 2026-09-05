@@ -45,7 +45,6 @@ using DispatchDoctor: @stable
 @reexport using SymbolicRegression
 
 @stable default_mode = "disable" begin
-    include("Utils.jl")
     include("LLMServe.jl")
     include("Logging.jl")
     include("LLMCache.jl")
