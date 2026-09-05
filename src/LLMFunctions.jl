@@ -80,6 +80,60 @@ end
     return _gen_llm_random_tree(tree_size_to_generate, options, nfeatures, T)
 end
 
+"""
+    request_suggestions(options, mode, conversation, n; rendered_msg, template_vars...)
+
+Send one rendered conversation to the model and return `(candidates, gen_id)`.
+
+Every LLM operation funnels through here, so logging, error handling, and response
+parsing exist once rather than being duplicated per operator. On any failure --- a
+transport error, or a response with nothing parseable in it --- this returns an empty
+candidate list and the caller applies its own fallback.
+"""
+@unstable function request_suggestions(
+    options::AbstractOptions,
+    mode::AbstractString,
+    conversation,
+    n::Integer;
+    rendered_msg::Union{AbstractString,Nothing}=nothing,
+    template_vars...,
+)
+    gen_id = uuid1()
+    if isnothing(rendered_msg)
+        log_generation!(options.lasr_logger; id=gen_id, mode=mode)
+    else
+        log_generation!(options.lasr_logger; id=gen_id, mode=mode, llm_input=rendered_msg)
+    end
+
+    msg = try
+        options.llm_generate(
+            CustomOpenAISchema(),
+            conversation;
+            N=n,
+            api_key=options.api_key,
+            model=options.model,
+            api_kwargs=convertDict(options.api_kwargs),
+            http_kwargs=convertDict(options.http_kwargs),
+            template_vars...,
+        )
+    catch e
+        log_generation!(
+            options.lasr_logger; id=gen_id, mode=mode, failed="None." * string(e)
+        )
+        return String[], gen_id
+    end
+
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode=mode, llm_output=string(msg.content)
+    )
+    candidates = parse_msg_content(String(msg.content), options)
+    # A well-formed response with nothing parseable in it is still a failure for the
+    # caller; record it the same way a transport error is recorded.
+    isempty(candidates) &&
+        log_generation!(options.lasr_logger; id=gen_id, mode=mode, failed="None")
+    return candidates, gen_id
+end
+
 @unstable function _gen_llm_random_tree(
     node_count::Int, options::AbstractOptions, nfeatures::Int, ::Type{T}
 )::AbstractExpressionNode{T} where {T<:DATA_TYPE}
@@ -120,46 +174,22 @@ end
         "\n",
     )
 
-    # Instantiate ID once for all subsequent log calls in this function
-    gen_id = uuid1()
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="gen_random", llm_input=rendered_msg
+    gen_tree_options, gen_id = request_suggestions(
+        options,
+        "gen_random",
+        conversation,
+        options.num_generated_equations;
+        rendered_msg=rendered_msg,
+        variables=get_vars(options),
+        operators=get_ops(options),
+        no_system_message=false,
+        verbose=options.verbose,
     )
-
-    msg = nothing
-    try
-        msg = options.llm_generate(
-            CustomOpenAISchema(),
-            conversation;
-            variables=get_vars(options),
-            operators=get_ops(options),
-            N=options.num_generated_equations,
-            api_key=options.api_key,
-            model=options.model,
-            api_kwargs=convertDict(options.api_kwargs),
-            http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=false,
-            verbose=options.verbose,
-        )
-    catch e
-        log_generation!(
-            options.lasr_logger; id=gen_id, mode="gen_random", failed="None." * string(e)
-        )
+    if isempty(gen_tree_options)
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
-
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="gen_random", llm_output=string(msg.content)
-    )
-
-    gen_tree_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(gen_tree_options)[1], options.num_generated_equations)
-
-    if N == 0
-        log_generation!(options.lasr_logger; id=gen_id, mode="gen_random", failed="None")
-        return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
-    end
 
     for i in 1:N
         l = rand(1:N)
@@ -248,44 +278,21 @@ if the call fails or nothing usable was produced.
         ),
     ]
 
-    gen_id = uuid1()
-    log_generation!(options.lasr_logger; id=gen_id, mode="gen_candidates")
-
-    msg = nothing
-    try
-        msg = options.llm_generate(
-            CustomOpenAISchema(),
-            conversation;
-            variables=get_vars(options),
-            operators=get_ops(options),
-            N=options.num_generated_equations,
-            api_key=options.api_key,
-            model=options.model,
-            api_kwargs=convertDict(options.api_kwargs),
-            http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=false,
-            verbose=options.verbose,
-        )
-    catch e
-        log_generation!(
-            options.lasr_logger;
-            id=gen_id,
-            mode="gen_candidates",
-            failed="None." * string(e),
-        )
+    # `request_suggestions` returns the raw proposal strings; parse each into a tree the
+    # same way the single-shot generators do, then keep the usable ones.
+    gen_tree_options, gen_id = request_suggestions(
+        options,
+        "gen_candidates",
+        conversation,
+        options.num_generated_equations;
+        variables=get_vars(options),
+        operators=get_ops(options),
+        no_system_message=false,
+        verbose=options.verbose,
+    )
+    if isempty(gen_tree_options)
         return AbstractExpressionNode{T}[]
     end
-
-    log_generation!(
-        options.lasr_logger;
-        id=gen_id,
-        mode="gen_candidates",
-        llm_output=string(msg.content),
-    )
-
-    # `parse_msg_content` returns the raw proposal strings; parse each into a tree the same
-    # way the single-shot generators do, then keep the usable ones.
-    gen_tree_options = parse_msg_content(String(msg.content), options)
 
     candidates = AbstractExpressionNode{T}[]
     for raw in gen_tree_options
@@ -344,50 +351,18 @@ end
         "\n",
     )
 
-    # Instantiate ID once for this function
-    gen_id = uuid1()
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="concept_evolution", llm_input=rendered_msg
+    idea_options, gen_id = request_suggestions(
+        options,
+        "concept_evolution",
+        conversation,
+        options.num_generated_concepts;
+        rendered_msg=rendered_msg,
     )
-
-    msg = nothing
-    try
-        msg = options.llm_generate(
-            CustomOpenAISchema(),
-            conversation;
-            N=options.num_generated_concepts,
-            api_key=options.api_key,
-            model=options.model,
-            api_kwargs=convertDict(options.api_kwargs),
-            http_kwargs=convertDict(options.http_kwargs),
-        )
-    catch e
-        log_generation!(
-            options.lasr_logger;
-            id=gen_id,
-            mode="concept_evolution",
-            failed="None." * string(e),
-        )
+    if isempty(idea_options)
         return nothing
     end
-
-    log_generation!(
-        options.lasr_logger;
-        id=gen_id,
-        mode="concept_evolution",
-        llm_output=string(msg.content),
-    )
-
-    idea_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(idea_options)[1], options.num_generated_concepts)
-
-    if N == 0
-        log_generation!(
-            options.lasr_logger; id=gen_id, mode="concept_evolution", failed="None"
-        )
-        return nothing
-    end
 
     chosen_idea = String(
         strip(idea_options[rand(1:N)], [' ', '\n', '"', ',', '.', '[', ']'])
@@ -525,54 +500,22 @@ function generate_concepts(dominating, worst_members, options::AbstractOptions)
         "\n",
     )
 
-    # Instantiate ID for this function
-    gen_id = uuid1()
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="generate_concepts", llm_input=rendered_msg
+    idea_options, gen_id = request_suggestions(
+        options,
+        "generate_concepts",
+        conversation,
+        options.num_generated_concepts;
+        rendered_msg=rendered_msg,
+        variables=get_vars(options),
+        operators=get_ops(options),
+        no_system_message=false,
+        verbose=options.verbose,
     )
-
-    msg = nothing
-    try
-        msg = options.llm_generate(
-            CustomOpenAISchema(),
-            conversation;
-            variables=get_vars(options),
-            operators=get_ops(options),
-            N=options.num_generated_concepts,
-            api_key=options.api_key,
-            model=options.model,
-            api_kwargs=convertDict(options.api_kwargs),
-            http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=false,
-            verbose=options.verbose,
-        )
-    catch e
-        log_generation!(
-            options.lasr_logger;
-            id=gen_id,
-            mode="generate_concepts",
-            failed="None." * string(e),
-        )
+    if isempty(idea_options)
         return nothing
     end
-
-    log_generation!(
-        options.lasr_logger;
-        id=gen_id,
-        mode="generate_concepts",
-        llm_output=string(msg.content),
-    )
-
-    idea_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(idea_options)[1], options.num_generated_concepts)
-
-    if N == 0
-        log_generation!(
-            options.lasr_logger; id=gen_id, mode="generate_concepts", failed="None"
-        )
-        return nothing
-    end
 
     for _ in 1:(options.num_concept_crossover)
         a = rand(1:N)
@@ -643,45 +586,23 @@ end
         "\n",
     )
 
-    # Instantiate ID for this function
-    gen_id = uuid1()
-    log_generation!(options.lasr_logger; id=gen_id, mode="mutate", llm_input=rendered_msg)
-
-    msg = nothing
-    try
-        msg = options.llm_generate(
-            CustomOpenAISchema(),
-            conversation; #OllamaSchema(), conversation;
-            variables=get_vars(options),
-            operators=get_ops(options),
-            N=options.num_generated_equations,
-            expr=expr,
-            api_key=options.api_key,
-            model=options.model,
-            api_kwargs=convertDict(options.api_kwargs),
-            http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=false,
-            verbose=options.verbose,
-        )
-    catch e
-        log_generation!(
-            options.lasr_logger; id=gen_id, mode="mutate", failed="None." * string(e)
-        )
+    mut_tree_options, gen_id = request_suggestions(
+        options,
+        "mutate",
+        conversation,
+        options.num_generated_equations;
+        rendered_msg=rendered_msg,
+        variables=get_vars(options),
+        operators=get_ops(options),
+        expr=expr,
+        no_system_message=false,
+        verbose=options.verbose,
+    )
+    if isempty(mut_tree_options)
         return tree
     end
-
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="mutate", llm_output=string(msg.content)
-    )
-
-    mut_tree_options = parse_msg_content(String(msg.content), options)
 
     N = min(size(mut_tree_options)[1], options.num_generated_equations)
-
-    if N == 0
-        log_generation!(options.lasr_logger; id=gen_id, mode="mutate", failed="None")
-        return tree
-    end
 
     for i in 1:N
         l = rand(1:N)
@@ -710,7 +631,7 @@ end
     return get_contents(out)
 end
 
-@unstable function llm_crossover_trees(
+function llm_crossover_trees(
     ex1::E, ex2::E, options::AbstractOptions
 )::Tuple{E,E} where {T,E<:AbstractExpression{T}}
     options = lasr_context(options)
@@ -773,51 +694,27 @@ end
         "\n",
     )
 
-    # Instantiate ID for crossover
-    gen_id = uuid1()
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="crossover", llm_input=rendered_msg
+    cross_tree_options, gen_id = request_suggestions(
+        options,
+        "crossover",
+        conversation,
+        options.num_generated_equations;
+        rendered_msg=rendered_msg,
+        variables=get_vars(options),
+        operators=get_ops(options),
+        expr1=expr1,
+        expr2=expr2,
+        no_system_message=false,
+        verbose=options.verbose,
     )
-
-    msg = nothing
-    try
-        msg = options.llm_generate(
-            CustomOpenAISchema(),
-            conversation;
-            variables=get_vars(options),
-            operators=get_ops(options),
-            N=options.num_generated_equations,
-            expr1=expr1,
-            expr2=expr2,
-            api_key=options.api_key,
-            model=options.model,
-            api_kwargs=convertDict(options.api_kwargs),
-            http_kwargs=convertDict(options.http_kwargs),
-            no_system_message=false,
-            verbose=options.verbose,
-        )
-    catch e
-        log_generation!(
-            options.lasr_logger; id=gen_id, mode="crossover", failed="None." * string(e)
-        )
+    if isempty(cross_tree_options)
         return tree1, tree2
     end
-
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="crossover", llm_output=string(msg.content)
-    )
-
-    cross_tree_options = parse_msg_content(String(msg.content), options)
 
     cross_tree1 = nothing
     cross_tree2 = nothing
 
     N = min(size(cross_tree_options)[1], options.num_generated_equations)
-
-    if N == 0
-        log_generation!(options.lasr_logger; id=gen_id, mode="crossover", failed="None")
-        return tree1, tree2
-    end
 
     if N == 1
         t = parse_expr(

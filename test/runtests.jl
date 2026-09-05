@@ -77,6 +77,10 @@ end
     include("test_lasr_amnesty.jl")
 end
 
+@testitem "Test llm round trip against a mock server" tags = [:online] begin
+    include("test_lasr_llm_integration.jl")
+end
+
 @testitem "Test normalization pipeline" tags = [:online] begin
     include("test_lasr_normalize.jl")
 end
