@@ -27,7 +27,6 @@ jobs:
       matrix:
         test:
           - "online"
-          - "llamafile"
         julia-version:
           - "1.11"
           - "1"
@@ -43,15 +42,6 @@ jobs:
           - os: ubuntu-latest
             julia-version: "~1.11.0-0"
             test: "online"
-          - os: windows-latest
-            julia-version: "~1.11.0-0"
-            test: "llamafile"
-          - os: macOS-latest
-            julia-version: "~1.11.0-0"
-            test: "llamafile"
-          - os: ubuntu-latest
-            julia-version: "~1.11.0-0"
-            test: "llamafile"
     steps:
       - uses: actions/checkout@v4
       - name: "Set up Julia"

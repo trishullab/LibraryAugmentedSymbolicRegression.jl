@@ -1,4 +1,4 @@
-module NormalizeModule
+module NormalizationRulesModule
 
 using DispatchDoctor: @unstable
 
@@ -18,9 +18,9 @@ NormalizationRule(p::Pair; name::AbstractString="user") =
 
 # Scientist-registerable extension point: append user-supplied rules (e.g. from
 # `LaSRPlugin(; parse_rules=[...])`) after the built-in defaults, order preserved.
-@unstable resolve_rules(defaults, user) = vcat(defaults, user)
+resolve_rules(defaults, user) = vcat(defaults, user)
 
-# ---- LaSR-specific string rules (ported from Parse.jl `_normalize_expr_string`) ----
+# ---- LaSR-specific string rules (ported from the former Parse.jl `_normalize_expr_string`) ----
 rule_whitespace()   = NormalizationRule("whitespace",   :string, s -> replace(s, r"\s+" => " "))
 rule_c_placeholder()= NormalizationRule("c_placeholder",:string, s -> replace(replace(s,
                           r"(?<!\w)\(C\)(?!\w)" => "(1.0)"), r"(?<!\w)C(?!\w)" => "1.0"))
@@ -78,7 +78,7 @@ rule_unary_sign() = NormalizationRule("unary_sign", :expr, _unary_and_pow)
 const _TOKEN_RE = r"([A-Za-z_][A-Za-z0-9_]*|\d+\.?\d*|\*\*|[-+*/^(),]|\s+)"
 const _DEFAULT_UNARY_OPS = Set(["sin", "cos", "exp", "log", "sqrt", "tan", "abs", "cbrt"])
 
-@unstable function _tokenize(s::AbstractString)
+function _tokenize(s::AbstractString)
     toks = String[]
     i = firstindex(s)
     n = lastindex(s)
@@ -98,7 +98,7 @@ end
 
 _is_name_token(t::AbstractString) = occursin(r"^[A-Za-z_][A-Za-z0-9_]*$", t)
 
-@unstable function _implicit_multiplication(s::AbstractString)
+function _implicit_multiplication(s::AbstractString)
     toks = _tokenize(s)
     out = String[]
     i = 1
@@ -121,7 +121,7 @@ _is_name_token(t::AbstractString) = occursin(r"^[A-Za-z_][A-Za-z0-9_]*$", t)
 end
 rule_implicit_multiplication() = NormalizationRule("implicit_multiplication", :string, _implicit_multiplication)
 
-@unstable function _implicit_application(s::AbstractString, ops::Set{String}=_DEFAULT_UNARY_OPS)
+function _implicit_application(s::AbstractString, ops::Set{String}=_DEFAULT_UNARY_OPS)
     toks = _tokenize(s)
     out = String[]
     i = 1
@@ -197,52 +197,8 @@ const DEFAULT_RULES = NormalizationRule[
     rule_strip_lhs(), rule_unary_sign(),
 ]
 
-# ---- Parse failure store (observability instead of silent fallback) ----
-# `parse_expr` falls back to a constant-1 tree on any unparseable LLM string. That
-# fallback is cheap and keeps the search alive, but a silent fallback hides *why* the
-# LLM's output was unusable. This store records each fallback occurrence (bounded, so a
-# pathological run cannot leak memory) so a scientist can inspect what shape of string is
-# tripping the parser and, e.g., register a `NormalizationRule` (see `resolve_rules`
-# above) to fix the root cause instead of just eating the fallback forever.
-struct ParseFailure
-    raw::String
-    normalized::String
-    stage::Symbol             # :meta_parse | :expr_stage | :tree_parse
-    reason::String
-end
-
-# Thread-safe bounded ring buffer. Held BY REFERENCE across `fork_plugin_state`/
-# `refresh_worker_plugin_state` (see `src/Mutate.jl`) so `:serial`/`:multithreading` runs
-# aggregate records from every worker into one store; `:multiprocessing` runs live in
-# separate address spaces so each worker gets its own store (a documented follow-up --
-# the `lasr_logger` route already covers cross-process observability).
-mutable struct ParseFailureStore
-    records::Vector{ParseFailure}
-    cap::Int
-    lock::ReentrantLock
-end
-ParseFailureStore(; cap::Int=500) = ParseFailureStore(ParseFailure[], cap, ReentrantLock())
-
-function record_parse_failure!(s::ParseFailureStore, f::ParseFailure)
-    lock(s.lock) do
-        push!(s.records, f)
-        length(s.records) > s.cap && popfirst!(s.records)
-    end
-    return nothing
-end
-
-parse_failures(s::ParseFailureStore) = lock(() -> copy(s.records), s.lock)
-
-function parse_failure_summary(s::ParseFailureStore; n::Int=10)
-    counts = Dict{String,Int}()
-    for f in parse_failures(s)
-        counts[f.raw] = get(counts, f.raw, 0) + 1
-    end
-    return first(sort!(collect(counts); by=last, rev=true), min(n, length(counts)))
-end
-
 export NormalizationRule, apply_string_rules, apply_expr_rules,
     rule_implicit_multiplication, rule_implicit_application, rule_function_exponentiation,
-    DEFAULT_RULES, resolve_rules,
-    ParseFailure, ParseFailureStore, record_parse_failure!, parse_failures, parse_failure_summary
-end
+    DEFAULT_RULES, resolve_rules
+
+end # module

@@ -1,4 +1,4 @@
-module LoggingModule
+module LaSRLoggerModule
 
 using Base: UUID
 using Logging: Logging as LG
@@ -17,7 +17,6 @@ Base.@kwdef struct LaSRLogger{L<:SymbolicRegression.LoggingModule.SRLogger} <:
                    SymbolicRegression.AbstractSRLogger
     logger::L
 end
-# LaSRLogger(logger::SymbolicRegression.LoggingModule.SRLogger; kws...) = LaSRLogger(; logger, kws...)
 
 function log_generation!(
     logger::Union{SymbolicRegression.AbstractSRLogger,Nothing};

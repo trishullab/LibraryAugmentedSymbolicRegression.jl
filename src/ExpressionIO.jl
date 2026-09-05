@@ -1,24 +1,19 @@
-module ParseModule
+module ExpressionIOModule
 
 using DispatchDoctor: @unstable
 using DynamicExpressions
 using DynamicExpressions.NodeModule: Node
 using SymbolicRegression: AbstractOptions, DATA_TYPE
-using ..LLMOptionsModule: lasr_context
-using ..LLMOptionsStructModule: LaSRContext, LaSRPluginState
-using ..NormalizeModule:
-    apply_string_rules,
-    apply_expr_rules,
-    DEFAULT_RULES,
-    resolve_rules,
-    ParseFailure,
-    record_parse_failure!
+using ..PluginModule: lasr_context, LaSRContext, LaSRPluginState
+using ..NormalizationRulesModule:
+    apply_string_rules, apply_expr_rules, DEFAULT_RULES, resolve_rules
+using ..ParseFailuresModule: ParseFailure, record_parse_failure!
 
 # Record a constant-1 fallback into the active `LaSRPluginState`'s `ParseFailureStore`,
 # if one is present. `ctx.state` is `nothing` for a `LaSRContext` built directly from a
 # bare `Options` (e.g. a parser unit test with no plugin state) -- skip recording rather
 # than error, since the fallback itself must always succeed regardless of observability.
-@unstable function _record_parse_failure!(
+function _record_parse_failure!(
     ctx::LaSRContext, expr_str::AbstractString, expr_str_norm::AbstractString,
     stage::Symbol, reason::AbstractString,
 )
@@ -28,6 +23,15 @@ using ..NormalizeModule:
         state.parse_failures, ParseFailure(String(expr_str), String(expr_str_norm), stage, String(reason))
     )
     return nothing
+end
+
+@unstable function _parse_fallback(
+    options, expr_str, expr_str_norm, stage::Symbol, e, node_type, ::Type{T}
+) where {T}
+    @warn "LaSR parse fallback ($stage): returning constant 1 for: $expr_str"
+    @warn "Error: $e"
+    _record_parse_failure!(options, expr_str, expr_str_norm, stage, string(e))
+    return Expression(node_type(; val=convert(T, 1.0)); options.operators, options.variable_names)
 end
 
 """
@@ -41,7 +45,7 @@ AbstractExpressionNode.
     ::Type{T}, expr_str::String, options::AbstractOptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
     # `options` here may be a raw `SymbolicRegression.Options` or already a
-    # `LaSRContext` (every real call site in `LLMFunctions.jl` converts before calling
+    # `LaSRContext` (every real call site in the LLM modules converts before calling
     # `parse_expr`). `lasr_context` is idempotent on an existing `LaSRContext` (returns
     # it unchanged) and is the one function that reaches the active `LaSRPlugin`
     # regardless of which form `options` arrives in, so resolve through it instead of
@@ -63,23 +67,13 @@ AbstractExpressionNode.
             try
                 ast = Meta.parse(stripped)
             catch
-                @warn "Failed to Meta.parse even after stripping LHS: $expr_str"
-                @warn "Error: $e"
-                @warn "Returning a constant node with value 1."
-                _record_parse_failure!(options, expr_str, expr_str_norm, :meta_parse, string(e))
-                return Expression(
-                    node_type(; val=convert(T, 1.0));
-                    options.operators,
-                    options.variable_names,
+                return _parse_fallback(
+                    options, expr_str, expr_str_norm, :meta_parse, e, node_type, T
                 )
             end
         else
-            @warn "Failed to Meta.parse: $expr_str"
-            @warn "Error: $e"
-            @warn "Returning a constant node with value 1."
-            _record_parse_failure!(options, expr_str, expr_str_norm, :meta_parse, string(e))
-            return Expression(
-                node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
+            return _parse_fallback(
+                options, expr_str, expr_str_norm, :meta_parse, e, node_type, T
             )
         end
     end
@@ -91,14 +85,7 @@ AbstractExpressionNode.
         # substituted; rewrite them into equivalent registered forms first.
         ast = apply_expr_rules(rules, ast)
     catch e
-        @warn "Failed to apply expr rules: $expr_str"
-        @warn "Normalized: $expr_str_norm"
-        @warn "Error: $e"
-        @warn "Returning a constant node with value 1."
-        _record_parse_failure!(options, expr_str, expr_str_norm, :expr_stage, string(e))
-        return Expression(
-            node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
-        )
+        return _parse_fallback(options, expr_str, expr_str_norm, :expr_stage, e, node_type, T)
     end
 
     try
@@ -110,14 +97,7 @@ AbstractExpressionNode.
             variable_names=varnames,
         )::AbstractExpression{T}
     catch e
-        @warn "Failed to parse expression: $expr_str"
-        @warn "Normalized: $expr_str_norm"
-        @warn "Error: $e"
-        @warn "Returning a constant node with value 1."
-        _record_parse_failure!(options, expr_str, expr_str_norm, :tree_parse, string(e))
-        return Expression(
-            node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
-        )
+        return _parse_fallback(options, expr_str, expr_str_norm, :tree_parse, e, node_type, T)
     end
 end
 
@@ -134,7 +114,7 @@ function render_expr(
     return render_expr(get_contents(ex), options)
 end
 
-@unstable function _sketch_const(val)
+function _sketch_const(val)
     does_not_need_brackets = (typeof(val) <: Union{Real,AbstractArray})
 
     if does_not_need_brackets

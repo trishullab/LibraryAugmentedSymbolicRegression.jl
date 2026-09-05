@@ -16,11 +16,33 @@ LaSR is now a **plugin** for SymbolicRegression.jl v2 rather than a wrapper arou
   Structural mutation weights live on SymbolicRegression's own `mutation_weights`; the LLM
   operator weights (`mutate_weight`, `randomize_weight`, `generate_weight`,
   `crossover_probability`) are fields on `LaSRPlugin`.
-- The MLJ interface is reduced to what the plugin architecture supports.
+- **`LaSRRegressor` and `MultitargetLaSRRegressor` are gone.** They were keyword sugar that
+  returned a plain `SRRegressor`/`MultitargetSRRegressor` with the plugin appended. Attach the
+  plugin yourself:
+
+  ```julia
+  SRRegressor(; plugins=(LaSRPlugin(...),), niterations=40, ...)
+  ```
 - `SymbolicRegression` is pinned to `v2.0.0-beta.2`. A registry release is blocked until
   SymbolicRegression 2.0 is final.
 - Prompt templates are resolved at runtime from the package, with a per-file fallback. The
   `prompts.zip` download is gone; use `copy_prompts` to get an editable copy.
+- **LaSR no longer re-exports SymbolicRegression.** As a fork it mirrored SR.jl's whole
+  namespace so it could stand in for it; as a plugin it exports only its own surface. Import
+  both:
+
+  ```julia
+  using SymbolicRegression, LibraryAugmentedSymbolicRegression
+  ```
+
+  `LaSRPlugin` comes from LaSR; `Options`, `SRRegressor`, `equation_search`,
+  `calculate_pareto_frontier`, `string_tree` and the rest come from SymbolicRegression.
+- **The bundled llamafile server is gone**, along with the `LLAMAFILE_MODEL`,
+  `LLAMAFILE_PATH`, `LLAMAFILE_URL` and `LLM_PORT` exports and the `__init__` hook that could
+  download and spawn it. Point `api_kwargs["url"]` at an endpoint you control. A plugin should
+  not stand up its own inference server on import.
+- The MLJ compatibility stress suite inherited from SymbolicRegression.jl is removed;
+  SymbolicRegression tests its own MLJ interface upstream.
 
 ### Security
 
@@ -64,3 +86,13 @@ LaSR is now a **plugin** for SymbolicRegression.jl v2 rather than a wrapper arou
   a hard ceiling on a run's LLM traffic.
 - Mock-server tests covering the full LLM round trip, so the LLM path is exercised in CI
   without a model or network access.
+
+### Removed
+
+- Everything the package carried only because it used to be a fork of SymbolicRegression.jl:
+  a dead copy of SR.jl's `Utils.jl`, the `pipelines.sh` runner, an inert
+  `LocalPreferences.toml`, an archived prompt set, and a `coverage.jl` script whose CI
+  pipeline produced a report nothing consumed. With them go seven dependencies that had no
+  remaining consumer: `Downloads`, `MacroTools`, and the test-only `MLJBase`,
+  `MLJModelInterface`, `MLJTestInterface`, `Suppressor` and `SymbolicUtils`.
+- Static analysis is back: `test_jet.jl` runs again, scoped to LaSR's own modules.

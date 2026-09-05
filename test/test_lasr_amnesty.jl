@@ -1,7 +1,7 @@
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression.LLMOptionsStructModule: LaSRPlugin
-using SymbolicRegression: Options, Dataset, compute_complexity
+using LibraryAugmentedSymbolicRegression.PluginModule: LaSRPlugin
+using SymbolicRegression: SymbolicRegression, Options, Dataset, compute_complexity
 using SymbolicRegression.PopMemberModule: PopMember
 using SymbolicRegression.PopulationModule: Population
 using Random: Xoshiro

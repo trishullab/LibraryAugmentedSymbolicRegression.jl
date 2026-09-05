@@ -1,4 +1,4 @@
-using LibraryAugmentedSymbolicRegression: L2DistLoss
+using SymbolicRegression: L2DistLoss
 using DynamicExpressions.OperatorEnumConstructionModule: empty_all_globals!
 using Optim: Optim
 using LineSearches: LineSearches

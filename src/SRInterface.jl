@@ -1,9 +1,10 @@
-module MutateModule
+module SRInterfaceModule
 
 using Random: rand
 using UUIDs: uuid1
 using DynamicExpressions:
     AbstractExpression, get_tree, with_contents, simplify_tree!, combine_operators
+using SymbolicRegression
 using SymbolicRegression:
     AbstractOptions,
     AbstractPopMember,
@@ -23,24 +24,24 @@ import SymbolicRegression:
     fork_plugin_state,
     on_search_start!,
     on_generation_end!,
-    refresh_worker_plugin_state
-using ..LLMOptionsStructModule:
+    refresh_worker_plugin_state,
+    plugin_mutations,
+    plugin_crossovers
+using ..PluginModule:
     LaSRPlugin,
     LaSRPluginState,
     LLMMutateMutation,
     LLMRandomizeMutation,
     LLMGenerateMutation,
-    LLMCrossover
-using ..LLMOptionsModule: lasr_context, lasr_state
-using ..NormalizeModule: ParseFailureStore
-using ..LLMFunctionsModule:
-    llm_mutate_tree,
-    llm_crossover_trees,
-    llm_randomize_tree,
-    llm_generate_candidates,
-    generate_concepts
-using ..LoggingModule: LaSRLogger, log_generation!
-using ..ParseModule: render_expr
+    LLMCrossover,
+    lasr_context,
+    lasr_state
+using ..ParseFailuresModule: ParseFailureStore
+using ..LLMOperatorsModule:
+    llm_mutate_tree, llm_crossover_trees, llm_randomize_tree, llm_generate_candidates
+using ..ConceptsModule: generate_concepts
+using ..LaSRLoggerModule: LaSRLogger, log_generation!
+using ..ExpressionIOModule: render_expr
 
 function mutate!(
     tree::N,
@@ -284,6 +285,29 @@ function crossover(
     log_generation!(state.lasr_logger; id=generation_id, mode="crossover", chosen=rendered)
     # The engine owns constraint checking, retry, evaluation and replacement.
     return CrossoverResult{N}(; child1=child1, child2=child2)
+end
+
+function plugin_mutations(plugin::LaSRPlugin)
+    plugin.use_llm || return Pair{SymbolicRegression.AbstractMutation,Float64}[]
+    pairs = Pair{SymbolicRegression.AbstractMutation,Float64}[]
+    plugin.mutate_weight > 0 && push!(pairs, LLMMutateMutation() => plugin.mutate_weight)
+    plugin.randomize_weight > 0 &&
+        push!(pairs, LLMRandomizeMutation() => plugin.randomize_weight)
+    plugin.generate_weight > 0 &&
+        push!(pairs, LLMGenerateMutation() => plugin.generate_weight)
+    return pairs
+end
+
+# Crossover is now an `AbstractCrossover` sampled by weight from `options.crossovers`
+# (parallel to `plugin_mutations`), replacing the old `propose_crossover` hook. The plugin
+# injects an `LLMCrossover` weighted by `crossover_probability`; the built-in
+# `SubtreeCrossover` carries the remaining weight.
+function plugin_crossovers(plugin::LaSRPlugin)
+    plugin.use_llm || return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
+    plugin.crossover_probability > 0 || return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
+    return Pair{SymbolicRegression.AbstractCrossover,Float64}[
+        LLMCrossover() => plugin.crossover_probability
+    ]
 end
 
 end

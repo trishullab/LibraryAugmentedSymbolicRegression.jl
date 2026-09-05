@@ -1,14 +1,16 @@
-module LLMOptionsStructModule
+module PluginModule
 
-using DispatchDoctor: @unstable
 using PromptingTools: aigenerate
+using SymbolicRegression
 using SymbolicRegression:
     AbstractMutation, AbstractCrossover, AbstractOptions, AbstractPlugin, Options
-using ..LoggingModule: LaSRLogger
-using ..LLMCacheModule: SuggestionCache, CallBudget
+using ..LaSRLoggerModule: LaSRLogger
+using ..SuggestionCacheModule: SuggestionCache
+using ..CallBudgetModule: CallBudget
 using ..IdeaStoreModule: AbstractIdeaStore, WindowedIdeaStore
-using ..NormalizeModule: NormalizationRule, ParseFailure
-import ..NormalizeModule: ParseFailureStore, parse_failures, parse_failure_summary
+using ..NormalizationRulesModule: NormalizationRule
+using ..ParseFailuresModule: ParseFailure
+import ..ParseFailuresModule: ParseFailureStore, parse_failures, parse_failure_summary
 
 """
     default_prompts_dir()
@@ -209,7 +211,7 @@ mutable struct LaSRPluginState
     # Held BY REFERENCE across `fork_plugin_state`/`refresh_worker_plugin_state` (unlike
     # every other field above, which is deep/shallow-copied) so parse failures recorded by
     # any `:serial`/`:multithreading` worker aggregate into one shared, lock-guarded store.
-    # See `src/Mutate.jl` (`_copy_plugin_state`) and `src/Normalize.jl` (`ParseFailureStore`).
+    # See `src/SRInterface.jl` (`_copy_plugin_state`) and `src/ParseFailures.jl` (`ParseFailureStore`).
     parse_failures::ParseFailureStore
 end
 
@@ -244,16 +246,36 @@ end
 # `ctx.state` is `nothing` for a `LaSRContext` built directly from a bare `Options` (e.g.
 # a parser unit test with no plugin state); return the empty-store answer rather than
 # erroring, matching the guard used at the `record_parse_failure!` call sites in
-# `src/Parse.jl`.
-@unstable function parse_failures(ctx::LaSRContext)
+# `src/ExpressionIO.jl`.
+function parse_failures(ctx::LaSRContext)
     state = getfield(ctx, :state)
     state isa LaSRPluginState || return ParseFailure[]
     return parse_failures(state.parse_failures)
 end
-@unstable function parse_failure_summary(ctx::LaSRContext; n::Int=10)
+function parse_failure_summary(ctx::LaSRContext; n::Int=10)
     state = getfield(ctx, :state)
     state isa LaSRPluginState || return Pair{String,Int}[]
     return parse_failure_summary(state.parse_failures; n=n)
+end
+
+lasr_context(context::LaSRContext, state=nothing) = context
+
+function lasr_plugin(options::SymbolicRegression.Options)
+    matches = filter(plugin -> plugin isa LaSRPlugin, options.plugins)
+    length(matches) == 1 ||
+        throw(ArgumentError("Expected exactly one LaSRPlugin in `options.plugins`."))
+    return only(matches)::LaSRPlugin
+end
+
+function lasr_context(options::SymbolicRegression.Options, state=nothing)
+    plugin = lasr_plugin(options)
+    return LaSRContext(options, plugin, state)
+end
+
+function lasr_state(options::SymbolicRegression.Options, plugin_states::Tuple)
+    index = findfirst(plugin -> plugin isa LaSRPlugin, options.plugins)
+    isnothing(index) && throw(ArgumentError("LaSRPlugin is not active."))
+    return plugin_states[index]::LaSRPluginState
 end
 
 end

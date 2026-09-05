@@ -3,8 +3,8 @@
 println("Testing LaSR expression parser with render_expr")
 
 using Random: MersenneTwister
-using LibraryAugmentedSymbolicRegression:
-    Options, LaSRPlugin, string_tree, parse_expr, render_expr, gen_random_tree
+using SymbolicRegression: Options, string_tree, gen_random_tree
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_expr, render_expr
 include("test_params.jl")
 @inline sinf(x) = sin(T(x))::T
 @inline cosf(x) = cos(T(x))::T

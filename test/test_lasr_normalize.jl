@@ -1,5 +1,5 @@
 using Test
-using LibraryAugmentedSymbolicRegression.NormalizeModule:
+using LibraryAugmentedSymbolicRegression.NormalizationRulesModule:
     NormalizationRule, apply_string_rules, apply_expr_rules,
     rule_pipe_abs, rule_subscript_var, rule_pow_star, rule_c_placeholder,
     rule_unary_sign, rule_strip_lhs
@@ -25,7 +25,7 @@ end
     @test apply_expr_rules(exprs, Meta.parse("y = x0 + x1")) == Meta.parse("x0 + x1") # strip_lhs
 end
 
-using LibraryAugmentedSymbolicRegression.NormalizeModule:
+using LibraryAugmentedSymbolicRegression.NormalizationRulesModule:
     rule_implicit_multiplication, rule_implicit_application, rule_function_exponentiation
 @testset "inherited SymPy rules" begin
     ss = [rule_implicit_multiplication(), rule_implicit_application(), rule_function_exponentiation()]
@@ -35,7 +35,7 @@ using LibraryAugmentedSymbolicRegression.NormalizeModule:
 end
 
 using LibraryAugmentedSymbolicRegression: LaSRPlugin
-using LibraryAugmentedSymbolicRegression.NormalizeModule: resolve_rules, DEFAULT_RULES
+using LibraryAugmentedSymbolicRegression.NormalizationRulesModule: resolve_rules, DEFAULT_RULES
 @testset "extension API" begin
     p = LaSRPlugin(; use_llm=false, parse_rules=[NormalizationRule(r"θ" => "theta")])
     @test length(p.parse_rules) == 1
@@ -44,12 +44,13 @@ using LibraryAugmentedSymbolicRegression.NormalizeModule: resolve_rules, DEFAULT
     @test apply_string_rules(resolved, "sin(θ)") == apply_string_rules(resolved, "sin(theta)")
 end
 
-using LibraryAugmentedSymbolicRegression: Options, parse_expr, string_tree
-using LibraryAugmentedSymbolicRegression.LLMOptionsModule: lasr_context
+using SymbolicRegression: Options, string_tree
+using LibraryAugmentedSymbolicRegression: parse_expr
+using LibraryAugmentedSymbolicRegression.PluginModule: lasr_context
 @testset "extension API: parse_expr honors plugin.parse_rules regardless of options form" begin
     # Regression test for a bug where `parse_expr` resolved the active plugin via
     # `applicable(lasr_plugin, options)` on the pre-conversion argument: every real
-    # call site in LLMFunctions.jl passes an already-converted `LaSRContext` (not a
+    # call site in the LLM modules passes an already-converted `LaSRContext` (not a
     # raw `Options`), for which `lasr_plugin` has no method, so `applicable` returned
     # false and scientist-registered `parse_rules` were silently dropped.
     options = Options(;
@@ -143,7 +144,7 @@ end
     @test string_tree(ex, options) == "sin(x)"   # NOT the constant-1 fallback
 end
 
-using LibraryAugmentedSymbolicRegression.NormalizeModule:
+using LibraryAugmentedSymbolicRegression.ParseFailuresModule:
     ParseFailure, ParseFailureStore, record_parse_failure!, parse_failures, parse_failure_summary
 @testset "failure store" begin
     store = ParseFailureStore(; cap=3)

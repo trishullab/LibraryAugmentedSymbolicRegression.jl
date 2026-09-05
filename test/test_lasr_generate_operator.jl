@@ -1,8 +1,8 @@
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression.LLMFunctionsModule: llm_generate_candidates
-using LibraryAugmentedSymbolicRegression.LLMOptionsStructModule: LaSRPlugin
-using SymbolicRegression: Options
+using LibraryAugmentedSymbolicRegression.LLMOperatorsModule: llm_generate_candidates
+using LibraryAugmentedSymbolicRegression.PluginModule: LaSRPlugin
+using SymbolicRegression: SymbolicRegression, Options
 
 include("test_helpers.jl")  # provides mock_llm(calls, content)
 
@@ -24,7 +24,7 @@ include("test_helpers.jl")  # provides mock_llm(calls, content)
     # A state-free context is sufficient here: with `state === nothing` the LaSRContext
     # reads `idea_store`/`variable_names` straight from the plugin. (Building a real
     # `LaSRPluginState` is exercised in the mutate! test below.)
-    ctx = LibraryAugmentedSymbolicRegression.LLMOptionsModule.lasr_context(options)
+    ctx = LibraryAugmentedSymbolicRegression.PluginModule.lasr_context(options)
     cands = llm_generate_candidates(ctx, 20, 2, Float64)
     @test length(cands) == 2   # the two usable ones
     @test calls[] == 1         # a single batched call

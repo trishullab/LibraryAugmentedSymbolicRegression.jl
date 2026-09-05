@@ -1,4 +1,4 @@
-module LLMUtilsModule
+module PromptsModule
 
 using Random: rand, randperm
 using DynamicExpressions:
@@ -21,9 +21,8 @@ using DynamicExpressions:
     AbstractOperatorEnum
 using SymbolicRegression: DATA_TYPE, AbstractOptions
 using DispatchDoctor: @unstable
-using ..LLMOptionsModule: lasr_context
-using ..LLMOptionsStructModule: default_prompts_dir
-using ..ParseModule: render_expr, get_variable_names
+using ..PluginModule: lasr_context, default_prompts_dir
+using ..ExpressionIOModule: render_expr, get_variable_names
 using JSON: parse
 
 """
@@ -72,12 +71,7 @@ function copy_prompts(dest::AbstractString; force::Bool=false)::String
 end
 
 function load_prompt(path::String)::String
-    # load prompt file 
-    f = open(path, "r")
-    s = read(f, String)
-    s = strip(s)
-    close(f)
-    return s
+    return String(strip(read(path, String)))
 end
 
 # A NamedTuple built from a runtime `Dict` has a value-dependent concrete type, so its

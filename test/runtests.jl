@@ -3,23 +3,13 @@ using TestItemRunner: @run_package_tests
 
 ENV["SYMBOLIC_REGRESSION_TEST"] = "true"
 # online - test is run on github actions
-# llamafile - test downloads the llamafile
 # offline - test is run locally
-tags_to_run = let t = get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,llamafile,offline")
+tags_to_run = let t = get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,offline")
     t = split(t, ",")
     t = map(Symbol, t)
     t
 end
 @eval @run_package_tests filter = ti -> !isdisjoint(ti.tags, $tags_to_run) verbose = true
-
-@testitem "Test handshake (llamafile)" tags = [:llamafile] begin
-    include("test_handshake.jl")
-end
-
-# This test takes too long. Best to perform it offline.
-@testitem "Test tutorial (llamafile)" tags = [:offline] begin
-    include("test_tutorial_llamafile.jl")
-end
 
 @testitem "Test tutorial" tags = [:offline] begin
     include("test_tutorial.jl")
@@ -93,14 +83,11 @@ end
     include("test_lasr_failure_sink.jl")
 end
 
-# Test SymbolicRegression.jl backwards compatibility (~15 min)
-include("test_backwards_compat.jl")
-
 @testitem "Aqua tests" tags = [:online, :aqua] begin
     include("test_aqua.jl")
 end
 
-# @testitem "JET tests" tags = [:online, :jet] begin
-#     test_jet_file = joinpath((@__DIR__), "test_jet.jl")
-#     run(`$(Base.julia_cmd()) --startup-file=no $test_jet_file`)
-# end
+@testitem "JET tests" tags = [:online, :jet] begin
+    test_jet_file = joinpath((@__DIR__), "test_jet.jl")
+    run(`$(Base.julia_cmd()) --startup-file=no $test_jet_file`)
+end

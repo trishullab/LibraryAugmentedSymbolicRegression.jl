@@ -1,7 +1,6 @@
 module IdeaStoreModule
 
 using Random: randperm, shuffle
-using DispatchDoctor: @unstable
 
 export AbstractIdeaStore,
     WindowedIdeaStore,
@@ -14,12 +13,7 @@ export AbstractIdeaStore,
 """
     AbstractIdeaStore
 
-The concept library LaSR accumulates during a search: natural-language "ideas" about the
-structure of the target expression, extracted from the good/bad members and fed back into
-the mutation prompts.
-
-The store is deliberately an interface rather than a bare `Vector` so the retrieval
-strategy can be swapped without touching the search. A subtype implements:
+The concept library LaSR accumulates during a search. A subtype implements:
 
 - `add_idea!(store, idea; refined=false)` — add one idea. `refined=true` marks a merged
   concept (the output of concept evolution) that the store may choose to prefer.
@@ -29,30 +23,20 @@ strategy can be swapped without touching the search. A subtype implements:
 - `evolution_candidates(store)` — the ideas eligible to be merged/distilled by concept
   evolution (for the windowed store, everything past the sampling window).
 - `Base.length(store)` — number of ideas held.
-
-This is the seam for alternatives the search never has to know about:
-embedding/RAG retrieval, or a priority heap ranked by a fitness heuristic.
 """
 abstract type AbstractIdeaStore end
 
 Base.isempty(store::AbstractIdeaStore) = length(store) == 0
 
-# Fallbacks so a minimal subtype only has to define the essentials.
+# By default, fallbacks to an empty list of evolution candidates. Subtypes can override.
 evolution_candidates(store::AbstractIdeaStore) = String[]
-
-# ---------------------------------------------------------------------------------------
-# WindowedIdeaStore: LaSR's historical behavior, unchanged.
-# ---------------------------------------------------------------------------------------
 
 """
     WindowedIdeaStore(; window=30, seed=String[])
 
-The original concept library. Ideas live in one list; refined (merged) ideas are pushed
-to the front and raw ideas to the back. Retrieval draws a distinct uniform sample from
-the front `window` ideas, so recently-refined concepts dominate. `query` is ignored.
+Ideas live in one list; refined (merged) ideas are pushed to the front and raw ideas to the back. Retrieval draws a distinct uniform sample from the front `window` ideas, so recently-refined concepts dominate. `query` is ignored.
 
-Ideas beyond the window are the `evolution_candidates`: overflow that concept evolution
-distills back into new front-of-list ideas.
+Ideas beyond the window are the `evolution_candidates`: overflow that concept evolution distills back into new front-of-list ideas.
 """
 struct WindowedIdeaStore <: AbstractIdeaStore
     ideas::Vector{String}
@@ -74,7 +58,7 @@ function add_idea!(store::WindowedIdeaStore, idea::AbstractString; refined::Bool
     return nothing
 end
 
-@unstable function retrieve_ideas(
+function retrieve_ideas(
     store::WindowedIdeaStore, n::Integer; query::Union{AbstractString,Nothing}=nothing
 )
     isempty(store.ideas) && return String[]
@@ -90,7 +74,7 @@ function evolution_candidates(store::WindowedIdeaStore)
     return store.ideas[(store.window + 1):end]
 end
 
-@unstable function _tokenize(s::AbstractString)::Vector{String}
+function _tokenize(s::AbstractString)::Vector{String}
     return String.(filter(!isempty, split(lowercase(s), r"[^a-z0-9_]+")))
 end
 
@@ -200,7 +184,7 @@ function update_idea_value!(store::ScoredIdeaStore, idea::AbstractString, delta:
     return nothing
 end
 
-@unstable function retrieve_ideas(
+function retrieve_ideas(
     store::ScoredIdeaStore, n::Integer; query::Union{AbstractString,Nothing}=nothing
 )
     isempty(store.ideas) && return String[]

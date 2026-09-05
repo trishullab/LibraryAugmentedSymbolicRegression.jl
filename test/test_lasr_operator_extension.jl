@@ -5,9 +5,9 @@
 # deterministic.
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression: Options, LaSRPlugin, NormalizationRule
-using LibraryAugmentedSymbolicRegression.ParseModule: parse_expr
-using SymbolicRegression: eval_tree_array
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, NormalizationRule
+using LibraryAugmentedSymbolicRegression.ExpressionIOModule: parse_expr
+using SymbolicRegression: Options, eval_tree_array
 
 # Same definition as `examples/operator_extension.jl`, duplicated here so this test file
 # has no runtime dependency on `examples/` and stays a self-contained regression test.
@@ -51,7 +51,7 @@ end
 
     # `x0!` is not valid Julia syntax; without the plugin's parse rule this would fail
     # `Meta.parse` and `parse_expr` would fall back to a constant-1 node (see
-    # `src/Normalize.jl`'s `ParseFailureStore`) instead of the factorial operator.
+    # `src/ParseFailures.jl`'s `ParseFailureStore`) instead of the factorial operator.
     ex = parse_expr(Float64, "x0!", options)
 
     X = reshape([-2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0], 1, :)

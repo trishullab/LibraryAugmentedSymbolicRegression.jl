@@ -7,8 +7,8 @@
 
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression: Options, LaSRPlugin, LLMCrossover
-using SymbolicRegression: equation_search, calculate_pareto_frontier
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, LLMCrossover
+using SymbolicRegression: SymbolicRegression, Options, equation_search, calculate_pareto_frontier
 
 include("mock_llm_server.jl")
 using .MockLLMServer: MockLLMServer, with_server, count_for, total_calls
@@ -113,7 +113,7 @@ end
         # LaSR's method must win dispatch over SR's built-in subtree crossover.
         @test which(
             crossover, (typeof(p1), typeof(p2), LLMCrossover, typeof(options))
-        ).module === LibraryAugmentedSymbolicRegression.MutateModule
+        ).module === LibraryAugmentedSymbolicRegression.SRInterfaceModule
 
         before = count_for("crossover")
         result = crossover(

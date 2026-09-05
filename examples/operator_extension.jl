@@ -1,7 +1,7 @@
 # Worked example: adding a new operator to LaSR's search vocabulary (factorial).
 #
 # Extending a symbolic-regression search with a new operator that matches a scientist's
-# domain is a TWO-SIDED story:
+# domain requires two operations in LaSR:
 #
 #   1. THE OPERATOR ITSELF -- a `unary_operators`/`binary_operators` entry must be a
 #      plain Julia function SR can *evaluate* on the search's numeric type
@@ -13,12 +13,12 @@
 #   2. THE PARSE-SIDE VOCABULARY -- a scientist (or an LLM) writes equations in their own
 #      domain notation, here `x!` for factorial, which is not valid Julia syntax and is
 #      not, by itself, anything `Options`/`Meta.parse` knows how to read. `LaSRPlugin`'s
-#      `parse_rules` extension point (see `src/Normalize.jl`'s `resolve_rules`) lets a
+#      `parse_rules` extension point (see `src/NormalizationRules.jl`'s `resolve_rules`) lets a
 #      scientist register a string-level `NormalizationRule` that rewrites their notation
 #      into the registered operator's call syntax *before* `parse_expr` hands the string
 #      to `Meta.parse`. Without this half, `x0!` fails `Meta.parse` and `parse_expr`
 #      silently falls back to a constant-1 node (recorded in the plugin's
-#      `ParseFailureStore` -- see `src/Normalize.jl`) even though `safe_factorial` is a
+#      `ParseFailureStore` -- see `src/ParseFailures.jl`) even though `safe_factorial` is a
 #      perfectly good operator once its call syntax is spelled out.
 #
 # The wiring below is exercised (without a model server) by
@@ -26,9 +26,8 @@
 #
 # Run: `julia --project=. examples/operator_extension.jl`
 
-using LibraryAugmentedSymbolicRegression:
-    Options, LaSRPlugin, NormalizationRule, parse_expr, string_tree
-using SymbolicRegression: eval_tree_array
+using SymbolicRegression: Options, string_tree, eval_tree_array
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, NormalizationRule, parse_expr
 
 # ---- 1. A differentiable operator ---------------------------------------------------
 #
@@ -65,7 +64,7 @@ println("safe_factorial(4) = ", safe_factorial(4.0), "  (exact 4! = 24)")
 # `unary_operators` makes `safe_factorial` something the search can place in a tree and
 # evaluate. `LaSRPlugin(; parse_rules=[...])` makes `x!` -- the notation a scientist or an
 # LLM actually writes -- resolve to a call on that operator when `parse_expr` normalizes
-# an equation string: `src/Normalize.jl`'s `resolve_rules(DEFAULT_RULES,
+# an equation string: `src/NormalizationRules.jl`'s `resolve_rules(DEFAULT_RULES,
 # plugin.parse_rules)` appends scientist-registered rules after the built-ins, so `x!`
 # gets rewritten to `safe_factorial(x)` before `Meta.parse` ever sees the string.
 # `use_llm=false` keeps this example fully deterministic and server-free.

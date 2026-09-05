@@ -1,8 +1,8 @@
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression: Options, LaSRPlugin
-using LibraryAugmentedSymbolicRegression.ParseModule: parse_expr
-using SymbolicRegression: eval_tree_array
+using LibraryAugmentedSymbolicRegression: LaSRPlugin
+using LibraryAugmentedSymbolicRegression.ExpressionIOModule: parse_expr
+using SymbolicRegression: Options, eval_tree_array
 
 # NOTE: LaSR's `parse_expr` reads variable names / operators through the LaSRPlugin,
 # so options must carry a `LaSRPlugin` (a bare `SymbolicRegression.Options` with no

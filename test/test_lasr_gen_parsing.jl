@@ -1,6 +1,7 @@
 # LaSR uses an LLM to generate expressions. This test case ensures that the parser can correctly format the LLM outputs.
 println("Testing LaSR llm output parser")
-using LibraryAugmentedSymbolicRegression: Options, LaSRPlugin, parse_msg_content
+using SymbolicRegression: Options
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_msg_content
 
 include("test_params.jl")
 options = Options(;

@@ -4,15 +4,11 @@
 
 using Test
 using LibraryAugmentedSymbolicRegression:
-    Options, LaSRPlugin, SuggestionCache, CallBudget, cache_stats, budget_used
-using LibraryAugmentedSymbolicRegression.LLMCacheModule:
-    cache_key,
-    take_suggestion!,
-    store_suggestions!,
-    claim_call!,
-    reset_budget!,
-    reset_cache!
-using SymbolicRegression: equation_search
+    LaSRPlugin, SuggestionCache, CallBudget, cache_stats, budget_used
+using LibraryAugmentedSymbolicRegression.SuggestionCacheModule:
+    cache_key, take_suggestion!, store_suggestions!, reset_cache!
+using LibraryAugmentedSymbolicRegression.CallBudgetModule: claim_call!
+using SymbolicRegression: Options, equation_search
 
 include("mock_llm_server.jl")
 using .MockLLMServer: with_server, total_calls
@@ -64,9 +60,6 @@ end
     used = budget_used(budget)
     @test used.used >= 3
     @test used.denied == 7
-
-    reset_budget!(budget)
-    @test claim_call!(budget)
 end
 
 @testset "a nothing limit is unbounded" begin

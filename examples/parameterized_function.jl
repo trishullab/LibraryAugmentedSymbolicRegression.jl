@@ -1,4 +1,6 @@
-using LibraryAugmentedSymbolicRegression
+using SymbolicRegression: SRRegressor
+using DynamicExpressions: ParametricExpression
+using LibraryAugmentedSymbolicRegression: LaSRPlugin
 using Random: MersenneTwister
 using Zygote
 using MLJBase: machine, fit!, predict, report
@@ -17,7 +19,8 @@ y = [
 
 stop_at = Ref(1e-4)
 
-model = LaSRRegressor(;
+model = SRRegressor(;
+    plugins=(LaSRPlugin(),),
     niterations=100,
     binary_operators=[+, *, /, -],
     unary_operators=[cos, exp],

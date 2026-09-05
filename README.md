@@ -14,6 +14,7 @@ Configure the LLM boundary, put it in a `LaSRPlugin`, and pass the plugin to
 the ordinary SR `Options` constructor:
 
 ```julia
+using SymbolicRegression
 using LibraryAugmentedSymbolicRegression
 
 plugin = LaSRPlugin(;
@@ -67,7 +68,7 @@ From Python (`juliacall`, e.g. under PySR):
 
 ```python
 from juliacall import Main as jl
-jl.seval("using LibraryAugmentedSymbolicRegression")
+jl.seval("using SymbolicRegression, LibraryAugmentedSymbolicRegression")
 LaSR = jl.LibraryAugmentedSymbolicRegression
 
 print(LaSR.default_prompts_dir())                        # read the shipped defaults
@@ -76,16 +77,18 @@ prompts_dir = str(LaSR.copy_prompts("~/my_lasr_prompts"))  # edit these, then pa
 
 ## MLJ
 
-`LaSRRegressor` and `MultitargetLaSRRegressor` are small constructors around
-SR's native MLJ models:
+LaSR has no MLJ models of its own. Use SymbolicRegression's `SRRegressor` and
+`MultitargetSRRegressor` and pass the plugin through `plugins`, exactly as you
+would to `Options`:
 
 ```julia
 using MLJ
+using SymbolicRegression
 using LibraryAugmentedSymbolicRegression
 
 plugin = LaSRPlugin(; model="my-model", api_key="...", mutate_weight=0.01)
-model = LaSRRegressor(;
-    plugin,
+model = SRRegressor(;
+    plugins=(plugin,),
     niterations=40,
     binary_operators=[+, -, *, /],
 )

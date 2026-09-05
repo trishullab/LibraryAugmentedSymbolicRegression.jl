@@ -4,15 +4,15 @@ Pkg.activate(".")
 Pkg.instantiate()
 using Revise
 using TensorBoardLogger
-using LibraryAugmentedSymbolicRegression:
-    LaSRPlugin,
+using SymbolicRegression:
     equation_search,
     calculate_pareto_frontier,
     compute_complexity,
     string_tree,
     SRLogger,
     eval_tree_array,
-    LaSRRegressor
+    SRRegressor
+using LibraryAugmentedSymbolicRegression: LaSRPlugin
 import MLJ: machine, fit!, predict, report
 
 logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
@@ -33,8 +33,8 @@ plugin = LaSRPlugin(;
     randomize_weight=p,
     crossover_probability=p,
 )
-model = LaSRRegressor(;
-    plugin,
+model = SRRegressor(;
+    plugins=(plugin,),
     niterations=40,
     logger=logger,
     binary_operators=[+, -, *, /, ^],

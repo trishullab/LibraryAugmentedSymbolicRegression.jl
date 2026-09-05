@@ -1,8 +1,8 @@
 using Test
 using LibraryAugmentedSymbolicRegression: LaSRPlugin
-using LibraryAugmentedSymbolicRegression.NormalizeModule:
+using LibraryAugmentedSymbolicRegression.ParseFailuresModule:
     ParseFailureStore, ParseFailure, record_parse_failure!, parse_failures
-using LibraryAugmentedSymbolicRegression.LLMOptionsStructModule: LaSRPluginState
+using LibraryAugmentedSymbolicRegression.PluginModule: LaSRPluginState
 using SymbolicRegression: init_plugin_state, fork_plugin_state
 
 # init_plugin_state only reads `dataset.variable_names` when `plugin.variable_names`

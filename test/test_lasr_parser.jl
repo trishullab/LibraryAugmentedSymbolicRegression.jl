@@ -3,8 +3,8 @@
 println("Testing LaSR expression parser")
 
 using Random: MersenneTwister
-using LibraryAugmentedSymbolicRegression:
-    Options, LaSRPlugin, string_tree, parse_expr, gen_random_tree
+using SymbolicRegression: Options, string_tree, gen_random_tree
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_expr
 include("test_params.jl")
 
 @inline safepow(x, y) = sign(x) * abs(x)^y

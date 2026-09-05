@@ -4,7 +4,8 @@
 # which executed arbitrary Julia code. These tests pin the safe behaviour.
 
 using Test
-using LibraryAugmentedSymbolicRegression: Options, LaSRPlugin, parse_msg_content
+using SymbolicRegression: Options
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_msg_content
 
 options = Options(;
     binary_operators=[+, -, *, /], unary_operators=[cos], plugins=(LaSRPlugin(; use_llm=false),)

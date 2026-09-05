@@ -2,6 +2,15 @@ using Pkg
 Pkg.activate(".")
 Pkg.instantiate()
 using TensorBoardLogger
+using SymbolicRegression:
+    Options,
+    Dataset,
+    equation_search,
+    calculate_pareto_frontier,
+    compute_complexity,
+    eval_tree_array,
+    SRLogger,
+    string_tree
 using LibraryAugmentedSymbolicRegression
 
 # Dataset with 5 features:
