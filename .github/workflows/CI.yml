@@ -58,5 +58,32 @@ jobs:
         env:
           SYMBOLIC_REGRESSION_TEST_SUITE: ${{ matrix.test }}
         run: |
-          julia --color=yes --threads=auto --check-bounds=yes --depwarn=yes -e 'import Pkg; Pkg.activate("."); Pkg.test()'
+          julia --color=yes -e 'import Pkg; Pkg.add("Coverage")'
+          julia --color=yes --threads=auto --check-bounds=yes --depwarn=yes --code-coverage=user -e 'import Pkg; Pkg.activate("."); Pkg.test(coverage=true)'
+          julia --color=yes coverage.jl
         shell: bash
+      - name: "Upload coverage artifacts"
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.os }}-${{ strategy.job-index }}
+          path: lcov.info
+          retention-days: 1
+
+  upload-coverage:
+    name: Upload Coverage to Codecov
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Download all coverage artifacts"
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          path: coverage
+      - name: "Upload to Codecov"
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
+          fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
+          verbose: true
