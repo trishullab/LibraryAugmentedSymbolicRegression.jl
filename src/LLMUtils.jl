@@ -21,7 +21,6 @@ using DynamicExpressions:
     AbstractOperatorEnum
 using SymbolicRegression: DATA_TYPE, AbstractOptions
 using DispatchDoctor: @unstable
-using ..LLMOptionsStructModule: LLMOptions
 using ..LLMOptionsModule: lasr_context
 using ..ParseModule: render_expr, get_variable_names
 using JSON: parse

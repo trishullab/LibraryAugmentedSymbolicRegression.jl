@@ -6,7 +6,6 @@ using Revise
 using TensorBoardLogger
 using LibraryAugmentedSymbolicRegression:
     LaSRPlugin,
-    LLMOptions,
     equation_search,
     calculate_pareto_frontier,
     compute_complexity,
@@ -22,13 +21,10 @@ X = randn(Float32, 2, 100)
 y = 2 * cos.(X[1, :]) + X[2, :] .^ 2 .- 2
 
 p = 0.001
-llm_options = LLMOptions(;
+plugin = LaSRPlugin(;
     model="meta-llama/Meta-Llama-3.1-8B-Instruct",
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),
     verbose=true,
-)
-plugin = LaSRPlugin(;
-    llm_options,
     use_concepts=true,
     use_concept_evolution=true,
     context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",

@@ -3,32 +3,10 @@ module LLMOptionsStructModule
 using PromptingTools: aigenerate
 using SymbolicRegression:
     AbstractMutation, AbstractCrossover, AbstractOptions, AbstractPlugin, Options
-using ..LaSRMutationWeightsModule: LaSRMutationWeights
 using ..LoggingModule: LaSRLogger
 using ..IdeaStoreModule: AbstractIdeaStore, WindowedIdeaStore
 
 const DEFAULT_PROMPTS_DIR = joinpath(pkgdir(parentmodule(@__MODULE__)), "prompts") * "/"
-
-Base.@kwdef mutable struct LLMOperationWeights
-    llm_crossover::Float64 = 0.0
-    llm_mutate::Float64 = 0.0
-    llm_randomize::Float64 = 0.0
-end
-
-"""
-    LLMOptions(; kws...)
-
-Options for the language model itself: which model to call, and how. All
-LaSR search/prompt behavior is configured directly on [`LaSRPlugin`](@ref).
-"""
-Base.@kwdef mutable struct LLMOptions
-    api_key::Union{String,Nothing} = nothing
-    model::Union{String,Nothing} = nothing
-    api_kwargs::Dict = Dict("max_tokens" => 1000)
-    http_kwargs::Dict = Dict("retries" => 3, "readtimeout" => 3600)
-    llm_generate::Function = aigenerate
-    verbose::Bool = true
-end
 
 struct LLMMutateMutation <: AbstractMutation end
 struct LLMRandomizeMutation <: AbstractMutation end
@@ -40,13 +18,18 @@ struct LLMCrossover <: AbstractCrossover end
 
 Library-augmented symbolic regression plugin. Pass it through
 `Options(; plugins=(LaSRPlugin(...),), ...)`. LLM client settings
-(`model`, `api_key`, ...) live in [`LLMOptions`](@ref); everything else is
-set directly on the plugin. The mutation weights are unnormalized, like all
-entries in `Options.mutations`; `crossover_probability` is conditional on
-SR selecting crossover.
+(`model`, `api_key`, ...) and everything else are set directly on the
+plugin. The mutation weights are unnormalized, like all entries in
+`Options.mutations`; `crossover_probability` is conditional on SR selecting
+crossover.
 """
 struct LaSRPlugin <: AbstractPlugin
-    llm_options::LLMOptions
+    api_key::Union{String,Nothing}
+    model::Union{String,Nothing}
+    api_kwargs::Dict
+    http_kwargs::Dict
+    llm_generate::Function
+    verbose::Bool
     use_llm::Bool
     use_concepts::Bool
     use_concept_evolution::Bool
@@ -67,7 +50,12 @@ struct LaSRPlugin <: AbstractPlugin
     generate_weight::Float64
     amnesty_complexity::Int
     function LaSRPlugin(;
-        llm_options::LLMOptions=LLMOptions(),
+        api_key::Union{String,Nothing}=nothing,
+        model::Union{String,Nothing}=nothing,
+        api_kwargs::Dict=Dict("max_tokens" => 1000),
+        http_kwargs::Dict=Dict("retries" => 3, "readtimeout" => 3600),
+        llm_generate::Function=aigenerate,
+        verbose::Bool=true,
         use_llm::Bool=true,
         use_concepts::Bool=false,
         use_concept_evolution::Bool=false,
@@ -113,7 +101,12 @@ struct LaSRPlugin <: AbstractPlugin
             ),
         )
         return new(
-            llm_options,
+            api_key,
+            model,
+            api_kwargs,
+            http_kwargs,
+            llm_generate,
+            verbose,
             use_llm,
             use_concepts,
             use_concept_evolution,
@@ -151,7 +144,7 @@ struct LaSRContext{O<:Options,S} <: AbstractOptions
     state::S
 end
 
-const _LLM_OPTIONS_KEYS = fieldnames(LLMOptions)
+const _CLIENT_KEYS = (:api_key, :model, :api_kwargs, :http_kwargs, :llm_generate, :verbose)
 const _PLUGIN_KEYS = fieldnames(LaSRPlugin)
 
 function Base.getproperty(context::LaSRContext, key::Symbol)
@@ -163,8 +156,8 @@ function Base.getproperty(context::LaSRContext, key::Symbol)
         return getfield(context, :state).lasr_logger
     elseif key === :variable_names && !isnothing(getfield(context, :state))
         return getfield(context, :state).variable_names
-    elseif key in _LLM_OPTIONS_KEYS
-        return getproperty(getfield(context, :plugin).llm_options, key)
+    elseif key in _CLIENT_KEYS
+        return getproperty(getfield(context, :plugin), key)
     elseif key in _PLUGIN_KEYS && !hasproperty(getfield(context, :sr_options), key)
         # `hasproperty` guard: never shadow SR options (e.g. `crossover_probability`)
         return getproperty(getfield(context, :plugin), key)

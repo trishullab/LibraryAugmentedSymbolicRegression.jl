@@ -1,16 +1,16 @@
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression: LaSROptions
+using LibraryAugmentedSymbolicRegression: Options, LaSRPlugin
 using LibraryAugmentedSymbolicRegression.ParseModule: parse_expr
 using SymbolicRegression: eval_tree_array
 
 # NOTE: LaSR's `parse_expr` reads variable names / operators through the LaSRPlugin,
-# so options must be built with `LaSROptions` (a bare `SymbolicRegression.Options`
-# carries no LaSRPlugin and `parse_expr` rejects it).
-opts = LaSROptions(;
+# so options must carry a `LaSRPlugin` (a bare `SymbolicRegression.Options` with no
+# plugins is rejected by `parse_expr`).
+opts = Options(;
     binary_operators=[+, *, -, /, ^],
     unary_operators=[abs, cbrt, tan, exp, log, sqrt, sin, cos],
-    variable_names=Dict("x0" => "x0", "x1" => "x1"),
+    plugins=(LaSRPlugin(; variable_names=Dict("x0" => "x0", "x1" => "x1")),),
 )
 # Rows are features in sorted variable-name order: row 1 = x0, row 2 = x1.
 X = [-2.0 -1.0 3.0;   # x0

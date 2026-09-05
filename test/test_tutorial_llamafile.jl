@@ -1,11 +1,6 @@
 # Test that LaSR runs with active=true and can solve simple problems.
 import LibraryAugmentedSymbolicRegression:
-    LaSROptions,
-    LaSRRegressor,
-    LaSRMutationWeights,
-    LLMOperationWeights,
-    LLAMAFILE_MODEL,
-    LLM_PORT
+    LaSRPlugin, LaSRRegressor, LLAMAFILE_MODEL, LLM_PORT
 import MLJ: machine, fit!, predict, report
 
 # Ensure that TEST_LLM env variable is set to true.
@@ -22,19 +17,21 @@ model = LaSRRegressor(;
     binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
     populations=20,
-    use_llm=true,
-    use_concepts=true,
-    use_concept_evolution=true,
-    llm_operation_weights=LLMOperationWeights(;
-        llm_crossover=p, llm_mutate=p, llm_randomize=p
+    plugin=LaSRPlugin(;
+        use_llm=true,
+        use_concepts=true,
+        use_concept_evolution=true,
+        mutate_weight=p,
+        randomize_weight=p,
+        crossover_probability=p,
+        context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
+        variable_names=Dict("x1" => "theta", "x2" => "offset"),
+        prompts_dir="prompts/",
+        api_key="OpenAI complains if this isn't set. but LLamafile doesn't need one.",
+        model=LLAMAFILE_MODEL,
+        api_kwargs=Dict("url" => "http://localhost:$(LLM_PORT)/v1"),
+        verbose=true, # Set to true to see LLM generation logs.
     ),
-    llm_context="We believe the relationship between the theta and offset parameter is a function of the cosine of the theta variable and the square of the offset.",
-    variable_names=Dict("x1" => "theta", "x2" => "offset"),
-    prompts_dir="prompts/",
-    api_key="OpenAI complains if this isn't set. but LLamafile doesn't need one.",
-    model=LLAMAFILE_MODEL,
-    api_kwargs=Dict("url" => "http://localhost:$(LLM_PORT)/v1"),
-    verbose=true, # Set to true to see LLM generation logs.
 )
 
 mach = machine(model, transpose(X), y)

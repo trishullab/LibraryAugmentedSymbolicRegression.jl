@@ -16,17 +16,13 @@ the ordinary SR `Options` constructor:
 ```julia
 using LibraryAugmentedSymbolicRegression
 
-llm = LLMOptions(;
+plugin = LaSRPlugin(;
     model="my-model",
     api_key="...",
     api_kwargs=Dict(
         "url" => "http://localhost:11440/v1",
         "max_tokens" => 1000,
     ),
-)
-
-plugin = LaSRPlugin(;
-    llm_options=llm,
     use_concepts=true,
     use_concept_evolution=true,
     context="The response depends on an angle and an offset.",
@@ -62,10 +58,7 @@ SR's native MLJ models:
 using MLJ
 using LibraryAugmentedSymbolicRegression
 
-plugin = LaSRPlugin(;
-    llm_options=LLMOptions(; model="my-model", api_key="..."),
-    mutate_weight=0.01,
-)
+plugin = LaSRPlugin(; model="my-model", api_key="...", mutate_weight=0.01)
 model = LaSRRegressor(;
     plugin,
     niterations=40,
@@ -90,16 +83,18 @@ fit!(mach)
 - `mutate_weight`, `randomize_weight`, and `crossover_probability` set how
   often the LLM mutations and crossover run.
 
-`LLMOptions` only carries settings for the language model itself:
+LLM client settings are set directly on `LaSRPlugin`:
 
 - `api_key`, `model`, `api_kwargs`, and `http_kwargs` are forwarded to
   PromptingTools' OpenAI-compatible schema.
 - `llm_generate` is the generation function. Its default is
   `PromptingTools.aigenerate`; tests can inject a deterministic local function.
 
-`LaSROptions`, `LaSRMutationWeights`, and `LLMOperationWeights` remain as a
-compatibility path for older Julia callers, but new code should use
-`Options(; plugins=(LaSRPlugin(...),))`.
+`LaSRPlugin` is the sole entry point — `Options(; plugins=(LaSRPlugin(...),))`.
+Structural mutation weights (`mutate_constant`, `add_node`, ...) are set with
+SR's own `Options(; mutation_weights=...)`; LLM-specific weights
+(`mutate_weight`, `randomize_weight`, `crossover_probability`,
+`generate_weight`) live on the plugin.
 
 ## Plugin mapping
 
@@ -120,7 +115,7 @@ are no longer used.
 ## Testing without an LLM service
 
 The focused tests inject a function returning fixed JSON through
-`LLMOptions(; llm_generate=...)`. This exercises prompt rendering, parsing,
+`LaSRPlugin(; llm_generate=...)`. This exercises prompt rendering, parsing,
 mutation/crossover dispatch, constraints, evaluation, and complete SR searches
 without network access or credentials.
 

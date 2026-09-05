@@ -15,13 +15,10 @@ y = y .+ randn(100) .* 1e-3
 
 logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
 p = 0.0001
-llm_options = LLMOptions(;
+plugin = LaSRPlugin(;
     model="meta-llama/Meta-Llama-3.1-8B-Instruct",
     api_kwargs=Dict("url" => "http://localhost:11440/v1"),
     verbose=true, # Set to true to see LLM generation logs.
-)
-plugin = LaSRPlugin(;
-    llm_options,
     use_llm=true,
     use_concepts=true,
     use_concept_evolution=true,

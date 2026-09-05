@@ -10,12 +10,12 @@ include("test_helpers.jl")  # provides mock_llm(calls, content)
     calls = Ref(0)
     # three proposals; "1.0" is not usable (no feature), the other two are
     content = "[\"x0 + x1\", \"1.0\", \"x0 * cos(x1)\"]"
-    llm_options = LLMOptions(; verbose=false, llm_generate=mock_llm(calls, content))
     # Register x0/x1 as features 1/2 so the proposals parse to feature-referencing trees;
     # with the default variable names DynamicExpressions rejects `x0`/`x1` and the parser
     # substitutes a constant, which would (correctly) be filtered as unusable.
     plugin = LaSRPlugin(;
-        llm_options=llm_options,
+        verbose=false,
+        llm_generate=mock_llm(calls, content),
         use_llm=true,
         num_generated_equations=3,
         variable_names=Dict(1 => "x0", 2 => "x1"),
@@ -70,7 +70,8 @@ using Random: Xoshiro
         default_plugins=(),
         plugins=(
             LaSRPlugin(;
-                llm_options=LLMOptions(; verbose=false, llm_generate=mock),
+                verbose=false,
+                llm_generate=mock,
                 use_llm=true,
                 num_generated_equations=3,
                 generate_weight=1.0,
@@ -135,21 +136,18 @@ using Random: Xoshiro
     @test res_rand.member.loss > 1e-3
 end
 
-@testset "LLMGenerateMutation reachable via LaSROptions compat constructor" begin
-    # The legacy `LaSROptions` constructor passes explicit `mutations`/`default_mutations`,
-    # which suppresses the `plugin_mutations` merge, so the operator must instead reach the
-    # mutation list through `_mutation_pairs`. Threading `generate_weight` must wire it in.
-    opts = LaSROptions(;
-        binary_operators=[+, *],
-        unary_operators=[cos],
-        use_llm=true,
-        generate_weight=1.25,
-        default_plugins=(),
+@testset "LLMGenerateMutation reaches options.mutations via the plugin" begin
+    # The intended entry point: a LaSRPlugin passed to Options contributes its weighted
+    # mutations through `plugin_mutations`, which SR merges as defaults.
+    opts = Options(;
+        binary_operators=[+, *], unary_operators=[cos], default_plugins=(),
+        plugins=(LaSRPlugin(; use_llm=true, generate_weight=1.25),),
     )
     @test any(p -> first(p) isa LLMGenerateMutation && last(p) == 1.25, opts.mutations)
-    # Opt-in: with the default `generate_weight=0.0` the operator still appears in the
-    # mutation list but carries zero weight (so it is never sampled) -- identical to how the
-    # existing `LLMMutateMutation`/`LLMRandomizeMutation` pairs surface in `_mutation_pairs`.
-    off = LaSROptions(; binary_operators=[+, *], use_llm=true, default_plugins=())
-    @test all(p -> !(first(p) isa LLMGenerateMutation) || last(p) == 0.0, off.mutations)
+    # Opt-in: default generate_weight=0.0 means the operator is not contributed at all.
+    off = Options(;
+        binary_operators=[+, *], default_plugins=(),
+        plugins=(LaSRPlugin(; use_llm=true),),
+    )
+    @test all(p -> !(first(p) isa LLMGenerateMutation), off.mutations)
 end

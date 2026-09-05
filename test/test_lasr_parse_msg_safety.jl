@@ -4,9 +4,11 @@
 # which executed arbitrary Julia code. These tests pin the safe behaviour.
 
 using Test
-using LibraryAugmentedSymbolicRegression: LaSROptions, parse_msg_content
+using LibraryAugmentedSymbolicRegression: Options, LaSRPlugin, parse_msg_content
 
-options = LaSROptions(; binary_operators=[+, -, *, /], unary_operators=[cos])
+options = Options(;
+    binary_operators=[+, -, *, /], unary_operators=[cos], plugins=(LaSRPlugin(; use_llm=false),)
+)
 
 @testset "well-formed responses still parse" begin
     @test parse_msg_content("```json\n[\"x + y\", \"cos(x)\"]\n```", options) ==

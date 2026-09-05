@@ -5,10 +5,6 @@ export LaSRPlugin,
     LLMRandomizeMutation,
     LLMGenerateMutation,
     LLMCrossover,
-    LLMOptions,
-    LLMOperationWeights,
-    LaSRMutationWeights,
-    LaSROptions,
     LaSRRegressor,
     MultitargetLaSRRegressor,
     llm_randomize_tree,
@@ -41,7 +37,6 @@ using DispatchDoctor: @stable
 @stable default_mode = "disable" begin
     include("Utils.jl")
     include("LLMServe.jl")
-    include("MutationWeights.jl")
     include("Logging.jl")
     include("IdeaStore.jl")
     include("LLMOptionsStruct.jl")
@@ -52,7 +47,6 @@ using DispatchDoctor: @stable
     include("Mutate.jl")
 end
 
-using .LaSRMutationWeightsModule: LaSRMutationWeights
 using .LoggingModule: LaSRLogger
 using .IdeaStoreModule:
     AbstractIdeaStore,
@@ -63,14 +57,11 @@ using .IdeaStoreModule:
     update_idea_value!,
     evolution_candidates
 using .LLMOptionsStructModule:
-    LLMOperationWeights,
-    LLMOptions,
     LaSRPlugin,
     LLMMutateMutation,
     LLMRandomizeMutation,
     LLMGenerateMutation,
     LLMCrossover
-using .LLMOptionsModule: LaSROptions
 using .LLMServeModule:
     async_run_llm_server, LLAMAFILE_MODEL, LLAMAFILE_PATH, LLAMAFILE_URL, LLM_PORT
 using .LLMFunctionsModule:

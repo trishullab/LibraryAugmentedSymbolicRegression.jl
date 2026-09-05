@@ -54,19 +54,8 @@ using Random: Xoshiro
     @test pop.members[1].loss < 1e-6
 end
 
-@testset "amnesty_complexity reachable via LaSROptions compat constructor" begin
-    # `LaSROptions` must thread `amnesty_complexity` through to the `LaSRPlugin` it
-    # builds, mirroring `generate_weight` (see test_lasr_generate_operator.jl's
-    # "reachable via LaSROptions compat constructor" test). `use_llm=false` here to
-    # confirm the value reaches the plugin unconditionally (amnesty is independent of
-    # `use_llm`, unlike the LLM mutation weights).
-    opts = LibraryAugmentedSymbolicRegression.LaSROptions(;
-        binary_operators=[+, *],
-        unary_operators=[cos],
-        use_llm=false,
-        amnesty_complexity=7,
-        default_plugins=(),
-    )
-    plugin = only(filter(p -> p isa LaSRPlugin, opts.plugins))
+@testset "amnesty_complexity is honored on LaSRPlugin" begin
+    plugin = LaSRPlugin(; use_llm=false, amnesty_complexity=7)
     @test plugin.amnesty_complexity == 7
+    @test LaSRPlugin(; use_llm=false).amnesty_complexity == 0  # opt-in default
 end

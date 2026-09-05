@@ -4,7 +4,7 @@ println("Testing LaSR expression parser [hard]")
 
 using Random: MersenneTwister, shuffle
 using LibraryAugmentedSymbolicRegression:
-    LaSROptions, string_tree, parse_expr, gen_random_tree
+    Options, LaSRPlugin, string_tree, parse_expr, gen_random_tree
 include("test_params.jl")
 
 @inline sinf(x) = sin(T(x))::T
@@ -17,11 +17,15 @@ include("test_params.jl")
 @inline mulf(a, b) = (T(a) * T(b))::T
 @inline divf(a, b) = (ta=T(a); tb=T(b); (ta / (abs(tb) + eps(T)))::T)
 
-options = LaSROptions(;
+options = Options(;
     default_params...,
     binary_operators=[+, addf, mulf, divf],
     unary_operators=[sinf, cosf, expf, safelog, sqr, cube],
-    variable_names=Dict('x' * string(i) => ('x' * string(i)) for i in 1:9),
+    plugins=(
+        LaSRPlugin(;
+            variable_names=Dict('x' * string(i) => ('x' * string(i)) for i in 1:9)
+        ),
+    ),
 )
 rng = MersenneTwister(314159)
 
