@@ -46,9 +46,6 @@ model = SRRegressor(;
             api_kwargs=Dict(
                 "url" => LLM_URL,
                 "max_tokens" => 4096,
-                # Reasoning models (gemma-4 / Qwen, served with a --reasoning-parser) return
-                # EMPTY content unless thinking is disabled -- without this every LLM
-                # suggestion comes back empty and falls back to a constant. See `model-blame`.
                 "chat_template_kwargs" => Dict("enable_thinking" => false),
             ),
             verbose=true,

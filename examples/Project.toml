@@ -1,6 +1,4 @@
-# Environment for the runnable examples. The package pins SymbolicRegression to a
-# git rev (its own [sources]); mirror that here so `--project=examples` resolves the
-# same SR the package builds against. Instantiate once with:
+# Instantiate once with:
 #   julia --project=examples -e 'using Pkg; Pkg.instantiate()'
 [deps]
 LibraryAugmentedSymbolicRegression = "158930c3-947c-4174-974b-74b39e64a28f"
