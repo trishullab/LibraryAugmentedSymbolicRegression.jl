@@ -48,8 +48,12 @@ end
 
 @testset "prompt_path ignores a trailing separator" begin
     d = default_prompts_dir()
+    # Pin the canonical form, not just self-consistency: on Windows `joinpath` keeps a
+    # trailing `/` and returns `...\prompts/crossover_user.prompt`. Both calls opened the
+    # same file, but only one of them was a native path.
     @test prompt_path(d * "/", "crossover_user.prompt") ==
-        prompt_path(d, "crossover_user.prompt")
+        prompt_path(d, "crossover_user.prompt") ==
+        normpath(joinpath(d, "crossover_user.prompt"))
 end
 
 @testset "prompt_path reports an unknown template clearly" begin

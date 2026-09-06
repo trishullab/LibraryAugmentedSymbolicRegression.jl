@@ -33,9 +33,12 @@ template present in `prompts_dir` wins; anything the user did not override falls
 back to the packaged copy, so a custom directory may hold just the one template it
 changes. `prompts_dir` is *joined* with `name`, so a trailing separator is optional
 (concatenating it silently produced `.../my_promptsmutate_user.prompt` before).
+The result is `normpath`ed, so a trailing separator cannot leak the caller's
+separator into the middle of the path (on Windows `joinpath("...\\prompts/", name)`
+keeps the `/` and yields `...\\prompts/name`).
 """
 function prompt_path(prompts_dir::AbstractString, name::AbstractString)::String
-    path = joinpath(prompts_dir, name)
+    path = normpath(joinpath(prompts_dir, name))
     isfile(path) && return path
     packaged = joinpath(default_prompts_dir(), name)
     isfile(packaged) && return packaged
