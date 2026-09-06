@@ -1,6 +1,6 @@
 module LLMOperatorsModule
 
-using Random: default_rng, AbstractRNG, rand
+using Random: default_rng, AbstractRNG, rand, randperm
 using DispatchDoctor: @unstable
 using DynamicExpressions:
     AbstractExpressionNode,
@@ -25,13 +25,16 @@ _is_one_constant(expression) =
         tree.constant && tree.val == one(tree.val)
     end
 
-# ponytail: unifies the assumptions preamble that was copy-pasted (with inconsistent
-# ordering) across the 4 LLM operators. `use_concepts` gates only the evolved idea library;
-# a user-set `context` is prepended whenever present, independent of `use_concepts`.
-# This matches the old `llm_mutate_tree`/`llm_crossover_trees` order and changes
-# `_gen_llm_random_tree`/`llm_generate_candidates` ONLY in the corner case
-# `context != "" && use_concepts == false` (those two previously discarded a set context).
-# In every other config -- all defaults included -- the result is byte-identical.
+# Return the first parsed candidate that is not the constant-1 fallback, in random order,
+# or `nothing` if every candidate is unusable.
+@unstable function _first_usable(::Type{T}, candidates, options) where {T}
+    for i in randperm(length(candidates))
+        t = parse_expr(T, _clean(candidates[i]), options)
+        _is_one_constant(t) || return get_contents(t)
+    end
+    return nothing
+end
+
 function _assumptions(options; query=nothing)
     a = options.use_concepts ?
         retrieve_ideas(options.idea_store, options.num_pareto_context; query=query) :
@@ -105,33 +108,13 @@ end
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     end
 
-    N = min(size(gen_tree_options)[1], options.num_generated_equations)
-
-    for i in 1:N
-        l = rand(1:N)
-        t = parse_expr(T, _clean(gen_tree_options[l]), options)
-        if _is_one_constant(t)
-            continue
-        end
-        log_generation!(
-            options.lasr_logger;
-            id=gen_id,
-            mode="gen_random",
-            chosen=render_expr(t, options),
-        )
-        return get_contents(t)
-    end
-
-    out = parse_expr(T, _clean(gen_tree_options[1]), options)
-    log_generation!(
-        options.lasr_logger; id=gen_id, mode="gen_random", chosen=render_expr(out, options)
-    )
-
-    if _is_one_constant(out)
+    chosen = _first_usable(T, gen_tree_options, options)
+    chosen === nothing &&
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
-    end
-
-    return get_contents(out)
+    log_generation!(
+        options.lasr_logger; id=gen_id, mode="gen_random", chosen=render_expr(chosen, options)
+    )
+    return chosen
 end
 
 """
@@ -261,27 +244,12 @@ function llm_mutate_tree(
         return tree
     end
 
-    N = min(size(mut_tree_options)[1], options.num_generated_equations)
-
-    for i in 1:N
-        l = rand(1:N)
-        t = parse_expr(T, _clean(mut_tree_options[l]), options)
-        if _is_one_constant(t)
-            continue
-        end
-
-        log_generation!(
-            options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(t, options)
-        )
-        return get_contents(t)
-    end
-
-    out = parse_expr(T, _clean(mut_tree_options[1]), options)
-
+    chosen = _first_usable(T, mut_tree_options, options)
+    chosen === nothing && return tree   # fall back to the parent, never a constant
     log_generation!(
-        options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(out, options)
+        options.lasr_logger; id=gen_id, mode="mutate", chosen=render_expr(chosen, options)
     )
-    return get_contents(out)
+    return chosen
 end
 
 function llm_crossover_trees(
@@ -344,42 +312,18 @@ function llm_crossover_trees(
         return tree1, tree2
     end
 
-    cross_tree1 = nothing
-    cross_tree2 = nothing
-
-    N = min(size(cross_tree_options)[1], options.num_generated_equations)
-
-    if N == 1
-        t = parse_expr(T, _clean(cross_tree_options[1]), options)
-
-        log_generation!(
-            options.lasr_logger; id=gen_id, mode="crossover", chosen=render_expr(t, options)
-        )
-        return get_contents(t), tree2
+    # Pick up to two distinct usable candidates in random order. A missing child falls back
+    # to a parent, never a constant-1 tree (the old N==1 and fill paths skipped that check).
+    usable = AbstractExpressionNode{T}[]
+    for i in randperm(length(cross_tree_options))
+        t = parse_expr(T, _clean(cross_tree_options[i]), options)
+        _is_one_constant(t) && continue
+        push!(usable, get_contents(t))
+        length(usable) == 2 && break
     end
 
-    for i in 1:(2 * N)
-        l = rand(1:N)
-        t = parse_expr(T, _clean(cross_tree_options[l]), options)
-        if _is_one_constant(t)
-            continue
-        end
-
-        if isnothing(cross_tree1)
-            cross_tree1 = get_contents(t)
-        elseif isnothing(cross_tree2)
-            cross_tree2 = get_contents(t)
-            break
-        end
-    end
-
-    if isnothing(cross_tree1)
-        cross_tree1 = get_contents(parse_expr(T, _clean(cross_tree_options[1]), options))
-    end
-
-    if isnothing(cross_tree2)
-        cross_tree2 = get_contents(parse_expr(T, _clean(cross_tree_options[2]), options))
-    end
+    cross_tree1 = length(usable) >= 1 ? usable[1] : tree1
+    cross_tree2 = length(usable) >= 2 ? usable[2] : tree2
 
     recording_str =
         render_expr(cross_tree1, options) * " && " * render_expr(cross_tree2, options)

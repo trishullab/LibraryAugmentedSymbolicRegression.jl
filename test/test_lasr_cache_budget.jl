@@ -72,6 +72,13 @@ end
     @test_throws ArgumentError LaSRPlugin(; mutate_weight=1.0, max_llm_calls=-3)
 end
 
+@testset "SuggestionCache capacity is validated" begin
+    # Like max_llm_calls, a bad capacity must fail at construction, not deep in a search
+    # after an LLM call was already billed.
+    @test_throws ArgumentError SuggestionCache(; capacity=0)
+    @test_throws ArgumentError SuggestionCache(; capacity=-4)
+end
+
 @testset "budget caps the LLM calls a search actually issues" begin
     X = randn(Float64, 1, 60)
     y = @. X[1, :]^3 + X[1, :]^2 + X[1, :]

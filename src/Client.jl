@@ -109,7 +109,7 @@ function request_suggestions(
     log_generation!(
         options.lasr_logger; id=gen_id, mode=mode, llm_output=string(msg.content)
     )
-    candidates = parse_msg_content(String(msg.content), options)
+    candidates = parse_msg_content(string(msg.content), options)
     # A well-formed response with nothing parseable in it is still a failure for the
     # caller; record it the same way a transport error is recorded.
     isempty(candidates) &&
@@ -188,7 +188,7 @@ function parse_msg_content(msg_content::String, options::AbstractOptions)::Vecto
     # LLM responses are untrusted input, and `eval` on them is remote code execution.
     if isnothing(out)
         try
-            out = safe_literal_parse(msg_content)
+            out = safe_literal_parse(content)
         catch
             if options.verbose
                 @debug "Failed to read content as a literal: $content"
@@ -196,10 +196,10 @@ function parse_msg_content(msg_content::String, options::AbstractOptions)::Vecto
         end
     end
 
-    if out isa Dict && all(x -> isa(x, String), values(out))
-        return collect(values(out))
-    elseif out isa Vector && all(x -> isa(x, String), out)
-        return out
+    if out isa Dict
+        return String[v for v in values(out) if v isa String]
+    elseif out isa Vector
+        return String[x for x in out if x isa String]
     end
     return String[]
 end

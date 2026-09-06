@@ -34,6 +34,7 @@ struct SuggestionCache
 end
 
 function SuggestionCache(; capacity::Int=8192)
+    capacity > 0 || throw(ArgumentError("`capacity` must be positive."))
     return SuggestionCache(
         Dict{UInt64,Vector{String}}(),
         ReentrantLock(),
