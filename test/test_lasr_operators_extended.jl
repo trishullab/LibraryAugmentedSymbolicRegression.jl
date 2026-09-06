@@ -13,8 +13,10 @@ opts = Options(;
     plugins=(LaSRPlugin(; variable_names=Dict("x0" => "x0", "x1" => "x1")),),
 )
 # Rows are features in sorted variable-name order: row 1 = x0, row 2 = x1.
-X = [-2.0 -1.0 3.0;   # x0
-     0.5 4.0 -2.0]    # x1
+X = [
+    -2.0 -1.0 3.0;   # x0
+    0.5 4.0 -2.0
+]    # x1
 x0 = X[1, :]
 x1 = X[2, :]
 

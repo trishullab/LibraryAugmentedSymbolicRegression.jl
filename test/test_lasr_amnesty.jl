@@ -2,8 +2,13 @@ using Test
 using LibraryAugmentedSymbolicRegression
 using LibraryAugmentedSymbolicRegression.PluginModule: LaSRPlugin
 using SymbolicRegression:
-    SymbolicRegression, Options, Dataset, compute_complexity, HallOfFame,
-    calculate_pareto_frontier, create_expression
+    SymbolicRegression,
+    Options,
+    Dataset,
+    compute_complexity,
+    HallOfFame,
+    calculate_pareto_frontier,
+    create_expression
 using SymbolicRegression.PopMemberModule: PopMember
 using DynamicExpressions: get_contents
 using SymbolicRegression.PopulationModule: Population
@@ -50,7 +55,9 @@ using Random: Xoshiro
     # Real SR.jl beta.2 signature: (state, plugin, search_state, dataset, options, ropt,
     # returned_pop). `use_llm=false`, yet amnesty must still run because amnesty_complexity > 0.
     # search_state/ropt are untouched on this path, so `nothing` is safe.
-    SymbolicRegression.on_generation_end!(state, plugin, nothing, dataset, opts, nothing, pop)
+    SymbolicRegression.on_generation_end!(
+        state, plugin, nothing, dataset, opts, nothing, pop
+    )
 
     # Constants were optimized in place (9.0 → ~2.0): loss genuinely drops toward zero.
     @test pop.members[1].loss < loss_before
@@ -78,7 +85,9 @@ end
         default_plugins=(),
         plugins=(
             LaSRPlugin(;
-                use_llm=false, amnesty_complexity=3, variable_names=Dict(1 => "x0", 2 => "x1")
+                use_llm=false,
+                amnesty_complexity=3,
+                variable_names=Dict(1 => "x0", 2 => "x1"),
             ),
         ),
     )

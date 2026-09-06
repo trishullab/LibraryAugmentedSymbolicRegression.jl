@@ -11,7 +11,8 @@ using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_msg_content
 using LibraryAugmentedSymbolicRegression.ClientModule: safe_literal_parse
 
 options = Options(;
-    binary_operators=[+, -, *, /], unary_operators=[cos],
+    binary_operators=[+, -, *, /],
+    unary_operators=[cos],
     plugins=(LaSRPlugin(; use_llm=false),),
 )
 
@@ -36,5 +37,6 @@ end
     # The literal fallback reads the fence-extracted content, not the raw message. A fenced
     # Dict or tuple that is not valid JSON must still yield its expressions.
     @test parse_msg_content("```\nDict(\"k\" => \"x * y\")\n```", options) == ["x * y"]
-    @test parse_msg_content("```\n(\"x + y\", \"x - y\")\n```", options) == ["x + y", "x - y"]
+    @test parse_msg_content("```\n(\"x + y\", \"x - y\")\n```", options) ==
+        ["x + y", "x - y"]
 end

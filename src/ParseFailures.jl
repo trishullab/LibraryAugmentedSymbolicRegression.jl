@@ -30,7 +30,7 @@ ParseFailureStore(; cap::Int=500) = ParseFailureStore(ParseFailure[], cap, Reent
 function record_parse_failure!(s::ParseFailureStore, f::ParseFailure)
     lock(s.lock) do
         push!(s.records, f)
-        length(s.records) > s.cap && popfirst!(s.records)
+        return length(s.records) > s.cap && popfirst!(s.records)
     end
     return nothing
 end
@@ -45,7 +45,7 @@ function parse_failure_summary(s::ParseFailureStore; n::Int=10)
     return first(sort!(collect(counts); by=last, rev=true), min(n, length(counts)))
 end
 
-export ParseFailure, ParseFailureStore, record_parse_failure!,
-    parse_failures, parse_failure_summary
+export ParseFailure,
+    ParseFailureStore, record_parse_failure!, parse_failures, parse_failure_summary
 
 end # module

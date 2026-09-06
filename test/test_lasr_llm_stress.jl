@@ -6,7 +6,8 @@
 # can insert a constant child; the reader can drop valid strings next to a non-string.
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression: llm_mutate_tree, llm_crossover_trees, parse_expr, parse_msg_content
+using LibraryAugmentedSymbolicRegression:
+    llm_mutate_tree, llm_crossover_trees, parse_expr, parse_msg_content
 using LibraryAugmentedSymbolicRegression.PluginModule: LaSRPlugin, lasr_context
 using LibraryAugmentedSymbolicRegression.ClientModule: request_suggestions
 using SymbolicRegression: Options, string_tree
@@ -15,8 +16,11 @@ using PromptingTools: AIMessage, SystemMessage, UserMessage
 
 include("test_helpers.jl")  # provides mock_llm(calls, content)
 
-_refs_feature(ex) =
-    !isempty(filter_map(n -> n.degree == 0 && !n.constant, n -> 1, get_contents(ex), Int))
+function _refs_feature(ex)
+    return !isempty(
+        filter_map(n -> n.degree == 0 && !n.constant, n -> 1, get_contents(ex), Int)
+    )
+end
 
 @testset "candidate selection never misses the one usable proposal" begin
     # The batch has four constant proposals and one usable one, last. The old loop drew an
@@ -72,8 +76,12 @@ end
         binary_operators=[+, -, *],
         plugins=(
             LaSRPlugin(;
-                use_llm=true, mutate_weight=1.0, llm_generate=null_gen,
-                api_key="mock", model="mock-model", variable_names=Dict(1 => "x"),
+                use_llm=true,
+                mutate_weight=1.0,
+                llm_generate=null_gen,
+                api_key="mock",
+                model="mock-model",
+                variable_names=Dict(1 => "x"),
             ),
         ),
     )

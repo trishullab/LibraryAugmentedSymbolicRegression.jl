@@ -10,8 +10,9 @@ using SymbolicRegression: init_plugin_state, fork_plugin_state
 # for both and keep this a pure, server-free unit test.
 @testset "parse_failure_sink: use-if-present" begin
     sink = ParseFailureStore()
-    plugin = LaSRPlugin(; use_llm=false, variable_names=Dict(1 => "x0"),
-                        parse_failure_sink=sink)
+    plugin = LaSRPlugin(;
+        use_llm=false, variable_names=Dict(1 => "x0"), parse_failure_sink=sink
+    )
     state = init_plugin_state(plugin, nothing, nothing)
     @test state isa LaSRPluginState
     @test state.parse_failures === sink                      # head state uses the sink

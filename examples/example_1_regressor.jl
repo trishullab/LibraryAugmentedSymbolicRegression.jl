@@ -15,7 +15,7 @@ import MLJ: machine, fit!, predict, report
 # LLM connection settings are read from a local `.env` (see `.env.example`) so the model
 # and endpoint are never hardcoded. Discover what's deployed locally with `model-blame`.
 function load_dotenv!(path=joinpath(@__DIR__, "..", ".env"))
-    isfile(path) || return
+    isfile(path) || return nothing
     for raw in eachline(path)
         line = strip(raw)
         (isempty(line) || startswith(line, "#")) && continue

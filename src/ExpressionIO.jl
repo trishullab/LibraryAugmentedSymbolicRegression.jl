@@ -14,13 +14,17 @@ using ..ParseFailuresModule: ParseFailure, record_parse_failure!
 # bare `Options` (e.g. a parser unit test with no plugin state) -- skip recording rather
 # than error, since the fallback itself must always succeed regardless of observability.
 function _record_parse_failure!(
-    ctx::LaSRContext, expr_str::AbstractString, expr_str_norm::AbstractString,
-    stage::Symbol, reason::AbstractString,
+    ctx::LaSRContext,
+    expr_str::AbstractString,
+    expr_str_norm::AbstractString,
+    stage::Symbol,
+    reason::AbstractString,
 )
     state = getfield(ctx, :state)
     state isa LaSRPluginState || return nothing
     record_parse_failure!(
-        state.parse_failures, ParseFailure(String(expr_str), String(expr_str_norm), stage, String(reason))
+        state.parse_failures,
+        ParseFailure(String(expr_str), String(expr_str_norm), stage, String(reason)),
     )
     return nothing
 end
@@ -31,7 +35,9 @@ end
     @warn "LaSR parse fallback ($stage): returning constant 1 for: $expr_str"
     @warn "Error: $e"
     _record_parse_failure!(options, expr_str, expr_str_norm, stage, string(e))
-    return Expression(node_type(; val=convert(T, 1.0)); options.operators, options.variable_names)
+    return Expression(
+        node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
+    )
 end
 
 """
@@ -85,7 +91,9 @@ AbstractExpressionNode.
         # substituted; rewrite them into equivalent registered forms first.
         ast = apply_expr_rules(rules, ast)
     catch e
-        return _parse_fallback(options, expr_str, expr_str_norm, :expr_stage, e, node_type, T)
+        return _parse_fallback(
+            options, expr_str, expr_str_norm, :expr_stage, e, node_type, T
+        )
     end
 
     try
@@ -97,7 +105,9 @@ AbstractExpressionNode.
             variable_names=varnames,
         )::AbstractExpression{T}
     catch e
-        return _parse_fallback(options, expr_str, expr_str_norm, :tree_parse, e, node_type, T)
+        return _parse_fallback(
+            options, expr_str, expr_str_norm, :tree_parse, e, node_type, T
+        )
     end
 end
 

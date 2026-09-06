@@ -44,6 +44,7 @@ using LibraryAugmentedSymbolicRegression.IdeaStoreModule:
     @testset "evolution_candidates are the ideas past the window" begin
         s = WindowedIdeaStore(; window=2, seed=["a", "b", "c", "d"])
         @test evolution_candidates(s) == ["c", "d"]
-        @test evolution_candidates(WindowedIdeaStore(; window=5, seed=["a", "b"])) == String[]
+        @test evolution_candidates(WindowedIdeaStore(; window=5, seed=["a", "b"])) ==
+            String[]
     end
 end

@@ -175,10 +175,7 @@ end
 fork_plugin_state(state::LaSRPluginState, ::LaSRPlugin, dataset) = _copy_plugin_state(state)
 
 function refresh_worker_plugin_state(
-    worker_state::LaSRPluginState,
-    head_state::LaSRPluginState,
-    ::LaSRPlugin,
-    dataset,
+    worker_state::LaSRPluginState, head_state::LaSRPluginState, ::LaSRPlugin, dataset
 )
     return _copy_plugin_state(head_state)
 end
@@ -207,7 +204,7 @@ function on_generation_end!(
         end
         if improved && !isnothing(search_state)
             output = findfirst(search_state.plugin_states) do states
-                any(candidate -> candidate === state, states)
+                return any(candidate -> candidate === state, states)
             end
             isnothing(output) || update_hall_of_fame!(
                 search_state.halls_of_fame[output], returned_pop.members, options
@@ -226,23 +223,22 @@ function on_generation_end!(
 
     state.generations % options.populations == 0 || return nothing
     output = findfirst(search_state.plugin_states) do states
-        any(candidate -> candidate === state, states)
+        return any(candidate -> candidate === state, states)
     end
     isnothing(output) && return nothing
     dominating = calculate_pareto_frontier(search_state.halls_of_fame[output])
     if !isempty(dominating)
         filter!(member -> member.loss > last(dominating).loss, state.worst_members)
     end
-    generate_concepts(
-        dominating, state.worst_members, lasr_context(options, state)
-    )
+    generate_concepts(dominating, state.worst_members, lasr_context(options, state))
     empty!(state.worst_members)
     return nothing
 end
 
-_is_constant(expression) = let tree = get_tree(expression)
-    tree.degree == 0 && tree.constant
-end
+_is_constant(expression) =
+    let tree = get_tree(expression)
+        tree.degree == 0 && tree.constant
+    end
 
 function crossover(
     member1::P,
@@ -309,15 +305,15 @@ end
 # `SubtreeCrossover` carries the remaining weight.
 function plugin_crossovers(plugin::LaSRPlugin)
     plugin.use_llm || return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
-    plugin.crossover_probability > 0 || return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
+    plugin.crossover_probability > 0 ||
+        return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
     # Make `crossover_probability` a true conditional probability. SR merges crossovers by
     # type, so pinning SubtreeCrossover to (1 - p) overrides its default weight of 1.0.
     # Without this, LLM crossover competes p against a fixed 1.0 and can never exceed 50%
     # (p = 1.0 gave only 0.5), contradicting the parameter's [0, 1] probability contract.
     p = plugin.crossover_probability
     return Pair{SymbolicRegression.AbstractCrossover,Float64}[
-        LLMCrossover() => p,
-        SymbolicRegression.SubtreeCrossover() => (1 - p),
+        LLMCrossover() => p, SymbolicRegression.SubtreeCrossover() => (1 - p)
     ]
 end
 

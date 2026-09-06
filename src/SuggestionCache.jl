@@ -92,7 +92,7 @@ function store_suggestions!(cache::SuggestionCache, key::UInt64, suggestions)
             cache.stats[:evicted] += 1
         end
         cache.pools[key] = collect(String, suggestions)
-        cache.stats[:stored] += length(suggestions)
+        return cache.stats[:stored] += length(suggestions)
     end
     return nothing
 end

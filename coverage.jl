@@ -6,13 +6,12 @@ LCOV.writefile("lcov.info", coverage)
 
 # process '*.info' files
 coverage = merge_coverage_counts(
-    coverage,
-    filter!(
+    coverage, filter!(
         let prefix = joinpath(pwd(), "src", "")
             c -> startswith(c.filename, prefix)
         end,
         LCOV.readfolder("test"),
-    ),
+    )
 )
 # Get total coverage for all Julia files
 covered_lines, total_lines = get_summary(coverage)

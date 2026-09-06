@@ -140,14 +140,15 @@ end
     # The intended entry point: a LaSRPlugin passed to Options contributes its weighted
     # mutations through `plugin_mutations`, which SR merges as defaults.
     opts = Options(;
-        binary_operators=[+, *], unary_operators=[cos], default_plugins=(),
+        binary_operators=[+, *],
+        unary_operators=[cos],
+        default_plugins=(),
         plugins=(LaSRPlugin(; use_llm=true, generate_weight=1.25),),
     )
     @test any(p -> first(p) isa LLMGenerateMutation && last(p) == 1.25, opts.mutations)
     # Opt-in: default generate_weight=0.0 means the operator is not contributed at all.
     off = Options(;
-        binary_operators=[+, *], default_plugins=(),
-        plugins=(LaSRPlugin(; use_llm=true),),
+        binary_operators=[+, *], default_plugins=(), plugins=(LaSRPlugin(; use_llm=true),)
     )
     @test all(p -> !(first(p) isa LLMGenerateMutation), off.mutations)
 end

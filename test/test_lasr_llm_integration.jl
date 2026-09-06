@@ -9,12 +9,18 @@ using Test
 using LibraryAugmentedSymbolicRegression
 using LibraryAugmentedSymbolicRegression: LaSRPlugin, LLMCrossover, parse_failures
 using LibraryAugmentedSymbolicRegression.ParseFailuresModule: ParseFailureStore
-using SymbolicRegression: SymbolicRegression, Options, equation_search, calculate_pareto_frontier
+using SymbolicRegression:
+    SymbolicRegression, Options, equation_search, calculate_pareto_frontier
 using DynamicExpressions: get_contents, filter_map
 
 # True when the expression uses at least one input feature. It is not a bare constant.
-_references_feature(ex) =
-    !isempty(filter_map(n -> n.degree == 0 && !n.constant, n -> Int(n.feature), get_contents(ex), Int))
+function _references_feature(ex)
+    return !isempty(
+        filter_map(
+            n -> n.degree == 0 && !n.constant, n -> Int(n.feature), get_contents(ex), Int
+        ),
+    )
+end
 
 include("mock_llm_server.jl")
 using .MockLLMServer: MockLLMServer, with_server, count_for, total_calls
@@ -125,9 +131,8 @@ end
         states = map(p -> init_plugin_state(p, options, dataset), options.plugins)
 
         # LaSR's method must win dispatch over SR's built-in subtree crossover.
-        @test which(
-            crossover, (typeof(p1), typeof(p2), LLMCrossover, typeof(options))
-        ).module === LibraryAugmentedSymbolicRegression.SRInterfaceModule
+        @test which(crossover, (typeof(p1), typeof(p2), LLMCrossover, typeof(options))).module ===
+            LibraryAugmentedSymbolicRegression.SRInterfaceModule
 
         before = count_for("crossover")
         result = crossover(

@@ -33,8 +33,7 @@ using JET
 
 @info "Running tests..."
 JET.test_package(
-    LibraryAugmentedSymbolicRegression;
-    target_modules=(LibraryAugmentedSymbolicRegression,),
+    LibraryAugmentedSymbolicRegression; target_modules=(LibraryAugmentedSymbolicRegression,)
 )
 @info "Done!"
 

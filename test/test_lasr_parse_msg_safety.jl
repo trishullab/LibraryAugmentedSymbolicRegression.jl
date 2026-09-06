@@ -8,7 +8,9 @@ using SymbolicRegression: Options
 using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_msg_content
 
 options = Options(;
-    binary_operators=[+, -, *, /], unary_operators=[cos], plugins=(LaSRPlugin(; use_llm=false),)
+    binary_operators=[+, -, *, /],
+    unary_operators=[cos],
+    plugins=(LaSRPlugin(; use_llm=false),),
 )
 
 @testset "well-formed responses still parse" begin

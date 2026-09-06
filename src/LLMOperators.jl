@@ -36,9 +36,11 @@ _is_one_constant(expression) =
 end
 
 function _assumptions(options; query=nothing)
-    a = options.use_concepts ?
-        retrieve_ideas(options.idea_store, options.num_pareto_context; query=query) :
+    a = if options.use_concepts
+        retrieve_ideas(options.idea_store, options.num_pareto_context; query=query)
+    else
         String[]
+    end
     options.context == "" || pushfirst!(a, options.context)
     return a
 end
@@ -112,7 +114,10 @@ end
     chosen === nothing &&
         return gen_random_tree_fixed_size(node_count, options, nfeatures, T)
     log_generation!(
-        options.lasr_logger; id=gen_id, mode="gen_random", chosen=render_expr(chosen, options)
+        options.lasr_logger;
+        id=gen_id,
+        mode="gen_random",
+        chosen=render_expr(chosen, options),
     )
     return chosen
 end
@@ -266,12 +271,10 @@ end
 
 """LLM Crossover between two expressions"""
 function llm_crossover_trees(
-    tree1::NT1,
-    tree2::NT2,
-    options::AbstractOptions,
-)::Tuple{NT1,NT2} where {
-    T<:DATA_TYPE,NT1<:AbstractExpressionNode{T},NT2<:AbstractExpressionNode{T}
-}
+    tree1::NT1, tree2::NT2, options::AbstractOptions
+)::Tuple{
+    NT1,NT2
+} where {T<:DATA_TYPE,NT1<:AbstractExpressionNode{T},NT2<:AbstractExpressionNode{T}}
     options = lasr_context(options)
     expr1 = render_expr(tree1, options)
     expr2 = render_expr(tree2, options)

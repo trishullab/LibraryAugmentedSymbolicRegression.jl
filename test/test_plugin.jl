@@ -43,7 +43,9 @@ end
     )
 
     @test options.plugins === (plugin,)
-    @test any(pair -> pair.first isa LLMMutateMutation && pair.second == 100.0, options.mutations)
+    @test any(
+        pair -> pair.first isa LLMMutateMutation && pair.second == 100.0, options.mutations
+    )
     @test any(
         pair -> pair.first isa LLMRandomizeMutation && pair.second == 200.0,
         options.mutations,
@@ -57,7 +59,8 @@ end
         mutations=(LLMMutateMutation() => 3.0,),
     )
     @test count(pair -> pair.first isa LLMMutateMutation, overridden.mutations) == 1
-    @test only(filter(pair -> pair.first isa LLMMutateMutation, overridden.mutations)).second == 3.0
+    @test only(filter(pair -> pair.first isa LLMMutateMutation, overridden.mutations)).second ==
+        3.0
     @test Options(; binary_operators=[+], default_plugins=(), plugins=(LaSRPlugin(),)) isa
         Options
 
@@ -75,7 +78,9 @@ end
     # for "expressions". So this word shows the concept path ran, not just some LLM call.
     concept_aware = function (_schema, conversation; kwargs...)
         calls[] += 1
-        text = lowercase(join((string(getproperty(m, :content)) for m in conversation), "\n"))
+        text = lowercase(
+            join((string(getproperty(m, :content)) for m in conversation), "\n")
+        )
         occursin("hypothes", text) && (saw_concept[] = true)
         return (; content="[\"additive relationship\"]")
     end
@@ -86,7 +91,9 @@ end
         use_concept_evolution=true,
         num_concept_crossover=1,
         # Seed past the window so the evolution pool is non-empty and the refined-concept path runs.
-        idea_store=WindowedIdeaStore(; window=2, seed=["seed a", "seed b", "seed c", "seed d"]),
+        idea_store=WindowedIdeaStore(;
+            window=2, seed=["seed a", "seed b", "seed c", "seed d"]
+        ),
         prompts_dir=joinpath(pkgdir(LibraryAugmentedSymbolicRegression), "prompts") * "/",
     )
     options = Options(;

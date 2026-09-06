@@ -27,18 +27,15 @@ const CONCEPTS = [
 const CALL_COUNTS = Dict{String,Int}()
 const COUNTS_LOCK = ReentrantLock()
 
-count_for(mode) =
-    lock(COUNTS_LOCK) do
-        get(CALL_COUNTS, mode, 0)
-    end
-total_calls() =
-    lock(COUNTS_LOCK) do
-        sum(values(CALL_COUNTS); init=0)
-    end
-reset_counts!() =
-    lock(COUNTS_LOCK) do
-        empty!(CALL_COUNTS)
-    end
+count_for(mode) = lock(COUNTS_LOCK) do
+    return get(CALL_COUNTS, mode, 0)
+end
+total_calls() = lock(COUNTS_LOCK) do
+    return sum(values(CALL_COUNTS); init=0)
+end
+reset_counts!() = lock(COUNTS_LOCK) do
+    return empty!(CALL_COUNTS)
+end
 
 """Identify which LaSR operation a prompt came from, via its template's markers."""
 function classify(prompt::AbstractString)
@@ -73,7 +70,7 @@ function handle(req::HTTP.Request)
     prompt = join([get(m, :content, "") for m in get(body, :messages, [])], "\n")
     mode = classify(prompt)
     lock(COUNTS_LOCK) do
-        CALL_COUNTS[mode] = get(CALL_COUNTS, mode, 0) + 1
+        return CALL_COUNTS[mode] = get(CALL_COUNTS, mode, 0) + 1
     end
 
     text = payload_for(mode, 5)

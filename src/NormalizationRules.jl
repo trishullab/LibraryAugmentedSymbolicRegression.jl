@@ -8,22 +8,34 @@ struct NormalizationRule
     apply::Function          # (::AbstractString)->AbstractString  |  (ast)->ast
 end
 # Convenience: a string-stage regex/string rewrite.
-NormalizationRule(p::Pair; name::AbstractString="user") =
-    NormalizationRule(String(name), :string, s -> replace(s, first(p) => last(p)))
+function NormalizationRule(p::Pair; name::AbstractString="user")
+    return NormalizationRule(String(name), :string, s -> replace(s, first(p) => last(p)))
+end
 
-@unstable apply_string_rules(rules, s::AbstractString) =
-    foldl((acc, r) -> r.apply(acc), Iterators.filter(r -> r.stage === :string, rules); init=String(s))
-@unstable apply_expr_rules(rules, ast) =
-    foldl((acc, r) -> r.apply(acc), Iterators.filter(r -> r.stage === :expr, rules); init=ast)
+@unstable apply_string_rules(rules, s::AbstractString) = foldl(
+    (acc, r) -> r.apply(acc),
+    Iterators.filter(r -> r.stage === :string, rules);
+    init=String(s),
+)
+@unstable apply_expr_rules(rules, ast) = foldl(
+    (acc, r) -> r.apply(acc), Iterators.filter(r -> r.stage === :expr, rules); init=ast
+)
 
 # Scientist-registerable extension point: append user-supplied rules (e.g. from
 # `LaSRPlugin(; parse_rules=[...])`) after the built-in defaults, order preserved.
 resolve_rules(defaults, user) = vcat(defaults, user)
 
 # ---- LaSR-specific string rules (ported from the former Parse.jl `_normalize_expr_string`) ----
-rule_whitespace()   = NormalizationRule("whitespace",   :string, s -> replace(s, r"\s+" => " "))
-rule_c_placeholder()= NormalizationRule("c_placeholder",:string, s -> replace(replace(s,
-                          r"(?<!\w)\(C\)(?!\w)" => "(1.0)"), r"(?<!\w)C(?!\w)" => "1.0"))
+rule_whitespace() = NormalizationRule("whitespace", :string, s -> replace(s, r"\s+" => " "))
+function rule_c_placeholder()
+    return NormalizationRule(
+        "c_placeholder",
+        :string,
+        s -> replace(
+            replace(s, r"(?<!\w)\(C\)(?!\w)" => "(1.0)"), r"(?<!\w)C(?!\w)" => "1.0"
+        ),
+    )
+end
 # Indexed constant placeholders `C1`, `C2`, ... (and their lowercase forms): LLMs emit
 # multi-coefficient expressions like `C1*x0 + C2*x1` where each `Ck` denotes a distinct
 # constant to fit. `c_placeholder` only matches the *bare* `C` (its `(?!\w)` lookahead
@@ -33,17 +45,32 @@ rule_c_placeholder()= NormalizationRule("c_placeholder",:string, s -> replace(re
 # constant node (the same target as the bare-`C` placeholder). `[Cc]` covers both casings
 # regardless of order relative to `case_fold`; the leading `(?<![A-Za-z0-9_])` guard keeps
 # it from biting inside identifiers, and no SR operator name is `c`+digits.
-rule_indexed_const()= NormalizationRule("indexed_const",:string,
-                          s -> replace(s, r"(?<![A-Za-z0-9_])[Cc]\d+(?![A-Za-z0-9_])" => "1.0"))
-rule_pipe_abs()     = NormalizationRule("pipe_abs",     :string, s -> replace(s, r"\|([^|]+)\|" => s"abs(\1)"))
+function rule_indexed_const()
+    return NormalizationRule(
+        "indexed_const",
+        :string,
+        s -> replace(s, r"(?<![A-Za-z0-9_])[Cc]\d+(?![A-Za-z0-9_])" => "1.0"),
+    )
+end
+function rule_pipe_abs()
+    return NormalizationRule(
+        "pipe_abs", :string, s -> replace(s, r"\|([^|]+)\|" => s"abs(\1)")
+    )
+end
 # `ln` is the near-universal LLM/math notation for natural log; SR's operator is `log`. Without
 # this, `ln(x)` reaches `parse_expression` as an unknown function and the whole proposal is
 # dropped (observed across every LLM-SRBench domain). Case-insensitive, word-bounded so it never
 # bites inside another identifier (e.g. a variable `lnk`). An operator-dialect rule (like pow_star).
-rule_ln_log()       = NormalizationRule("ln_log",       :string, s -> replace(s, r"\b[Ll][Nn]\b" => "log"))
-rule_subscript_var()= NormalizationRule("subscript_var",:string, s -> replace(s, r"([A-Za-z])_(\d+)" => s"\1\2"))
-rule_case_fold()    = NormalizationRule("case_fold",    :string, s -> lowercase(s))
-rule_pow_star()     = NormalizationRule("pow_star",     :string, s -> replace(s, r"\*\*" => "^"))
+function rule_ln_log()
+    return NormalizationRule("ln_log", :string, s -> replace(s, r"\b[Ll][Nn]\b" => "log"))
+end
+function rule_subscript_var()
+    return NormalizationRule(
+        "subscript_var", :string, s -> replace(s, r"([A-Za-z])_(\d+)" => s"\1\2")
+    )
+end
+rule_case_fold() = NormalizationRule("case_fold", :string, s -> lowercase(s))
+rule_pow_star() = NormalizationRule("pow_star", :string, s -> replace(s, r"\*\*" => "^"))
 
 # ---- LaSR-specific expr rules (ported from `_rewrite_llm_ops` + `_rhs_of_assignment`) ----
 _strip_lhs(ast) = ast
@@ -68,7 +95,6 @@ _unary_and_pow(ast) = ast
 end
 # One pass handles unary `+`/`-` and `pow(a, b)` -> `a ^ b` together.
 rule_unary_sign() = NormalizationRule("unary_sign", :expr, _unary_and_pow)
-
 
 # ---- Inherited SymPy rules (implicit multiplication / application / function exponentiation) ----
 # Julia's `Meta.parse` already handles *numeric* juxtaposition (`2x`, `2sin(x)`), so these
@@ -106,10 +132,11 @@ function _implicit_multiplication(s::AbstractString)
     while i <= n
         push!(out, toks[i])
         if toks[i] == " " && i > 1 && i < n
-            left = toks[i-1]
-            right = toks[i+1]
+            left = toks[i - 1]
+            right = toks[i + 1]
             left_val = _is_name_token(left) || occursin(r"^\d+\.?\d*$", left) || left == ")"
-            right_val = _is_name_token(right) || occursin(r"^\d+\.?\d*$", right) || right == "("
+            right_val =
+                _is_name_token(right) || occursin(r"^\d+\.?\d*$", right) || right == "("
             if left_val && right_val
                 pop!(out)      # drop the space
                 push!(out, "*")
@@ -119,7 +146,9 @@ function _implicit_multiplication(s::AbstractString)
     end
     return join(out)
 end
-rule_implicit_multiplication() = NormalizationRule("implicit_multiplication", :string, _implicit_multiplication)
+function rule_implicit_multiplication()
+    return NormalizationRule("implicit_multiplication", :string, _implicit_multiplication)
+end
 
 function _implicit_application(s::AbstractString, ops::Set{String}=_DEFAULT_UNARY_OPS)
     toks = _tokenize(s)
@@ -152,8 +181,11 @@ function _implicit_application(s::AbstractString, ops::Set{String}=_DEFAULT_UNAR
     end
     return join(out)
 end
-rule_implicit_application(ops::Set{String}=_DEFAULT_UNARY_OPS) =
-    NormalizationRule("implicit_application", :string, s -> _implicit_application(s, ops))
+function rule_implicit_application(ops::Set{String}=_DEFAULT_UNARY_OPS)
+    return NormalizationRule(
+        "implicit_application", :string, s -> _implicit_application(s, ops)
+    )
+end
 
 # Handles the common `f^n(x)` / `f^n x` form only (`cos^2(t)` -> `cos(t)^2`).
 # Exotic forms (nested exponents, multi-arg functions, `f^n` with no operand) are out of
@@ -163,12 +195,14 @@ rule_implicit_application(ops::Set{String}=_DEFAULT_UNARY_OPS) =
 # `([A-Za-z]+)` matched any identifier, so a variable like `t` in `t^2 + v` was rewritten to
 # `t(+)^2 v` (grabbing `+` as `t`'s "argument") -- catastrophic once variables are single-char
 # domain symbols. Longest-first alternation + word boundary avoid partial-name matches.
-const _FUNC_EXP_RE = let ops = join(sort(collect(_DEFAULT_UNARY_OPS); by=length, rev=true), "|")
-    Regex("\\b(" * ops * ")\\^(\\d+)\\s*\\(?([^)\\s]+)\\)?")
-end
+const _FUNC_EXP_RE =
+    let ops = join(sort(collect(_DEFAULT_UNARY_OPS); by=length, rev=true), "|")
+        Regex("\\b(" * ops * ")\\^(\\d+)\\s*\\(?([^)\\s]+)\\)?")
+    end
 _function_exponentiation(s::AbstractString) = replace(s, _FUNC_EXP_RE => s"\1(\3)^\2")
-rule_function_exponentiation() = NormalizationRule("function_exponentiation", :string, _function_exponentiation)
-
+function rule_function_exponentiation()
+    return NormalizationRule("function_exponentiation", :string, _function_exponentiation)
+end
 
 # ---- Combined default pipeline used by `parse_expr` ----
 # String rules run in this exact order (order matters):
@@ -189,16 +223,28 @@ rule_function_exponentiation() = NormalizationRule("function_exponentiation", :s
 # (e.g. `:pow`, `:sin`) are lowercase by the time `Meta.parse` runs, regardless of how an
 # LLM (or the test fuzzer) capitalized them.
 const DEFAULT_RULES = NormalizationRule[
-    rule_whitespace(), rule_subscript_var(), rule_c_placeholder(), rule_indexed_const(),
+    rule_whitespace(),
+    rule_subscript_var(),
+    rule_c_placeholder(),
+    rule_indexed_const(),
     rule_pipe_abs(),
-    rule_case_fold(), rule_ln_log(),
-    rule_implicit_multiplication(), rule_implicit_application(), rule_function_exponentiation(),
+    rule_case_fold(),
+    rule_ln_log(),
+    rule_implicit_multiplication(),
+    rule_implicit_application(),
+    rule_function_exponentiation(),
     rule_pow_star(),
-    rule_strip_lhs(), rule_unary_sign(),
+    rule_strip_lhs(),
+    rule_unary_sign(),
 ]
 
-export NormalizationRule, apply_string_rules, apply_expr_rules,
-    rule_implicit_multiplication, rule_implicit_application, rule_function_exponentiation,
-    DEFAULT_RULES, resolve_rules
+export NormalizationRule,
+    apply_string_rules,
+    apply_expr_rules,
+    rule_implicit_multiplication,
+    rule_implicit_application,
+    rule_function_exponentiation,
+    DEFAULT_RULES,
+    resolve_rules
 
 end # module

@@ -5,7 +5,8 @@
 # returns the distilled idea. It was the darkest module (66.7%): a fresh store has no
 # overflow, so concept_evolution stopped at its first guard and its body never ran.
 using Test
-using LibraryAugmentedSymbolicRegression.ConceptsModule: concept_evolution, generate_concepts
+using LibraryAugmentedSymbolicRegression.ConceptsModule:
+    concept_evolution, generate_concepts
 using LibraryAugmentedSymbolicRegression.IdeaStoreModule: WindowedIdeaStore
 using LibraryAugmentedSymbolicRegression.PluginModule: LaSRPlugin
 using SymbolicRegression: Options

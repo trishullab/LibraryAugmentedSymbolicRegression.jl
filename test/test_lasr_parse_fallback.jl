@@ -13,7 +13,8 @@ using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_expr
 using SymbolicRegression: Options, string_tree
 
 opts = Options(;
-    binary_operators=[+, -, *, /], unary_operators=[cos],
+    binary_operators=[+, -, *, /],
+    unary_operators=[cos],
     plugins=(LaSRPlugin(; use_llm=false, variable_names=Dict("x0" => "x0", "x1" => "x1")),),
 )
 is_const1(ex) = string_tree(ex, opts) == "1.0"

@@ -1,8 +1,14 @@
 using Test
 using LibraryAugmentedSymbolicRegression.NormalizationRulesModule:
-    NormalizationRule, apply_string_rules, apply_expr_rules,
-    rule_pipe_abs, rule_subscript_var, rule_pow_star, rule_c_placeholder,
-    rule_unary_sign, rule_strip_lhs
+    NormalizationRule,
+    apply_string_rules,
+    apply_expr_rules,
+    rule_pipe_abs,
+    rule_subscript_var,
+    rule_pow_star,
+    rule_c_placeholder,
+    rule_unary_sign,
+    rule_strip_lhs
 
 @testset "NormalizationRule + Pair convenience" begin
     r = NormalizationRule(r"x_(\d+)" => s"x\1")
@@ -28,20 +34,37 @@ end
 using LibraryAugmentedSymbolicRegression.NormalizationRulesModule:
     rule_implicit_multiplication, rule_implicit_application, rule_function_exponentiation
 @testset "inherited SymPy rules" begin
-    ss = [rule_implicit_multiplication(), rule_implicit_application(), rule_function_exponentiation()]
-    @test apply_string_rules(ss, "3 x y") == "3*x*y" || occursin("3*x*y", replace(apply_string_rules(ss,"3 x y')")," "=>""))
-    @test occursin("sin(x)", apply_string_rules([rule_implicit_multiplication(), rule_implicit_application()], "sin x"))
-    @test occursin("cos(t)^2", replace(apply_string_rules([rule_function_exponentiation()], "cos^2(t)"), " " => ""))
+    ss = [
+        rule_implicit_multiplication(),
+        rule_implicit_application(),
+        rule_function_exponentiation(),
+    ]
+    @test apply_string_rules(ss, "3 x y") == "3*x*y" ||
+        occursin("3*x*y", replace(apply_string_rules(ss, "3 x y')"), " "=>""))
+    @test occursin(
+        "sin(x)",
+        apply_string_rules(
+            [rule_implicit_multiplication(), rule_implicit_application()], "sin x"
+        ),
+    )
+    @test occursin(
+        "cos(t)^2",
+        replace(
+            apply_string_rules([rule_function_exponentiation()], "cos^2(t)"), " " => ""
+        ),
+    )
 end
 
 using LibraryAugmentedSymbolicRegression: LaSRPlugin
-using LibraryAugmentedSymbolicRegression.NormalizationRulesModule: resolve_rules, DEFAULT_RULES
+using LibraryAugmentedSymbolicRegression.NormalizationRulesModule:
+    resolve_rules, DEFAULT_RULES
 @testset "extension API" begin
     p = LaSRPlugin(; use_llm=false, parse_rules=[NormalizationRule(r"θ" => "theta")])
     @test length(p.parse_rules) == 1
     resolved = resolve_rules(DEFAULT_RULES, p.parse_rules)
     @test length(resolved) == length(DEFAULT_RULES) + 1
-    @test apply_string_rules(resolved, "sin(θ)") == apply_string_rules(resolved, "sin(theta)")
+    @test apply_string_rules(resolved, "sin(θ)") ==
+        apply_string_rules(resolved, "sin(theta)")
 end
 
 using SymbolicRegression: Options, string_tree
@@ -91,10 +114,9 @@ end
     options = Options(;
         binary_operators=[+, -, *, /],
         unary_operators=[sin, cos],
-        plugins=(LaSRPlugin(;
-            use_llm=false,
-            variable_names=Dict("x0" => "x0", "x1" => "x1"),
-        ),),
+        plugins=(
+            LaSRPlugin(; use_llm=false, variable_names=Dict("x0" => "x0", "x1" => "x1")),
+        ),
     )
     ex = parse_expr(Float64, "C1*x0 + C2*x1", options)
     rendered = string_tree(ex, options)
@@ -145,7 +167,11 @@ end
 end
 
 using LibraryAugmentedSymbolicRegression.ParseFailuresModule:
-    ParseFailure, ParseFailureStore, record_parse_failure!, parse_failures, parse_failure_summary
+    ParseFailure,
+    ParseFailureStore,
+    record_parse_failure!,
+    parse_failures,
+    parse_failure_summary
 @testset "failure store" begin
     store = ParseFailureStore(; cap=3)
     record_parse_failure!(store, ParseFailure("|x", "abs(x", :meta_parse, "unbalanced"))
@@ -153,6 +179,8 @@ using LibraryAugmentedSymbolicRegression.ParseFailuresModule:
     @test length(parse_failures(store)) == 2
     top = parse_failure_summary(store; n=1)
     @test top[1][1] == "|x" && top[1][2] == 2                       # (raw, count)
-    for _ in 1:5; record_parse_failure!(store, ParseFailure("z","z",:tree_parse,"x")); end
+    for _ in 1:5
+        record_parse_failure!(store, ParseFailure("z", "z", :tree_parse, "x"))
+    end
     @test length(parse_failures(store)) <= 3                        # bounded
 end

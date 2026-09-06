@@ -43,7 +43,8 @@ Random.seed!(0)
         for _ in 1:3000, idea in retrieve_ideas(s, 1; query="x0 * cos(x1)")
             cnt[idea] = get(cnt, idea, 0) + 1
         end
-        @test get(cnt, "oscillatory motion with cos", 0) > get(cnt, "exponential decay term", 0)
+        @test get(cnt, "oscillatory motion with cos", 0) >
+            get(cnt, "exponential decay term", 0)
     end
 
     @testset "refined ideas enter with a higher prior" begin
