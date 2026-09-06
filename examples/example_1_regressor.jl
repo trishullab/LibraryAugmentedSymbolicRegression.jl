@@ -1,21 +1,34 @@
 # Example 1: Using LaSRPlugin with SRRegressor
-# Run: `julia --project=. examples/example_1_regressor.jl`
+# Run (after `julia --project=examples -e 'using Pkg; Pkg.instantiate()'`):
+#   julia --project=examples examples/example_1_regressor.jl
 # 
 # Brief: LaSR is a plugin within SymbolicRegression.jl that allows you to incorporate domain knowledge into the symbolic regression search process, using a language model to guide the search. This example demonstrates how to use LaSRPlugin with SRRegressor to find a symbolic expression that fits a given dataset.
 
 # Imports:
-#  - TensorBoardLogger: Provides logging capabilities to visualize the training process in TensorBoard.
 #  - SymbolicRegression: The main package for performing symbolic regression.
-# - LibraryAugmentedSymbolicRegression: Contains the LaSRPlugin for integrating language model guidance into the symbolic regression process.
-# - MLJ: A machine learning framework in Julia that provides a consistent interface for training and evaluating models.
-using TensorBoardLogger
+#  - LibraryAugmentedSymbolicRegression: Contains the LaSRPlugin for integrating language model guidance into the symbolic regression process.
+#  - MLJ: A machine learning framework in Julia that provides a consistent interface for training and evaluating models.
 using SymbolicRegression
 using LibraryAugmentedSymbolicRegression: LaSRPlugin
 import MLJ: machine, fit!, predict, report
 
-# Instantiate the logger separately on the command line with
-# `tensorboard --logdir logs/lasr_runs`
-logger = SRLogger(TBLogger("logs/lasr_runs"); log_interval=1)
+# LLM connection settings are read from a local `.env` (see `.env.example`) so the model
+# and endpoint are never hardcoded. Discover what's deployed locally with `model-blame`.
+function load_dotenv!(path=joinpath(@__DIR__, "..", ".env"))
+    isfile(path) || return
+    for raw in eachline(path)
+        line = strip(raw)
+        (isempty(line) || startswith(line, "#")) && continue
+        line = replace(line, r"^export\s+" => "")
+        i = findfirst(==('='), line)
+        i === nothing && continue
+        get!(ENV, strip(line[1:(i - 1)]), strip(line[(i + 1):end], ['"', '\'', ' ', '\t']))
+    end
+end
+load_dotenv!()
+const LLM_URL = get(ENV, "LASR_LLM_URL", "http://127.0.0.1:8001/v1")
+const LLM_MODEL = get(ENV, "LASR_LLM_MODEL", "gemma-4-12b")
+const LLM_API_KEY = get(ENV, "VLLM_API_KEY", "local")
 
 # We will try to recover the function `y = 2 * cos(theta) + offset^2 - 2` from noisy data. The input data is generated randomly, and the output is computed using the known function.
 X = randn(Float32, 2, 100)
@@ -28,8 +41,16 @@ p = 0.001
 model = SRRegressor(;
     plugins=(
         LaSRPlugin(;
-            model="meta-llama/Meta-Llama-3.1-8B-Instruct",
-            api_kwargs=Dict("url" => "http://localhost:11440/v1"),
+            model=LLM_MODEL,
+            api_key=LLM_API_KEY,
+            api_kwargs=Dict(
+                "url" => LLM_URL,
+                "max_tokens" => 4096,
+                # Reasoning models (gemma-4 / Qwen, served with a --reasoning-parser) return
+                # EMPTY content unless thinking is disabled -- without this every LLM
+                # suggestion comes back empty and falls back to a constant. See `model-blame`.
+                "chat_template_kwargs" => Dict("enable_thinking" => false),
+            ),
             verbose=true,
             use_concepts=true,
             use_concept_evolution=true,
@@ -42,7 +63,6 @@ model = SRRegressor(;
         ),
     ),
     niterations=40,
-    logger=logger,
     binary_operators=[+, -, *, /, ^],
     unary_operators=[cos],
     populations=20,

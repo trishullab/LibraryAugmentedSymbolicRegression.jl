@@ -1,5 +1,6 @@
 # Example 2: adding a new operator to LaSR's search vocabulary.
-# Run: `julia --project=. examples/example_2_operator_extension.jl`
+# Run (after `julia --project=examples -e 'using Pkg; Pkg.instantiate()'`):
+#   julia --project=examples examples/example_2_operator_extension.jl
 #
 # Brief:  Many scientific domains have their own specialized operations / notations. LaSR lets you extend the search operators vocabulary to add these domain-specific operations. Adding an operator is always a two-step process.
 # Step 1: Define the operator with a julia function.
