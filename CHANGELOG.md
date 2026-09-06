@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- **`update_idea_value!` is gone.** It was exported but had no caller inside the package:
+  nothing in the search reinforced an idea, so a `ScoredIdeaStore`'s values only ever moved
+  through `add_idea!` (its `decay` and `refined_prior`). Both of those are unchanged, so
+  retrieval and `evolution_candidates` behave as before. If you were adjusting idea values
+  from your own code, the method was six lines and can be restored.
+- **`reset_cache!` is gone.** It was never called and was not exported from the package.
+- **`safe_literal_parse` is gone, and `parse_msg_content` is JSON-only.** The reader no
+  longer accepts Julia-dialect model output such as `Dict("k" => "x * y")` or a bare tuple
+  `("x + y", "x - y")`; those now yield no expressions. JSON arrays and objects, fenced or
+  bare, are unaffected, and a trailing comma (`["x + y",]`) is still recovered. The reader
+  has never evaluated model output and still does not.
+
+### Changed
+
+- The four LLM operators and the two concept functions now build their request through one
+  `ClientModule.ask` helper instead of six near-identical blocks. `request_suggestions`
+  renders the conversation and supplies the per-call template variables itself; callers no
+  longer pass `rendered_msg`, `variables`, `operators`, `no_system_message` or `verbose`.
+  Rendered prompt text is byte-identical, so suggestion-pool keys are unchanged.
+- `LLMGenerateMutation`'s batch request opts out of the suggestion pool explicitly
+  (`use_cache=false`). This was already its behaviour; it is now stated rather than implied
+  by a missing argument.
+- The `Compat` dependency is dropped. Its only use was `Returns`, which is unused and has
+  been in `Base` since Julia 1.7.
+- `parse_expr` no longer retries with the left-hand side stripped when `Meta.parse` throws.
+  The `strip_lhs` normalization rule already removes an assignment at the AST stage, which
+  is the path every assignment-shaped input actually took.
+
 ## v0.4.0
 
 LaSR is now a **plugin** for SymbolicRegression.jl v2 rather than a wrapper around it.
