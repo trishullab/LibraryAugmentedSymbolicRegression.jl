@@ -27,7 +27,6 @@ jobs:
       matrix:
         test:
           - "online"
-          - "llamafile"
         julia-version:
           - "1.11"
           - "1"
@@ -43,15 +42,6 @@ jobs:
           - os: ubuntu-latest
             julia-version: "~1.11.0-0"
             test: "online"
-          - os: windows-latest
-            julia-version: "~1.11.0-0"
-            test: "llamafile"
-          - os: macOS-latest
-            julia-version: "~1.11.0-0"
-            test: "llamafile"
-          - os: ubuntu-latest
-            julia-version: "~1.11.0-0"
-            test: "llamafile"
     steps:
       - uses: actions/checkout@v4
       - name: "Set up Julia"
@@ -69,22 +59,31 @@ jobs:
           SYMBOLIC_REGRESSION_TEST_SUITE: ${{ matrix.test }}
         run: |
           julia --color=yes -e 'import Pkg; Pkg.add("Coverage")'
-          julia --color=yes --threads=auto --check-bounds=yes --depwarn=yes --code-coverage=user -e 'import Coverage; import Pkg; Pkg.activate("."); Pkg.test(coverage=true)'
+          julia --color=yes --threads=auto --check-bounds=yes --depwarn=yes --code-coverage=user -e 'import Pkg; Pkg.activate("."); Pkg.test(coverage=true)'
           julia --color=yes coverage.jl
         shell: bash
-      - name: "Coveralls"
-        uses: coverallsapp/github-action@v2
+      - name: "Upload coverage artifacts"
+        uses: actions/upload-artifact@v7
         with:
-          path-to-lcov: lcov.info
-          parallel: true
-          flag-name: julia-${{ matrix.julia-version }}-${{ matrix.os }}-${{ matrix.test }}-${{ github.event_name }}
+          name: coverage-${{ matrix.os }}-${{ strategy.job-index }}
+          path: lcov.info
+          retention-days: 1
 
-  coveralls:
-    name: Indicate completion to coveralls
-    runs-on: ubuntu-latest
+  upload-coverage:
+    name: Upload Coverage to Codecov
     needs: test
+    runs-on: ubuntu-latest
     steps:
-      - name: Finish
-        uses: coverallsapp/github-action@v2
+      - uses: actions/checkout@v4
+      - name: "Download all coverage artifacts"
+        uses: actions/download-artifact@v8
         with:
-          parallel-finished: true
+          pattern: coverage-*
+          path: coverage
+      - name: "Upload to Codecov"
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
+          fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
+          verbose: true

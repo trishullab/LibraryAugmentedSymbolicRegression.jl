@@ -21,3 +21,10 @@ docs/src/index.md
 .vscode
 **/*.json
 LocalPreferences.toml
+
+# Local LLM connection settings for the examples (may hold an API key); see .env.example
+.env
+
+# test run artifacts
+outputs/
+logs/

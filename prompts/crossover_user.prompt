@@ -1,14 +1,12 @@
 Suggestion 1: {{assump1}}
 Suggestion 2: {{assump2}}
 Suggestion 3: {{assump3}}
-Reference Expression 1: {{expr1}}
-Reference Expression 2: {{expr2}}
+Reference expression 1: {{expr1}}
+Reference expression 2: {{expr2}}
 
-Propose {{N}} expressions that would be appropriate given the suggestions and references. Provide short commentary for each of your decisions. End with a JSON list that enumerates the proposed expressions following this format:
+Propose {{N}} diverse recombinations of the two reference expressions, consistent with these suggestions, each using only the variables {{variables}} and the constant C.
+
+End your reply with a JSON array of exactly {{N}} expression strings, and make that array the last thing you write. In this illustrative example, x and y stand in for your actual variables -- use the ones listed above:
 ```json
-["expr1",
- "expr2",
- ...
- "expr{{N}}"
-]
+["C*sin(x) + C", "x/(y + C)", "C*exp(x) - y^2"]
 ```
