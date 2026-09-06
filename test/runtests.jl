@@ -11,7 +11,7 @@ tags_to_run = let t = get(ENV, "SYMBOLIC_REGRESSION_TEST_SUITE", "online,offline
 end
 @eval @run_package_tests filter = ti -> !isdisjoint(ti.tags, $tags_to_run) verbose = true
 
-@testitem "Test tutorial" tags = [:offline] begin
+@testitem "Test tutorial (MLJ SRRegressor path vs mock server)" tags = [:online] begin
     include("test_tutorial.jl")
 end
 
@@ -41,6 +41,14 @@ end
 
 @testitem "Test scored idea store" tags = [:online] begin
     include("test_scored_idea_store.jl")
+end
+
+@testitem "Test windowed idea store (the default store)" tags = [:online] begin
+    include("test_windowed_idea_store.jl")
+end
+
+@testitem "Test concept evolution and generation" tags = [:online] begin
+    include("test_lasr_concepts.jl")
 end
 
 @testitem "Test SR v2 plugin integration" tags = [:online] begin
@@ -81,6 +89,18 @@ end
 
 @testitem "Test parse-failure sink" tags = [:online] begin
     include("test_lasr_failure_sink.jl")
+end
+
+@testitem "Test parser fallback contract (malformed LLM output)" tags = [:online] begin
+    include("test_lasr_parse_fallback.jl")
+end
+
+@testitem "Test LLM-output reader (Dict + safe literal paths)" tags = [:online] begin
+    include("test_lasr_client_parse.jl")
+end
+
+@testitem "Test LLM operator stress (adversarial output)" tags = [:online] begin
+    include("test_lasr_llm_stress.jl")
 end
 
 @testitem "Aqua tests" tags = [:online, :aqua] begin

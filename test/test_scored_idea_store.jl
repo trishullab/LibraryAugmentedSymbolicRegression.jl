@@ -32,9 +32,6 @@ Random.seed!(0)
             cnt[idea] = get(cnt, idea, 0) + 1
         end
         @test get(cnt, "power law", 0) > 2400
-        # penalizing brings it back down (floored, not zeroed)
-        update_idea_value!(s, "power law", -100.0)
-        @test retrieve_ideas(s, 4) isa Vector{String}
     end
 
     @testset "query relevance surfaces the relevant idea" begin

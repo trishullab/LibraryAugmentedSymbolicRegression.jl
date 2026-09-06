@@ -7,8 +7,14 @@
 
 using Test
 using LibraryAugmentedSymbolicRegression
-using LibraryAugmentedSymbolicRegression: LaSRPlugin, LLMCrossover
+using LibraryAugmentedSymbolicRegression: LaSRPlugin, LLMCrossover, parse_failures
+using LibraryAugmentedSymbolicRegression.ParseFailuresModule: ParseFailureStore
 using SymbolicRegression: SymbolicRegression, Options, equation_search, calculate_pareto_frontier
+using DynamicExpressions: get_contents, filter_map
+
+# True when the expression uses at least one input feature. It is not a bare constant.
+_references_feature(ex) =
+    !isempty(filter_map(n -> n.degree == 0 && !n.constant, n -> Int(n.feature), get_contents(ex), Int))
 
 include("mock_llm_server.jl")
 using .MockLLMServer: MockLLMServer, with_server, count_for, total_calls
@@ -16,7 +22,7 @@ using .MockLLMServer: MockLLMServer, with_server, count_for, total_calls
 const PROMPTS_DIR = joinpath(@__DIR__, "prompts") * "/"
 const MOCK_PORT = 11_451
 
-function lasr_options(url; kws...)
+function lasr_options(url; sink=nothing, kws...)
     return Options(;
         binary_operators=[+, -, *, /, ^],
         unary_operators=[cos],
@@ -42,6 +48,8 @@ function lasr_options(url; kws...)
                 # constant-1 node and the test passes without exercising insertion.
                 variable_names=Dict(1 => "x", 2 => "y"),
                 verbose=false,
+                # The search records every parse failure here. A test can then check none occurred.
+                parse_failure_sink=sink,
             ),
         ),
         progress=false,
@@ -58,7 +66,7 @@ end
         # The search must complete rather than throwing. `llm_mutate` used to raise
         # `FieldError: Expression has no field val` on the first LLM suggestion.
         hof = equation_search(X, y; options, niterations=2, parallelism=:serial)
-        @test hof !== nothing
+        @test hof isa SymbolicRegression.HallOfFame
 
         # And the LLM must genuinely have been consulted, not silently skipped. A
         # swallowed exception in the LLM path shows up here as a zero count.
@@ -71,12 +79,18 @@ end
     X = randn(Float32, 2, 60)
     y = @. 2 * cos(X[1, :]) + X[2, :]^2 - 2
 
+    sink = ParseFailureStore()
     with_server(MOCK_PORT) do url
-        options = lasr_options(url)
+        options = lasr_options(url; sink=sink)
         hof = equation_search(X, y; options, niterations=2, parallelism=:serial)
         frontier = calculate_pareto_frontier(hof)
         @test !isempty(frontier)
         @test all(m -> m.tree isa SymbolicRegression.AbstractExpression, frontier)
+        # The mock proposals all parse under this operator set. An empty failure sink shows
+        # they became real trees, not the constant-1 fallback.
+        @test isempty(parse_failures(sink))
+        # At least one frontier member uses an input feature. It is a real expression.
+        @test any(m -> _references_feature(m.tree), frontier)
     end
 end
 
