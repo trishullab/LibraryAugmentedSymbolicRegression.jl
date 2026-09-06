@@ -3,28 +3,20 @@ module SuggestionCacheModule
 using Base.Threads: ReentrantLock
 using DispatchDoctor: @unstable
 
-export SuggestionCache, take_suggestion!, store_suggestions!, cache_stats, reset_cache!
+export SuggestionCache, take_suggestion!, store_suggestions!, cache_stats
 
 """
     SuggestionCache(; capacity=8192)
 
-A pool of not-yet-used LLM suggestions, keyed by the prompt that produced them.
+A pool of LLM suggestions that no operator used yet, organized by the parent prompt. Useful when the same prompt is requested multiple times.
 
-Two properties of LaSR's search make this worth far more than an ordinary cache:
+Two properties of the LaSR search make this pool worth much more than an ordinary cache:
 
-1. **Every call already asks for `num_generated_equations` suggestions and uses one.**
-   The other N-1 were parsed and thrown away, so serving them to later requests costs
-   nothing and removes N-1 round trips outright.
+1. **Each call already asks for `num_generated_equations` suggestions and uses one.** LaSR parsed the other N-1 suggestions and then discarded them. To give them to a later request costs nothing and removes N-1 round trips.
 
-2. **Structurally identical parents collapse to one key.** `render_expr` abstracts
-   constants to `C`, so expressions differing only in their fitted constants share a
-   prompt. Measured benefit is modest -- populations stay fairly diverse, so observed
-   hit rates are around 20% -- but it is free: the suggestions were already paid for.
+2. **Structurally equal parents give one key.** `render_expr` writes each constant as `C`, so two expressions that differ only in their fitted constants share a prompt. The measured gain is small, because the populations stay diverse: the observed hit rate is about 20%. The gain is still free, because the calls already paid for the suggestions.
 
-Entries are consumed rather than merely read: each suggestion is handed out once, so
-the population still sees varied material instead of the same expression repeatedly.
-When a key is exhausted the next request falls through to a real LLM call, which also
-refreshes the pool.
+Suggestions are deleted after use, so the population does not see the same expression repeatedly. When a key holds no more suggestions, the next request makes a real LLM call, which replenishes the pool.
 """
 struct SuggestionCache
     pools::Dict{UInt64,Vector{String}}
@@ -46,11 +38,8 @@ end
 """
     cache_key(mode, parts...)
 
-Hash the prompt-determining inputs of a request.
+Hashes the prompt.
 
-`parts` must include everything that changes the answer -- the rendered expression(s)
-and the sampled concepts -- so two requests share a key only when the same prompt
-would have been sent.
 """
 cache_key(mode::AbstractString, parts...) = hash((mode, parts...))
 
@@ -97,7 +86,12 @@ function store_suggestions!(cache::SuggestionCache, key::UInt64, suggestions)
     return nothing
 end
 
-"""Snapshot of hit/miss counters, for benchmarking and debugging."""
+"""
+    cache_stats(cache) -> Dict{Symbol,Int}
+
+A snapshot of the counters, for a benchmark or for debugging: `:hits`, `:misses`,
+`:stored`, `:evicted`, the derived `:hit_rate_pct`, and `:live_keys`.
+"""
 function cache_stats(cache::SuggestionCache)
     return lock(cache.lock) do
         stats = copy(cache.stats)
@@ -106,16 +100,6 @@ function cache_stats(cache::SuggestionCache)
         stats[:live_keys] = length(cache.pools)
         return stats
     end
-end
-
-function reset_cache!(cache::SuggestionCache)
-    lock(cache.lock) do
-        empty!(cache.pools)
-        for k in keys(cache.stats)
-            cache.stats[k] = 0
-        end
-    end
-    return nothing
 end
 
 end # module

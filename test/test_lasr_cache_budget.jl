@@ -6,7 +6,7 @@ using Test
 using LibraryAugmentedSymbolicRegression:
     LaSRPlugin, SuggestionCache, CallBudget, cache_stats, budget_used
 using LibraryAugmentedSymbolicRegression.SuggestionCacheModule:
-    cache_key, take_suggestion!, store_suggestions!, reset_cache!
+    cache_key, take_suggestion!, store_suggestions!
 using LibraryAugmentedSymbolicRegression.CallBudgetModule: claim_call!
 using SymbolicRegression: Options, equation_search
 

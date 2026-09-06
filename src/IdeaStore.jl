@@ -3,38 +3,39 @@ module IdeaStoreModule
 using Random: randperm, shuffle
 
 export AbstractIdeaStore,
-    WindowedIdeaStore,
-    ScoredIdeaStore,
-    add_idea!,
-    retrieve_ideas,
-    update_idea_value!,
-    evolution_candidates
+    WindowedIdeaStore, ScoredIdeaStore, add_idea!, retrieve_ideas, evolution_candidates
 
 """
     AbstractIdeaStore
 
-The concept library LaSR accumulates during a search. A subtype implements:
+The concept library that LaSR fills during a search. A subtype must supply these
+methods:
 
-- `add_idea!(store, idea; refined=false)` — add one idea. `refined=true` marks a merged
-  concept (the output of concept evolution) that the store may choose to prefer.
-- `retrieve_ideas(store, n; query=nothing)` — return up to `n` ideas, relevant to `query`
-  when the store supports it. `query` is typically the expression currently being mutated,
-  so a query-aware store surfaces concepts about the terms in play.
-- `evolution_candidates(store)` — the ideas eligible to be merged/distilled by concept
-  evolution (for the windowed store, everything past the sampling window).
-- `Base.length(store)` — number of ideas held.
+- `add_idea!(store, idea; refined=false)`: add one idea. `refined=true` marks a concept
+  that concept evolution merged. A store can prefer such a concept.
+- `retrieve_ideas(store, n; query=nothing)`: return `n` ideas at most. A store that
+  supports `query` returns the ideas that are relevant to it. `query` is usually the
+  expression that the search mutates now, so such a store gives concepts about the terms
+  in use.
+- `evolution_candidates(store)`: return the ideas that concept evolution can merge or
+  distill. For the windowed store these are the ideas past the sampling window.
+- `Base.length(store)`: return the number of ideas that the store holds.
 """
 abstract type AbstractIdeaStore end
 
 Base.isempty(store::AbstractIdeaStore) = length(store) == 0
 
-# By default, fallbacks to an empty list of evolution candidates. Subtypes can override.
+"""
+    evolution_candidates(store::AbstractIdeaStore) -> Vector{String}
+
+Return no candidates. A subtype can replace this method.
+"""
 evolution_candidates(store::AbstractIdeaStore) = String[]
 
 """
     WindowedIdeaStore(; window=30, seed=String[])
 
-Ideas live in one list; refined (merged) ideas are pushed to the front and raw ideas to the back. Retrieval draws a distinct uniform sample from the front `window` ideas, so recently-refined concepts dominate. `query` is ignored.
+Ideas are stored in a vector; refined (merged) ideas are pushed to the front and raw ideas to the back. Retrieval draws a uniform sample from the front `window` ideas, so recently-refined concepts dominate. `query` is ignored.
 
 Ideas beyond the window are the `evolution_candidates`: overflow that concept evolution distills back into new front-of-list ideas.
 """
@@ -78,7 +79,12 @@ function _tokenize(s::AbstractString)::Vector{String}
     return String.(filter(!isempty, split(lowercase(s), r"[^a-z0-9_]+")))
 end
 
-"""Core BM25 scoring over a token corpus."""
+"""
+    _bm25_scores(corpus, query_terms, k1, b) -> Vector{Float64}
+
+The BM25 score of each document in `corpus` against `query_terms`. `k1` sets the term
+frequency saturation, and `b` sets the length normalization.
+"""
 function _bm25_scores(
     corpus::Vector{Vector{String}}, query_terms::Vector{String}, k1::Float64, b::Float64
 )::Vector{Float64}
@@ -108,28 +114,10 @@ function _bm25_scores(
     return scores
 end
 
-# ---------------------------------------------------------------------------------------
-# ScoredIdeaStore: quality-weighted retrieval that can be UPDATED from search outcomes.
-# ---------------------------------------------------------------------------------------
-
 """
     ScoredIdeaStore(; k1=1.5, b=0.75, decay=0.99, refined_prior=2.0, seed=String[])
 
-An idea store that carries a mutable **value** per idea and retrieves by
-`value * (1 + BM25 relevance to the query)`. It addresses both weaknesses of the earlier
-stores: the windowed store ignores the query (uniform random) and a purely lexical store weights
-only lexical overlap with no notion of which ideas have actually been *useful*.
-
-The value is the "updating" half the search can drive: call `update_idea_value!(store,
-idea, delta)` to reinforce ideas that preceded an improved member and penalize ones that
-did not, turning the concept library into a bandit over concepts rather than a passive log.
-New ideas enter with value `1.0` (or `refined_prior` for distilled/merged concepts), and
-every `add_idea!` multiplies existing values by `decay` so stale concepts fade unless
-reinforced. Retrieval is stochastic (Efraimidis–Spirakis weighted sampling without
-replacement), so high-value/relevant ideas dominate while exploration continues.
-
-Drop-in for the other stores: only `retrieve_ideas`/`add_idea!` change from the search's
-side; `update_idea_value!` is an additional, optional lever.
+An idea store that carries a mutable **value** per idea and retrieves by `value * (1 + BM25 relevance to the query)`.
 """
 struct ScoredIdeaStore <: AbstractIdeaStore
     ideas::Vector{String}
@@ -170,20 +158,6 @@ function add_idea!(store::ScoredIdeaStore, idea::AbstractString; refined::Bool=f
     return nothing
 end
 
-"""
-    update_idea_value!(store, idea, delta)
-
-Reinforce (`delta > 0`) or penalize (`delta < 0`) an idea by content. No-op if the idea is
-absent. Values are floored at a small positive constant so a penalized idea can still be
-resampled (and later redeemed) rather than being permanently zeroed out.
-"""
-function update_idea_value!(store::ScoredIdeaStore, idea::AbstractString, delta::Real)
-    idx = findfirst(==(String(idea)), store.ideas)
-    idx === nothing && return nothing
-    store.values[idx] = max(store.values[idx] + Float64(delta), 1e-3)
-    return nothing
-end
-
 function retrieve_ideas(
     store::ScoredIdeaStore, n::Integer; query::Union{AbstractString,Nothing}=nothing
 )
@@ -206,15 +180,21 @@ function retrieve_ideas(
     return store.ideas[order]
 end
 
-# Low-value ideas are the ones concept evolution should try to distill or replace.
+"""
+    evolution_candidates(store::ScoredIdeaStore) -> Vector{String}
+
+Return the ideas with a value at or below the median. These are the low-value ideas, so
+concept evolution must try to distill or replace them.
+"""
 function evolution_candidates(store::ScoredIdeaStore)
     isempty(store.ideas) && return String[]
     med = _median(store.values)
     return [store.ideas[i] for i in eachindex(store.ideas) if store.values[i] <= med]
 end
 
+# ponytail: hand-rolled to avoid a `Statistics` dep entry for one call; swap in
+# `Statistics.median` if anything else in the package ever needs Statistics.
 function _median(v::AbstractVector{<:Real})
-    isempty(v) && return 0.0
     s = sort(v)
     m = length(s)
     return isodd(m) ? Float64(s[(m + 1) ÷ 2]) : (s[m ÷ 2] + s[m ÷ 2 + 1]) / 2

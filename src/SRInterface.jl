@@ -1,7 +1,6 @@
 module SRInterfaceModule
 
 using Random: rand
-using UUIDs: uuid1
 using DynamicExpressions:
     AbstractExpression, get_tree, with_contents, simplify_tree!, combine_operators
 using SymbolicRegression
@@ -41,8 +40,7 @@ using ..ParseFailuresModule: ParseFailureStore
 using ..LLMOperatorsModule:
     llm_mutate_tree, llm_crossover_trees, llm_randomize_tree, llm_generate_candidates
 using ..ConceptsModule: generate_concepts
-using ..LaSRLoggerModule: LaSRLogger, log_generation!
-using ..ExpressionIOModule: render_expr
+using ..LaSRLoggerModule: LaSRLogger
 
 function mutate!(
     tree::N,
@@ -256,8 +254,7 @@ function crossover(
     if attempt > 1
         return CrossoverResult{N}(; child1=copy(member1.tree), child2=copy(member2.tree))
     end
-    state = lasr_state(options, plugin_states)
-    context = lasr_context(options, state)
+    context = lasr_context(options, lasr_state(options, plugin_states))
     child1 = combine_operators(
         simplify_tree!(copy(member1.tree), options.operators), options.operators
     )
@@ -281,9 +278,7 @@ function crossover(
     child1 = combine_operators(simplify_tree!(child1, options.operators), options.operators)
     child2 = combine_operators(simplify_tree!(child2, options.operators), options.operators)
 
-    generation_id = uuid1()
-    rendered = render_expr(child1, context) * " && " * render_expr(child2, context)
-    log_generation!(state.lasr_logger; id=generation_id, mode="crossover", chosen=rendered)
+    # `llm_crossover_trees` already logged this crossover under its own generation id.
     # The engine owns constraint checking, retry, evaluation and replacement.
     return CrossoverResult{N}(; child1=child1, child2=child2)
 end
@@ -299,10 +294,13 @@ function plugin_mutations(plugin::LaSRPlugin)
     return pairs
 end
 
-# Crossover is now an `AbstractCrossover` sampled by weight from `options.crossovers`
-# (parallel to `plugin_mutations`), replacing the old `propose_crossover` hook. The plugin
-# injects an `LLMCrossover` weighted by `crossover_probability`; the built-in
-# `SubtreeCrossover` carries the remaining weight.
+"""
+    plugin_crossovers(plugin::LaSRPlugin)
+
+Return the crossovers that the plugin adds to `options.crossovers`, with a weight for each.
+
+SymbolicRegression samples an `AbstractCrossover` by weight, in the same way as `plugin_mutations`. This replaces the older `propose_crossover` hook. The plugin adds an `LLMCrossover` with the weight `crossover_probability`, and gives the remaining weight to the built-in `SubtreeCrossover`.
+"""
 function plugin_crossovers(plugin::LaSRPlugin)
     plugin.use_llm || return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
     plugin.crossover_probability > 0 ||

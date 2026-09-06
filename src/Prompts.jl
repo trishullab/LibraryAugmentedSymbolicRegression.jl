@@ -1,41 +1,15 @@
 module PromptsModule
 
-using Random: rand, randperm
-using DynamicExpressions:
-    Node,
-    AbstractExpressionNode,
-    AbstractExpression,
-    ParametricExpression,
-    ParametricNode,
-    AbstractNode,
-    NodeSampler,
-    get_contents,
-    with_contents,
-    constructorof,
-    copy_node,
-    set_node!,
-    count_nodes,
-    has_constants,
-    has_operators,
-    string_tree,
-    AbstractOperatorEnum
-using SymbolicRegression: DATA_TYPE, AbstractOptions
+using Random: randperm
+using SymbolicRegression: AbstractOptions
 using DispatchDoctor: @unstable
 using ..PluginModule: lasr_context, default_prompts_dir
 using ..ExpressionIOModule: render_expr, get_variable_names
-using JSON: parse
 
 """
-    prompt_path(prompts_dir, name)
+    prompt_path(prompts_dir, name) -> String
 
-Path of prompt template `name` for a plugin configured with `prompts_dir`. A
-template present in `prompts_dir` wins; anything the user did not override falls
-back to the packaged copy, so a custom directory may hold just the one template it
-changes. `prompts_dir` is *joined* with `name`, so a trailing separator is optional
-(concatenating it silently produced `.../my_promptsmutate_user.prompt` before).
-The result is `normpath`ed, so a trailing separator cannot leak the caller's
-separator into the middle of the path (on Windows `joinpath("...\\prompts/", name)`
-keeps the `/` and yields `...\\prompts/name`).
+Resolve one `.prompt` template: `prompts_dir` first, then the packaged templates.
 """
 function prompt_path(prompts_dir::AbstractString, name::AbstractString)::String
     path = normpath(joinpath(prompts_dir, name))
@@ -53,11 +27,7 @@ end
 """
     copy_prompts(dest; force=false)
 
-Copy the packaged `.prompt` templates into `dest` (created if needed) as *writable*
-files, and return `dest`. The installed originals are read-only (mode 444 after
-`Pkg.add`) and are replaced wholesale on upgrade, so editing prompts means editing a
-copy and passing it as `prompts_dir`. Existing files in `dest` are left alone unless
-`force=true`, so re-running this never discards edits.
+Copy the packaged `.prompt` templates into `dest` as writable files, and return `dest`.
 """
 function copy_prompts(dest::AbstractString; force::Bool=false)::String
     target = normpath(abspath(expanduser(String(dest))))
@@ -77,11 +47,13 @@ function load_prompt(path::String)::String
     return String(strip(read(path, String)))
 end
 
-# A NamedTuple built from a runtime `Dict` has a value-dependent concrete type, so its
-# return type is genuinely `NamedTuple` (abstract). Mark `@unstable` — this is a per-call
-# argument-marshalling helper, so the inference boundary here is harmless.
+"""
+    convertDict(d) -> NamedTuple
+
+Convert a `Dict` of template variables into a `NamedTuple` for the prompt renderer.
+"""
 @unstable function convertDict(d)::NamedTuple
-    return (; Dict(Symbol(k) => v for (k, v) in d)...)
+    return (; (Symbol(k) => v for (k, v) in d)...)
 end
 
 function get_vars(options::AbstractOptions)::String
@@ -108,9 +80,9 @@ function get_ops(options::AbstractOptions)::String
 end
 
 """
-Constructs a prompt by replacing the element_id_tag with the corresponding element in the element_list.
-If the element_list is longer than the number of occurrences of the element_id_tag, the missing elements are added after the last occurrence.
-If the element_list is shorter than the number of occurrences of the element_id_tag, the extra ids are removed.
+    construct_prompt(user_prompt, element_list, element_id_tag) -> String
+
+Replace each tag line in `user_prompt` with one element of `element_list`.
 """
 function construct_prompt(
     user_prompt::String, element_list::Vector, element_id_tag::String

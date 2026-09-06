@@ -4,58 +4,48 @@ using DispatchDoctor: @unstable
 using DynamicExpressions
 using DynamicExpressions.NodeModule: Node
 using SymbolicRegression: AbstractOptions, DATA_TYPE
-using ..PluginModule: lasr_context, LaSRContext, LaSRPluginState
+using ..PluginModule: lasr_context, LaSRPluginState
 using ..NormalizationRulesModule:
     apply_string_rules, apply_expr_rules, DEFAULT_RULES, resolve_rules
 using ..ParseFailuresModule: ParseFailure, record_parse_failure!
-
-# Record a constant-1 fallback into the active `LaSRPluginState`'s `ParseFailureStore`,
-# if one is present. `ctx.state` is `nothing` for a `LaSRContext` built directly from a
-# bare `Options` (e.g. a parser unit test with no plugin state) -- skip recording rather
-# than error, since the fallback itself must always succeed regardless of observability.
-function _record_parse_failure!(
-    ctx::LaSRContext,
-    expr_str::AbstractString,
-    expr_str_norm::AbstractString,
-    stage::Symbol,
-    reason::AbstractString,
-)
-    state = getfield(ctx, :state)
-    state isa LaSRPluginState || return nothing
-    record_parse_failure!(
-        state.parse_failures,
-        ParseFailure(String(expr_str), String(expr_str_norm), stage, String(reason)),
-    )
-    return nothing
-end
 
 @unstable function _parse_fallback(
     options, expr_str, expr_str_norm, stage::Symbol, e, node_type, ::Type{T}
 ) where {T}
     @warn "LaSR parse fallback ($stage): returning constant 1 for: $expr_str"
     @warn "Error: $e"
-    _record_parse_failure!(options, expr_str, expr_str_norm, stage, string(e))
+    # Record the fallback in the active plugin state, when there is one, so a scientist can
+    # see which LLM strings stop the parser and add a `NormalizationRule` for them.
+    state = getfield(options, :state)
+    if state isa LaSRPluginState
+        record_parse_failure!(
+            state.parse_failures,
+            ParseFailure(String(expr_str), String(expr_str_norm), stage, string(e)),
+        )
+    end
     return Expression(
         node_type(; val=convert(T, 1.0)); options.operators, options.variable_names
     )
 end
 
 """
-    parse_expr(expr_str::String, options)
+    parse_expr(::Type{T}, expr_str::String, options) -> AbstractExpression{T}
 
-Given a string (e.g., from string_tree) and an options object (containing
-operators, variable naming conventions, etc.), reconstruct an
-AbstractExpressionNode.
+Read an expression string and build an expression tree.
+
+`expr_str` is the text that an LLM sent, or the output of `render_expr`. `options` is a
+`LaSRContext` or a plain `Options`. It supplies the operators, the variable names, and
+the normalization rules.
+
+The normalization rules run first, then Julia reads the result. If a step fails, this
+function records a `ParseFailure` and returns a constant-1 tree, so the search continues.
 """
 @unstable function parse_expr(
     ::Type{T}, expr_str::String, options::AbstractOptions
 )::AbstractExpression{T} where {T<:DATA_TYPE}
     # `options` here may be a raw `SymbolicRegression.Options` or already a
     # `LaSRContext` (every real call site in the LLM modules converts before calling
-    # `parse_expr`). `lasr_context` is idempotent on an existing `LaSRContext` (returns
-    # it unchanged) and is the one function that reaches the active `LaSRPlugin`
-    # regardless of which form `options` arrives in, so resolve through it instead of
-    # gating on `applicable(lasr_plugin, options)` against the pre-conversion argument.
+    # `parse_expr`).
     options = lasr_context(options)
     rules = resolve_rules(DEFAULT_RULES, options.plugin.parse_rules)
     node_type = options.node_type{T}::Type{<:AbstractExpressionNode{T}}
@@ -68,27 +58,12 @@ AbstractExpressionNode.
     try
         ast = Meta.parse(expr_str_norm)
     catch e
-        if occursin(r"^\s*[^=\n]+=", expr_str_norm)
-            stripped = replace(expr_str_norm, r"^\s*[^=\n]+=\s*" => "")
-            try
-                ast = Meta.parse(stripped)
-            catch
-                return _parse_fallback(
-                    options, expr_str, expr_str_norm, :meta_parse, e, node_type, T
-                )
-            end
-        else
-            return _parse_fallback(
-                options, expr_str, expr_str_norm, :meta_parse, e, node_type, T
-            )
-        end
+        return _parse_fallback(
+            options, expr_str, expr_str_norm, :meta_parse, e, node_type, T
+        )
     end
 
     try
-        # LLMs emit operator idioms the operator enum does not carry (unary `-`/`+`,
-        # `pow(a, b)`), and the raw AST may still carry an LHS assignment (`y = ...`).
-        # Left as-is these trees fail to parse and are discarded and a constant node
-        # substituted; rewrite them into equivalent registered forms first.
         ast = apply_expr_rules(rules, ast)
     catch e
         return _parse_fallback(
@@ -114,9 +89,10 @@ end
 """
     render_expr(ex::AbstractExpression{T}, options::AbstractOptions) -> String
 
-Given an AbstractExpression and an options object, return a string representation
-of the expression. Specifically, replace constants with "C" and variables with
-"x", "y", "z", etc or the prespecified variable names.
+Write an expression as a string for a prompt.
+
+Each constant becomes `C`. Each variable becomes its configured name, or `x`, `y`, `z`
+and so on when `options` configures no names.
 """
 function render_expr(
     ex::AbstractExpression{T}, options::AbstractOptions
@@ -151,9 +127,6 @@ function render_expr(tree::AbstractExpressionNode{T}, options)::String where {T<
 end
 
 function get_variable_names(variable_names::Dict)::Vector{String}
-    # An empty Dict must fall back to the defaults. Returning an empty name list here
-    # makes every parse fail with "Variable `x` not found in `variable_names`", which
-    # silently discards *every* LLM suggestion rather than surfacing an error.
     isempty(variable_names) && return get_variable_names(nothing)
     return [variable_names[key] for key in sort(collect(keys(variable_names)))]
 end

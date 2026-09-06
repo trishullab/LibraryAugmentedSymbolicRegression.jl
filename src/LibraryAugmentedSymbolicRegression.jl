@@ -24,7 +24,6 @@ export LaSRPlugin,
     ScoredIdeaStore,
     add_idea!,
     retrieve_ideas,
-    update_idea_value!,
     evolution_candidates,
     NormalizationRule,
     parse_failures,
@@ -62,7 +61,7 @@ using DispatchDoctor: @stable
 end
 
 using .LaSRLoggerModule: LaSRLogger
-using .SuggestionCacheModule: SuggestionCache, cache_stats, reset_cache!
+using .SuggestionCacheModule: SuggestionCache, cache_stats
 using .CallBudgetModule: CallBudget, budget_used
 using .IdeaStoreModule:
     AbstractIdeaStore,
@@ -70,7 +69,6 @@ using .IdeaStoreModule:
     ScoredIdeaStore,
     add_idea!,
     retrieve_ideas,
-    update_idea_value!,
     evolution_candidates
 using .PluginModule:
     LaSRPlugin,
@@ -78,13 +76,14 @@ using .PluginModule:
     LLMRandomizeMutation,
     LLMGenerateMutation,
     LLMCrossover,
-    default_prompts_dir
+    default_prompts_dir,
+    parse_failures,
+    parse_failure_summary
 using .LLMOperatorsModule: llm_randomize_tree, llm_mutate_tree, llm_crossover_trees
 using .ConceptsModule: concept_evolution, generate_concepts
 using .ClientModule: parse_msg_content
 using .PromptsModule: load_prompt, construct_prompt, prompt_path, copy_prompts
 using .NormalizationRulesModule: NormalizationRule
-using .PluginModule: parse_failures, parse_failure_summary
 using .ExpressionIOModule: render_expr, parse_expr
 
 end

@@ -1,12 +1,7 @@
 using Test
 using Random
 using LibraryAugmentedSymbolicRegression.IdeaStoreModule:
-    ScoredIdeaStore,
-    AbstractIdeaStore,
-    add_idea!,
-    retrieve_ideas,
-    update_idea_value!,
-    evolution_candidates
+    ScoredIdeaStore, AbstractIdeaStore, add_idea!, retrieve_ideas, evolution_candidates
 
 Random.seed!(0)
 
@@ -19,19 +14,6 @@ Random.seed!(0)
             add_idea!(s, w)
         end
         @test length(s) == 4
-    end
-
-    @testset "update_idea_value! reweights retrieval" begin
-        s = ScoredIdeaStore()
-        for w in ["oscillatory cos", "exponential decay", "linear x0", "power law"]
-            add_idea!(s, w)
-        end
-        update_idea_value!(s, "power law", 30.0)
-        cnt = Dict{String,Int}()
-        for _ in 1:3000, idea in retrieve_ideas(s, 1)
-            cnt[idea] = get(cnt, idea, 0) + 1
-        end
-        @test get(cnt, "power law", 0) > 2400
     end
 
     @testset "query relevance surfaces the relevant idea" begin
@@ -63,10 +45,10 @@ Random.seed!(0)
         for w in ["a", "b", "c", "d"]
             add_idea!(s, w)
         end
-        update_idea_value!(s, "a", 10.0)
-        update_idea_value!(s, "b", 10.0)
+        # Every add decays what is already stored, so the oldest ideas hold the lowest
+        # values and are the ones concept evolution should distill.
         ec = evolution_candidates(s)
-        @test ("c" in ec) && ("d" in ec) && !("a" in ec)
+        @test ("a" in ec) && ("b" in ec) && !("d" in ec)
     end
 
     @testset "retrieval returns n distinct, capped at length" begin
