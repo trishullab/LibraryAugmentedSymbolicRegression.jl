@@ -64,6 +64,8 @@ Library-augmented symbolic regression plugin. Pass it through
 plugin. The mutation weights are unnormalized, like all entries in
 `Options.mutations`; `crossover_probability` is conditional on SR selecting
 crossover.
+
+Every keyword is documented in the "Configuration" section of the README.
 """
 struct LaSRPlugin <: AbstractPlugin
     api_key::Union{String,Nothing}
@@ -91,17 +93,8 @@ struct LaSRPlugin <: AbstractPlugin
     generate_weight::Float64
     amnesty_complexity::Int
     parse_rules::Vector{NormalizationRule}
-    # Optional pool of not-yet-used LLM suggestions. Each call already asks for
-    # `num_generated_equations` proposals and consumes one; the rest are banked here and
-    # served to later identical prompts. `nothing` disables caching.
     suggestion_cache::Union{SuggestionCache,Nothing}
-    # Ceiling on real LLM calls for the whole search (not per iteration). Once exhausted,
-    # the LLM operators fall back to their symbolic counterparts for the remainder of the
-    # run rather than stalling, so this is a hard cost bound. Unbounded by default.
     call_budget::CallBudget
-    # Optional externally-owned parse-failure store. When set, `init_plugin_state` uses
-    # THIS store instead of building a fresh one, so a caller (e.g. the PySR seam) holds a
-    # live handle to the exact store the (serial) search records into. Default `nothing`.
     parse_failure_sink::Union{Nothing,ParseFailureStore}
     function LaSRPlugin(;
         api_key::Union{String,Nothing}=nothing,
@@ -122,23 +115,13 @@ struct LaSRPlugin <: AbstractPlugin
         variable_names::Union{Dict,Nothing}=nothing,
         prompts_dir::AbstractString=default_prompts_dir(),
         idea_database::Vector{<:AbstractString}=AbstractString[],
-        # Pass a custom `AbstractIdeaStore` (BM25, Scored, RAG, ...) to change how
-        # concepts are retrieved. Defaults to a `WindowedIdeaStore` seeded from
-        # `idea_database` and sized to `max_concepts`, reproducing the historical
-        # uniform-random windowed sampling.
         idea_store::Union{AbstractIdeaStore,Nothing}=nothing,
         lasr_logger::Union{LaSRLogger,Nothing}=nothing,
         mutate_weight::Real=0.0,
         randomize_weight::Real=0.0,
         crossover_probability::Real=0.0,
         generate_weight::Real=0.0,
-        # Structural amnesty: any population member whose complexity is at least
-        # `amnesty_complexity` has its constants re-optimized in `on_generation_end!`
-        # before selection can cull it, so good structure is not lost to a bad
-        # constant fit. `0` disables the pass.
         amnesty_complexity::Integer=0,
-        # Scientist-registerable string/expr normalization rules, appended after
-        # `DEFAULT_RULES` (in order) by `parse_expr` when this plugin is active.
         parse_rules::Vector{NormalizationRule}=NormalizationRule[],
         suggestion_cache::Union{SuggestionCache,Nothing}=nothing,
         max_llm_calls::Union{Int,Nothing}=nothing,
