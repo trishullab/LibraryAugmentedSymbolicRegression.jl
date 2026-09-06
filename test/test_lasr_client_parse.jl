@@ -1,14 +1,12 @@
 # Test: the LLM-output reader (Client.jl).
 # What is it supposed to do? parse_msg_content reads model text into a list of strings.
-# It accepts a JSON object of strings. safe_literal_parse reads Julia literals without
-# evaluation, and it refuses a bare symbol.
-# What do we hope to learn from the tests implemented here? The Dict return and the
-# Dict-literal / symbol-refusal paths run (they were dark at 89.6%). test_lasr_parse_msg_safety
-# shows the reader never RUNS model output; this shows what it accepts.
+# It accepts a JSON array or a JSON object of strings, fenced or bare.
+# What do we hope to learn from the tests implemented here? The Dict return path runs (it
+# was dark at 89.6%). test_lasr_parse_msg_safety shows the reader never RUNS model output;
+# this shows what it accepts.
 using Test
 using SymbolicRegression: Options
 using LibraryAugmentedSymbolicRegression: LaSRPlugin, parse_msg_content
-using LibraryAugmentedSymbolicRegression.ClientModule: safe_literal_parse
 
 options = Options(;
     binary_operators=[+, -, *, /],
@@ -21,22 +19,22 @@ options = Options(;
     @test sort(out) == ["cos(x)", "x + y"]
 end
 
-@testset "safe_literal_parse reads Julia literals but refuses a symbol" begin
-    @test safe_literal_parse("[\"a\", \"b\"]") == ["a", "b"]
-    @test safe_literal_parse("Dict(\"k\" => \"x * y\")") == Dict("k" => "x * y")
-    @test safe_literal_parse("42") == 42
-    @test_throws ArgumentError safe_literal_parse("some_identifier")
+@testset "a fenced JSON payload is read, not the surrounding prose" begin
+    @test parse_msg_content("thinking...\n```json\n[\"x * y\"]\n```\ndone", options) ==
+        ["x * y"]
+    @test parse_msg_content("```\n{\"a\": \"x - y\"}\n```", options) == ["x - y"]
 end
 
-@testset "a Julia-dialect Dict reaches the Dict return in parse_msg_content" begin
-    # It is not valid JSON, so it goes through safe_literal_parse to the Dict return.
-    @test parse_msg_content("Dict(\"k\" => \"x * y\")", options) == ["x * y"]
+@testset "a trailing comma is recovered" begin
+    # Models emit `["x + y",]` often enough to be worth a retry; strict JSON rejects it.
+    @test parse_msg_content("[\"x + y\", \"cos(x)\",]", options) == ["x + y", "cos(x)"]
+    @test parse_msg_content("```json\n[\"x * y\",]\n```", options) == ["x * y"]
+    # The retry only runs on content that already failed, so a valid payload is untouched.
+    @test parse_msg_content("[\"f(a, b)\", \"g(x,y)\"]", options) == ["f(a, b)", "g(x,y)"]
 end
 
-@testset "a FENCED Julia-dialect literal is not dropped" begin
-    # The literal fallback reads the fence-extracted content, not the raw message. A fenced
-    # Dict or tuple that is not valid JSON must still yield its expressions.
-    @test parse_msg_content("```\nDict(\"k\" => \"x * y\")\n```", options) == ["x * y"]
-    @test parse_msg_content("```\n(\"x + y\", \"x - y\")\n```", options) ==
-        ["x + y", "x - y"]
+@testset "a non-JSON dialect yields no expressions" begin
+    # The reader is JSON-only by design: it never evaluates model output, so a Julia-style
+    # `Dict(...)` or tuple is simply not read.
+    @test parse_msg_content("Dict(\"k\" => \"x * y\")", options) == String[]
 end

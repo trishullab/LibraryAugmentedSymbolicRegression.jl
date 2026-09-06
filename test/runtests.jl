@@ -95,7 +95,7 @@ end
     include("test_lasr_parse_fallback.jl")
 end
 
-@testitem "Test LLM-output reader (Dict + safe literal paths)" tags = [:online] begin
+@testitem "Test LLM-output reader (JSON array and object paths)" tags = [:online] begin
     include("test_lasr_client_parse.jl")
 end
 
