@@ -1,8 +1,11 @@
 using Test
 using LibraryAugmentedSymbolicRegression
 using LibraryAugmentedSymbolicRegression.PluginModule: LaSRPlugin
-using SymbolicRegression: SymbolicRegression, Options, Dataset, compute_complexity
+using SymbolicRegression:
+    SymbolicRegression, Options, Dataset, compute_complexity, HallOfFame,
+    calculate_pareto_frontier, create_expression
 using SymbolicRegression.PopMemberModule: PopMember
+using DynamicExpressions: get_contents
 using SymbolicRegression.PopulationModule: Population
 using Random: Xoshiro
 
@@ -58,4 +61,44 @@ end
     plugin = LaSRPlugin(; use_llm=false, amnesty_complexity=7)
     @test plugin.amnesty_complexity == 7
     @test LaSRPlugin(; use_llm=false).amnesty_complexity == 0  # opt-in default
+end
+
+@testset "amnesty pushes the re-fitted member into the hall of fame" begin
+    # SR updates the HoF from the population BEFORE on_generation_end! runs. The fix
+    # re-pushes the amnesty-improved members, so the returned HoF reflects the lower loss
+    # instead of the pre-amnesty member (which a niterations=1 search would otherwise keep).
+    rng = Xoshiro(0)
+    X = rand(rng, 2, 200)
+    y = 2 .* X[1, :] .+ cos.(X[2, :])
+    dataset = Dataset(X, y)
+    opts = Options(;
+        binary_operators=[+, *],
+        unary_operators=[cos],
+        optimizer_nrestarts=3,
+        default_plugins=(),
+        plugins=(
+            LaSRPlugin(;
+                use_llm=false, amnesty_complexity=3, variable_names=Dict(1 => "x0", 2 => "x1")
+            ),
+        ),
+    )
+    # Build the member SR's way (create_expression), so its type matches the HoF the search
+    # would hold; parse_expr bakes operators/variable_names into the expression metadata.
+    node = get_contents(parse_expr(Float64, "9.0 * x0 + cos(x1)", opts))
+    bad = create_expression(node, opts, dataset)
+    m_bad = PopMember(dataset, bad, opts; deterministic=false)
+    loss_before = m_bad.loss
+    pop = Population([m_bad])
+    plugin = only(filter(p -> p isa LaSRPlugin, opts.plugins))
+    state = SymbolicRegression.init_plugin_state(plugin, opts, dataset)
+
+    # on_generation_end! reads only .plugin_states and .halls_of_fame from search_state.
+    hof = HallOfFame(opts, dataset)
+    stub = (plugin_states=((state,),), halls_of_fame=[hof])
+    SymbolicRegression.on_generation_end!(state, plugin, stub, dataset, opts, nothing, pop)
+
+    frontier = calculate_pareto_frontier(hof)
+    @test !isempty(frontier)
+    @test minimum(m.loss for m in frontier) < loss_before   # amnesty is reflected in the HoF
+    @test minimum(m.loss for m in frontier) < 1e-6
 end

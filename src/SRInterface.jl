@@ -17,6 +17,7 @@ using SymbolicRegression:
     gen_random_tree_fixed_size
 using SymbolicRegression.PopMemberModule: PopMember
 using SymbolicRegression.ConstantOptimizationModule: optimize_constants
+using SymbolicRegression.HallOfFameModule: update_hall_of_fame!
 import SymbolicRegression:
     mutate!,
     crossover,
@@ -195,18 +196,22 @@ function on_generation_end!(
 
     # Complexity amnesty: re-fit the constants of structurally-rich members before
     # selection can cull them, so good structure is not lost to a bad constant fit.
-    # Runs regardless of `use_llm` (it is pure constant optimization), gated only on
-    # `amnesty_complexity > 0`. Kept BEFORE the LLM/concept-evolution guard below so
-    # the LLM-off path still benefits. `optimize_constants` mutates the member in
-    # place (and guarantees non-increasing loss, resetting to the original constants
-    # when it cannot improve), so there is nothing to reassign back into
-    # `returned_pop.members`. The HoF is left untouched — SR's next-generation HoF
-    # update captures any newly-good member.
+
     if config.amnesty_complexity > 0
+        improved = false
         for member in returned_pop.members
             if compute_complexity(member, options) >= config.amnesty_complexity
                 optimize_constants(dataset, member, options)
+                improved = true
             end
+        end
+        if improved && !isnothing(search_state)
+            output = findfirst(search_state.plugin_states) do states
+                any(candidate -> candidate === state, states)
+            end
+            isnothing(output) || update_hall_of_fame!(
+                search_state.halls_of_fame[output], returned_pop.members, options
+            )
         end
     end
 
@@ -305,8 +310,14 @@ end
 function plugin_crossovers(plugin::LaSRPlugin)
     plugin.use_llm || return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
     plugin.crossover_probability > 0 || return Pair{SymbolicRegression.AbstractCrossover,Float64}[]
+    # Make `crossover_probability` a true conditional probability. SR merges crossovers by
+    # type, so pinning SubtreeCrossover to (1 - p) overrides its default weight of 1.0.
+    # Without this, LLM crossover competes p against a fixed 1.0 and can never exceed 50%
+    # (p = 1.0 gave only 0.5), contradicting the parameter's [0, 1] probability contract.
+    p = plugin.crossover_probability
     return Pair{SymbolicRegression.AbstractCrossover,Float64}[
-        LLMCrossover() => plugin.crossover_probability
+        LLMCrossover() => p,
+        SymbolicRegression.SubtreeCrossover() => (1 - p),
     ]
 end
 

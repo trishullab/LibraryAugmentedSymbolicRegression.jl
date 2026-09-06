@@ -68,13 +68,25 @@ end
     @test calls[] > 0
 end
 
-@testset "LaSRPlugin mocked concept lifecycle" begin
+@testset "LaSRPlugin mocked concept lifecycle actually generates concepts" begin
     calls = Ref(0)
+    saw_concept = Ref(false)
+    # A recording mock. The concept templates ask for "hypotheses"; equation templates ask
+    # for "expressions". So this word shows the concept path ran, not just some LLM call.
+    concept_aware = function (_schema, conversation; kwargs...)
+        calls[] += 1
+        text = lowercase(join((string(getproperty(m, :content)) for m in conversation), "\n"))
+        occursin("hypothes", text) && (saw_concept[] = true)
+        return (; content="[\"additive relationship\"]")
+    end
     plugin = LaSRPlugin(;
         verbose=false,
-        llm_generate=mock_llm(calls, "[\"additive relationship\"]"),
+        llm_generate=concept_aware,
+        use_concepts=true,
         use_concept_evolution=true,
         num_concept_crossover=1,
+        # Seed past the window so the evolution pool is non-empty and the refined-concept path runs.
+        idea_store=WindowedIdeaStore(; window=2, seed=["seed a", "seed b", "seed c", "seed d"]),
         prompts_dir=joinpath(pkgdir(LibraryAugmentedSymbolicRegression), "prompts") * "/",
     )
     options = Options(;
@@ -94,6 +106,23 @@ end
     hof = equation_search(X, vec(X) .+ 1; options, niterations=1, parallelism=:serial)
     @test hof isa HallOfFame
     @test calls[] > 0
+    @test saw_concept[]   # the concept path ran, not just some LLM call
+end
+
+@testset "crossover_probability normalizes to a true conditional probability" begin
+    # crossover_probability is documented and bounded [0, 1] as P(LLM crossover | crossover).
+    # It must equal the LLM crossover weight over the total crossover weight, so pinning
+    # SubtreeCrossover to (1 - p) is required (without it p=1.0 gave only 0.5).
+    for p in (0.25, 0.5, 1.0)
+        opts = Options(;
+            binary_operators=[+, *],
+            default_plugins=(),
+            plugins=(LaSRPlugin(; use_llm=true, crossover_probability=p),),
+        )
+        total = sum(last, opts.crossovers)
+        llm_w = only([last(x) for x in opts.crossovers if first(x) isa LLMCrossover])
+        @test llm_w / total ≈ p
+    end
 end
 
 @testset "LaSRPlugin mocked crossover" begin
@@ -105,12 +134,9 @@ end
         prompts_dir=joinpath(pkgdir(LibraryAugmentedSymbolicRegression), "prompts") * "/",
         crossover_probability=1.0,
     )
-    # `LLMCrossover` and SR's built-in `SubtreeCrossover` are both weighted 1.0 (SR's
-    # `default_crossovers()` gives `SubtreeCrossover() => 1.0`; `crossover_probability`
-    # is capped at 1 so the plugin cannot outweigh it), i.e. crossover TYPE is a 50/50
-    # draw each event. A larger population/cycle count than the mutation testset above
-    # is used so the mocked LLM crossover is (deterministically, for this seed) sampled
-    # at least once.
+    # crossover_probability=1.0 pins SubtreeCrossover to weight 0, so LLM crossover fires on
+    # every crossover event. A larger population/cycle count than the mutation testset is
+    # used so at least one crossover event occurs in this tiny deterministic search.
     options = Options(;
         binary_operators=[+, *],
         plugins=(plugin,),
