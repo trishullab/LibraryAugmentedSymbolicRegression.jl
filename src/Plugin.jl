@@ -15,17 +15,8 @@ import ..ParseFailuresModule: ParseFailureStore, parse_failures, parse_failure_s
 """
     default_prompts_dir()
 
-Absolute path of the prompt templates shipped with LaSR (the package's `prompts/`
-directory). Deliberately a function, not a `const`: a constant computed from
-`pkgdir` is evaluated at *precompile* time and its absolute path is frozen into the
-cache, so a depot that is later moved or copied (container image, restored CI
-cache, depot built as one user and run as another) keeps a valid pkgimage pointing
-at a path that no longer exists, and every prompt load fails. Resolving per call
-tracks wherever the package actually lives.
+The absolute path of the `prompts/` directory that ships with LaSR.
 
-On a `Pkg.add` install this directory is READ-ONLY (files land mode 444). To edit
-the templates, materialize a writable copy with [`copy_prompts`](@ref) and pass it
-as `prompts_dir`.
 """
 function default_prompts_dir()::String
     root = pkgdir(parentmodule(@__MODULE__))
@@ -33,9 +24,12 @@ function default_prompts_dir()::String
     return normpath(joinpath(root, "prompts"))
 end
 
-# `prompts_dir` is joined with template names (never concatenated), so a trailing
-# separator is optional. A directory that does not exist is a typo: fail here rather
-# than minutes into a search at the first LLM call.
+"""
+    normalize_prompts_dir(dir) -> String
+
+Expand `dir` to a canonical absolute path with no trailing separator, and check that the
+directory exists.
+"""
 function normalize_prompts_dir(dir::AbstractString)::String
     raw = normpath(abspath(expanduser(String(dir))))
     # `normpath` keeps a trailing separator; drop it so `plugin.prompts_dir` is canonical
@@ -58,14 +52,112 @@ struct LLMCrossover <: AbstractCrossover end
 """
     LaSRPlugin(; kws...)
 
-Library-augmented symbolic regression plugin. Pass it through
-`Options(; plugins=(LaSRPlugin(...),), ...)`. LLM client settings
-(`model`, `api_key`, ...) and everything else are set directly on the
-plugin. The mutation weights are unnormalized, like all entries in
-`Options.mutations`; `crossover_probability` is conditional on SR selecting
-crossover.
+The library-augmented symbolic regression plugin. Pass it to SymbolicRegression as
+`Options(; plugins=(LaSRPlugin(...),), ...)`.
 
-Every keyword is documented in the "Configuration" section of the README.
+# LLM operators
+
+Each operator asks the LLM for expressions and then competes with the symbolic operators
+of SR. All four are off by default. Set at least one weight, or the plugin makes no call.
+
+- `LLMMutateMutation` (`mutate_weight`): show the LLM one expression and ask for a change
+  to it.
+- `LLMRandomizeMutation` (`randomize_weight`): ask for one new expression of random size,
+  up to `curmaxsize` nodes, then fit its constants. This replaces a random restart.
+- `LLMGenerateMutation` (`generate_weight`): ask for `num_generated_equations` complete
+  expressions in one call, fit the constants of each one, and keep the best. The parent
+  survives unchanged if no candidate meets the constraints.
+- `LLMCrossover` (`crossover_probability`): show the LLM two parents and ask for two
+  children.
+
+The three weights are unnormalized, as with every entry in `Options.mutations`, and SR
+normalizes the full set. `crossover_probability` is different: it is a probability in
+`[0, 1]` that applies only after SR selects crossover, and LaSR gives the remaining
+weight to `SubtreeCrossover`.
+
+# Concepts
+
+LaSR can hold a library of natural-language concepts and put them into its prompts.
+
+`use_concepts=true` adds `num_pareto_context` concepts from the store to each operator
+prompt. `use_concept_evolution=true` fills the store during the search: every
+`populations` generations, LaSR shows the LLM the Pareto frontier and the worst members,
+and asks for `num_generated_concepts` concepts. It adds `num_concept_crossover` of them
+to the store, then runs `num_concept_crossover` merge steps. Each merge step sends the
+`evolution_candidates` of the store and adds one merged concept to the front.
+
+`use_concept_evolution` has an effect only with `use_concepts=true`. Alone, it generates
+concepts that no prompt reads.
+
+# Arguments
+
+## Backend
+
+LaSR uses `PromptingTools.jl` to reach an OpenAI-compatible server.
+
+  * `model=nothing`: the model name on the server.
+  * `api_key=nothing`: the API key for the server. A local server usually accepts any
+    string.
+  * `api_kwargs=Dict("max_tokens" => 4096)`: passed to the OpenAI schema of
+    PromptingTools. It must hold a `"url"` entry.
+  * `http_kwargs=Dict("retries" => 3, "readtimeout" => 3600)`: passed to the HTTP layer.
+  * `llm_generate=aigenerate`: the function that makes the call. Replace it with a mock
+    in a test.
+  * `verbose=true`: print the token count and the elapsed time of each call.
+
+## Search
+
+  * `use_llm=true`: use the LLM operators. Set it to `false` for a plain SR run.
+  * `mutate_weight=0.0`: the unnormalized weight of `LLMMutateMutation`.
+  * `randomize_weight=0.0`: the unnormalized weight of `LLMRandomizeMutation`.
+  * `generate_weight=0.0`: the unnormalized weight of `LLMGenerateMutation`.
+  * `crossover_probability=0.0`: the probability of `LLMCrossover`, given that SR selects
+    crossover.
+  * `num_generated_equations=5`: the number of expressions that one call requests.
+  * `context=""`: a description of the problem in natural language. It goes at the front
+    of each operator prompt. Domain knowledge here is the strongest single control.
+  * `variable_names=nothing`: a map from the dataset names to meaningful names, such as
+    `Dict("x1" => "theta")`. The dataset names apply when this is `nothing`.
+  * `prompts_dir=default_prompts_dir()`: the directory of the `.prompt` templates. See
+    `copy_prompts`. The constructor rejects a path that does not exist.
+  * `parse_rules=NormalizationRule[]`: extra rules for the expression dialect of the LLM.
+    They run after `DEFAULT_RULES`, in the given order.
+  * `amnesty_complexity=0`: refit the constants of each population member at or above
+    this complexity at the end of a generation. This rescues an expression that has good
+    structure and a bad constant fit. `0` turns it off. It also runs with `use_llm=false`.
+  * `lasr_logger=nothing`: a `LaSRLogger` that records each LLM call. LaSR builds one
+    from the `logger` that you give `equation_search`, so set this only when SR gets no
+    logger.
+
+## Concepts
+
+  * `use_concepts=false`: put concepts from the store into the operator prompts.
+  * `use_concept_evolution=false`: generate and merge concepts during the search.
+  * `num_pareto_context=5`: how many concepts an operator prompt shows, and how many
+    Pareto members and worst members a concept prompt shows.
+  * `num_generated_concepts=5`: the number of concepts that one concept call requests.
+  * `num_concept_crossover=2`: how many concepts LaSR adds per round, and how many merge
+    steps it runs.
+
+## Library
+
+  * `idea_database=String[]`: the concepts that seed the default store.
+  * `max_concepts=30`: the sampling window of the default store. Retrieval draws from the
+    `max_concepts` newest refined concepts.
+  * `idea_store=nothing`: an `AbstractIdeaStore` that replaces the default store and
+    overrides `idea_database` and `max_concepts`. LaSR supplies `WindowedIdeaStore` and
+    `ScoredIdeaStore`.
+
+## Budget
+
+  * `suggestion_cache=nothing`: a `SuggestionCache` that pools the proposals of a call
+    that no operator used, and serves them to later requests. Read it with `cache_stats`.
+  * `max_llm_calls=nothing`: a ceiling on the LLM calls of the full run. The LLM
+    operators fall back to their symbolic counterparts after the ceiling. Read the count
+    with `budget_used(plugin.call_budget)`.
+  * `parse_failure_sink=nothing`: a `ParseFailureStore` that collects the LLM strings
+    that the parser could not read. Read it with `parse_failures` and
+    `parse_failure_summary`.
 """
 struct LaSRPlugin <: AbstractPlugin
     api_key::Union{String,Nothing}
@@ -162,21 +254,21 @@ struct LaSRPlugin <: AbstractPlugin
             use_llm,
             use_concepts,
             use_concept_evolution,
-            Int(num_pareto_context),
-            Int(num_generated_equations),
-            Int(num_generated_concepts),
-            Int(num_concept_crossover),
-            Int(max_concepts),
-            String(context),
+            num_pareto_context,
+            num_generated_equations,
+            num_generated_concepts,
+            num_concept_crossover,
+            max_concepts,
+            context,
             variable_names,
             normalize_prompts_dir(prompts_dir),
             store,
             lasr_logger,
-            Float64(mutate_weight),
-            Float64(randomize_weight),
-            Float64(crossover_probability),
-            Float64(generate_weight),
-            Int(amnesty_complexity),
+            mutate_weight,
+            randomize_weight,
+            crossover_probability,
+            generate_weight,
+            amnesty_complexity,
             parse_rules,
             suggestion_cache,
             CallBudget(max_llm_calls),
@@ -226,10 +318,12 @@ function Base.getproperty(context::LaSRContext, key::Symbol)
     end
 end
 
-# `ctx.state` is `nothing` for a `LaSRContext` built directly from a bare `Options` (e.g.
-# a parser unit test with no plugin state); return the empty-store answer rather than
-# erroring, matching the guard used at the `record_parse_failure!` call sites in
-# `src/ExpressionIO.jl`.
+"""
+    parse_failures(ctx::LaSRContext) -> Vector{ParseFailure}
+
+Return the parse failures that the search recorded, or no failures if `ctx` holds no
+plugin state.
+"""
 function parse_failures(ctx::LaSRContext)
     state = getfield(ctx, :state)
     state isa LaSRPluginState || return ParseFailure[]

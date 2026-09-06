@@ -25,7 +25,7 @@ a Python frontend.
 
 - [Installation](#installation)
 - [Quickstart](#quickstart)
-- [Configuration](#configuration)
+- [Configuration](#lasr-configuration)
 - [Prompt templates](#prompt-templates)
 - [MLJ](#mlj)
 - [Extending the parser](#extending-the-parser)
@@ -66,7 +66,7 @@ const API_KEY = "token-abc123"
 const API_URL = "http://localhost:11440/v1"
 
 p = 0.001
-model = Options(;
+options = Options(;
     plugins=(
         LaSRPlugin(;
             model=MODEL_NAME,
@@ -101,68 +101,80 @@ Point `url`/`model` at any OpenAI-compatible server (vLLM, SGLang, Ollama, a pai
 
 ## LaSR configuration
 
+Every option below is a keyword of `LaSRPlugin`. Run `?LaSRPlugin` for the same list.
 
-### Backend model configuration
+### Backend model
 
-We use `PromptingTools.jl` to communicate with OpenAI-compatible servers. The following keywords configure the backend model and its connection.
-
-| Keyword | Default | Description |
-| --- | --- | --- |
-| `model` | `nothing` | Model name on the OpenAI-compatible server. |
-| `api_key` | `nothing` | API key for that server. Local servers usually accept any string. |
-| `api_kwargs` | `Dict("max_tokens" => 4096)` | Forwarded to PromptingTools' OpenAI schema. `"url"` is required. |
-| `http_kwargs` | `Dict("retries" => 3, "readtimeout" => 3600)` | Forwarded to the HTTP layer. |
-| `verbose` | `true` | Prints the per-call token count and elapsed time. |
-
-### LaSR main configuration
+LaSR uses `PromptingTools.jl` to reach an OpenAI-compatible server.
 
 | Keyword | Default | Description |
 | --- | --- | --- |
-| `use_llm` | `true` | Use the LLM to generate equation proposals. |
-| `use_concepts` | `false` | Incorporate concepts learned during the search into LLM prompts. |
-| `use_concept_evolution` | `false` | Continuously evolve concepts throughout the search process. |
-| `context` | `""` | A natural-language description of the problem, prepended to every prompt. Domain knowledge here is the single highest-leverage knob. |
-| `variable_names` | `nothing` | Map from dataset names to meaningful names, e.g. `Dict("x1" => "theta")`. Falls back to the dataset's own names. |
-| `parse_rules` | `NormalizationRule[]` | Custom string normalization rules, appended in order after the built-in defaults. See [Extending the parser](#extending-the-parser). |
-| `lasr_logger` | `nothing` | `LaSRLogger(SRLogger(...))` records each LLM call — prompt, raw output, chosen expression, etc. |
+| `model` | `nothing` | The model name on the server. |
+| `api_key` | `nothing` | The API key. A local server usually accepts any string. |
+| `api_kwargs` | `Dict("max_tokens" => 4096)` | Passed to the OpenAI schema. It must hold a `"url"` entry. |
+| `http_kwargs` | `Dict("retries" => 3, "readtimeout" => 3600)` | Passed to the HTTP layer. |
+| `llm_generate` | `aigenerate` | The function that makes the call. Replace it with a mock in a test. |
+| `verbose` | `true` | Print the token count and the elapsed time of each call. |
 
+### Search
 
-### LaSR search hyperparameters
-
-| Keyword | Default | Description |
-| --- | --- | --- |
-| `mutate_weight` | `0.0` | Probability of using LLM mutation. Mutation simply asks the LLM to suggest changes to the current equation. |
-| `randomize_weight` | `0.0` | REWRITE Unnormalized weight of `LLMRandomizeMutation` (LLM-proposed replacement for a random restart). |
-| `generate_weight` | `0.0` | REWRITE Unnormalized weight of `LLMGenerateMutation`: best-of-K structural generation — asks for `num_generated_equations` complete expressions, constant-fits each, keeps the best. |
-| `crossover_probability` | `0.0` | REWRITE Probability in `[0, 1]` of using `LLMCrossover` **given** that SymbolicRegression already chose to cross over (set by SR's own `Options(; crossover_probability=...)`). LaSR pins subtree crossover to `1 - p` so this is a true conditional probability. |
-| `num_pareto_context` | `5` | How many Pareto-frontier members — and how many concepts from the idea store — are shown to the LLM per call. |
-| `num_generated_equations` | `5` | Expressions requested per call. Best-of-K for generation; the unused ones feed `suggestion_cache`. |
-| `num_generated_concepts` | `5` | Concepts requested per concept-generation call. |
-| `num_concept_crossover` | `2` | Concept pairs merged per concept-evolution round. |
-| `prompts_dir` | `default_prompts_dir()` | Directory of `.prompt` templates. See [Prompt templates](#prompt-templates). A path that does not exist is rejected at construction, not minutes into a search. |
-| `amnesty_complexity` | `0` | Any population member at or above this complexity has its constants re-optimized at the end of a generation. This operation 'rescues' any equation that has good structure but would have been deleted due to a bad constant fit. |
-
-
-### LaSR library configuration
+The four LLM operators are off by default. Set at least one weight, or LaSR makes no
+call. The three weights are unnormalized, as with every entry in `Options.mutations`.
+`crossover_probability` is a probability in `[0, 1]`.
 
 | Keyword | Default | Description |
 | --- | --- | --- |
-| `idea_database` | `String[]` | Concepts to seed the default store with. |
-| `max_concepts` | `30` | Sampling window of the default store: retrieval draws from the `max_concepts` most recently refined concepts. |
-| `idea_store` | `nothing` | Pass an `AbstractIdeaStore` to change how concepts are retrieved; overrides `idea_database`/`max_concepts`. |
+| `use_llm` | `true` | Use the LLM operators. Set it to `false` for a plain SR run. |
+| `mutate_weight` | `0.0` | Weight of `LLMMutateMutation`. It shows the LLM one expression and asks for a change. |
+| `randomize_weight` | `0.0` | Weight of `LLMRandomizeMutation`. It asks for one new expression of random size, then fits its constants. |
+| `generate_weight` | `0.0` | Weight of `LLMGenerateMutation`. It asks for `num_generated_equations` expressions in one call, fits each one, and keeps the best. |
+| `crossover_probability` | `0.0` | Probability of `LLMCrossover`, given that SR selects crossover. LaSR gives the rest to subtree crossover. |
+| `num_generated_equations` | `5` | The number of expressions that one call requests. |
+| `context` | `""` | A description of the problem in natural language. It goes at the front of each operator prompt. This is the strongest single control. |
+| `variable_names` | `nothing` | A map from the dataset names to meaningful names, such as `Dict("x1" => "theta")`. |
+| `prompts_dir` | `default_prompts_dir()` | The directory of the `.prompt` templates. See [Prompt templates](#prompt-templates). |
+| `parse_rules` | `NormalizationRule[]` | Extra rules for the expression dialect of the LLM. See [Extending the parser](#extending-the-parser). |
+| `amnesty_complexity` | `0` | Refit the constants of each member at or above this complexity at the end of a generation. This rescues good structure that has a bad constant fit. |
+| `lasr_logger` | `nothing` | A `LaSRLogger` that records each LLM call. LaSR builds one from the logger that you give `equation_search`. |
 
-LaSR implements two kinds of concept stores. New information retrieval techniques (RAG, etc.) can be added by implementing the `AbstractIdeaStore` interface.
+### Concepts
 
-- **`WindowedIdeaStore(; window=30, seed=String[])`** — A simple FIFO store. Newly refined concepts are added to the front. Concepts are retrieved from the first `window` entries. Concept evolution distills concepts from the rest of the entries. Ignores the concept's relevance to the query.
-
-- **`ScoredIdeaStore(; k1=1.5, b=0.75, decay=0.99, refined_prior=2.0, seed=String[])`** — Returns the `k` most relevant concepts to the current query, using standard information retrieval techniques (here, BM25). 
-
-### LaSR budgeting configuration
+LaSR can hold a library of natural-language concepts and put them into its prompts. Every
+`populations` generations, it shows the LLM the Pareto frontier and the worst members,
+and asks for new concepts.
 
 | Keyword | Default | Description |
 | --- | --- | --- |
-| `suggestion_cache` | `nothing` | By default, LaSR generates `num_generated_equations` proposals per call and only selects one of them. A `SuggestionCache(; capacity=8192)` saves these proposals and serves them for later requests. Entries are *consumed*, so population doesn't collapse. Inspect with `cache_stats`. |
-| `max_llm_calls` | `nothing` | Hard ceiling on LLM calls for the whole run. After the ceiling is reached, the LLM operators fall back to their symbolic counterparts for the rest of the search. Inspect with `budget_used(plugin.call_budget)`. |
+| `use_concepts` | `false` | Put concepts from the store into the operator prompts. |
+| `use_concept_evolution` | `false` | Generate and merge concepts during the search. It has an effect only with `use_concepts=true`. |
+| `num_pareto_context` | `5` | How many concepts an operator prompt shows, and how many Pareto members and worst members a concept prompt shows. |
+| `num_generated_concepts` | `5` | The number of concepts that one concept call requests. |
+| `num_concept_crossover` | `2` | How many concepts LaSR adds per round, and how many merge steps it runs. |
+
+### Library
+
+| Keyword | Default | Description |
+| --- | --- | --- |
+| `idea_database` | `String[]` | The concepts that seed the default store. |
+| `max_concepts` | `30` | The sampling window of the default store. Retrieval draws from the `max_concepts` newest refined concepts. |
+| `idea_store` | `nothing` | An `AbstractIdeaStore` that replaces the default store. It overrides `idea_database` and `max_concepts`. |
+
+LaSR supplies two stores. Implement `AbstractIdeaStore` to add another, such as a RAG
+index.
+
+- **`WindowedIdeaStore(; window=30, seed=String[])`**: a FIFO store. It adds each refined
+  concept to the front and draws from the first `window` entries. Concept evolution
+  distills the rest. It ignores the query.
+- **`ScoredIdeaStore(; k1=1.5, b=0.75, decay=0.99, refined_prior=2.0, seed=String[])`**:
+  it returns the concepts that are most relevant to the query, by BM25.
+
+### Budget
+
+| Keyword | Default | Description |
+| --- | --- | --- |
+| `suggestion_cache` | `nothing` | A `SuggestionCache` that pools the proposals that no operator used and serves them to later requests. Read it with `cache_stats`. |
+| `max_llm_calls` | `nothing` | A ceiling on the LLM calls of the full run. The operators then fall back to their symbolic counterparts. Read the count with `budget_used(plugin.call_budget)`. |
+| `parse_failure_sink` | `nothing` | A `ParseFailureStore` that collects the strings that the parser could not read. See [Debugging LLM output](#debugging-llm-output). |
 
 
 ## Prompt templates
@@ -184,6 +196,33 @@ print(LaSR.default_prompts_dir())                          # read the shipped de
 prompts_dir = str(LaSR.copy_prompts("~/my_lasr_prompts"))  # edit these, then pass along
 ```
 
+
+## MLJ
+
+`SRRegressor` takes the same `plugins` tuple as `Options`, so LaSR needs no other change
+to run through MLJ.
+
+```julia
+using SymbolicRegression: SRRegressor
+using LibraryAugmentedSymbolicRegression: LaSRPlugin
+import MLJ: machine, fit!, predict, report
+
+model = SRRegressor(;
+    plugins=(LaSRPlugin(; model=MODEL_NAME, api_key=API_KEY, mutate_weight=0.001),),
+    niterations=40,
+    binary_operators=[+, -, *, /],
+    unary_operators=[cos],
+)
+
+# MLJ expects one row per observation, so transpose a feature-by-sample matrix.
+mach = machine(model, transpose(X), y)
+fit!(mach)
+
+rep = report(mach)                      # `rep.equations` and `rep.best_idx`
+pred = predict(mach, transpose(X_test))
+```
+
+`examples/example_1_regressor.jl` is a full script. It reads the LLM settings from `.env`.
 
 ## Extending the parser
 

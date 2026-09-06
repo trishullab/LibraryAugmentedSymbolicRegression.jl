@@ -6,12 +6,9 @@ using SymbolicRegression
 using SymbolicRegression.LoggingModule: should_log
 
 """
-    LaSRLogger(logger::SRLogger; **kwargs)
+    LaSRLogger(logger)
 
-A logger for LaSR that wraps the base SymbolicRegression.jl logger.
-
-# Arguments
-- `logger`: The base logger to wrap
+A logger for LaSR. It wraps `logger`, the base SymbolicRegression.jl `SRLogger`.
 """
 Base.@kwdef struct LaSRLogger{L<:SymbolicRegression.LoggingModule.SRLogger} <:
                    SymbolicRegression.AbstractSRLogger
