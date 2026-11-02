@@ -10,8 +10,8 @@ include("test_params.jl")
 @inline cosf(x) = cos(T(x))::T
 @inline expf(x) = exp(T(clamp(x, -40.0, 40.0)))::T
 @inline safelog(x) = log(abs(T(x)) + eps(T))::T  # no 1e-12!
-@inline sqr(x) = (t=T(x); (t*t)::T)
-@inline cube(x) = (t=T(x); (t*t*t)::T)
+@inline sqr(x) = (t=T(x); (t * t)::T)
+@inline cube(x) = (t=T(x); (t * t * t)::T)
 @inline addf(a, b) = (T(a) + T(b))::T
 @inline mulf(a, b) = (T(a) * T(b))::T
 @inline divf(a, b) = (ta=T(a); tb=T(b); (ta / (abs(tb) + eps(T)))::T)

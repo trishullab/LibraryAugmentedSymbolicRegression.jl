@@ -313,8 +313,8 @@ function _main_search_loop!(
                         running_search_statistics=c_rss,
                     )
                 end,
-                parallelism = ropt.parallelism,
-                worker_idx = worker_idx
+                parallelism=ropt.parallelism,
+                worker_idx=worker_idx
             )
             if ropt.parallelism in (:multiprocessing, :multithreading)
                 state.tasks[j][i] = @async put!(
@@ -439,7 +439,7 @@ using ConstructionBase: ConstructionBase as _
 include("precompile.jl")
 redirect_stdout(devnull) do
     redirect_stderr(devnull) do
-        do_precompilation(Val(:precompile))
+        return do_precompilation(Val(:precompile))
     end
 end
 

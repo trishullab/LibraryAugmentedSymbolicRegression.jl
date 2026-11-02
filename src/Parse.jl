@@ -90,7 +90,7 @@ function _normalize_expr_string(s::AbstractString)
     # TODO: Right now, making all variables lowercase. This might not always be desired.
     s = lowercase(s)
     s = replace(s, r"\*\*" => "^")
-    strip(s)
+    return strip(s)
 end
 
 """
