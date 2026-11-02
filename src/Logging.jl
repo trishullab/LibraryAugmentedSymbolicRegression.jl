@@ -32,7 +32,7 @@ function log_generation!(
                 if isnothing(value) || length(value) == 0
                     continue
                 end
-                @info(primary_key, key = value)
+                @info(primary_key, key=value)
             end
         end
     end

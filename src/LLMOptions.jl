@@ -65,13 +65,10 @@ $(LASR_OPTIONS_DESCRIPTION)
     use_concepts::Bool=false,
     use_concept_evolution::Bool=false,
     @nospecialize(
-        mutation_weights::Union{LaSRMutationWeights,AbstractVector,NamedTuple,Nothing} =
-            nothing
+        mutation_weights::Union{LaSRMutationWeights,AbstractVector,NamedTuple,Nothing}=nothing
     ),
     @nospecialize(
-        llm_operation_weights::Union{
-            LLMOperationWeights,AbstractVector,NamedTuple,Nothing
-        } = nothing
+        llm_operation_weights::Union{LLMOperationWeights,AbstractVector,NamedTuple,Nothing}=nothing
     ),
 
     ## 2. LaSR Performance Modifiers
